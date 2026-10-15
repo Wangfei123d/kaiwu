@@ -1,0 +1,1567 @@
+/* 外壳布局。
+   顶栏 + 主体两段(笔记 / 设置)。底部不再有状态条。 */
+
+.shell {
+    display: grid;
+    grid-template-rows: 46px 1fr;
+    grid-template-areas: "top" "body";
+    height: 100vh;
+}
+
+/* ================= 顶栏 ================= */
+.topbar {
+    grid-area: top;
+    display: flex; align-items: center; gap: 18px;
+    padding: 0 14px;
+    background: rgba(18, 16, 15, .88);
+    border-bottom: 1px solid rgba(126, 200, 255, .10);
+    -webkit-app-region: drag;                 /* 顶栏可拖动窗口 */
+}
+.topbar button, .topbar input { -webkit-app-region: no-drag; }
+
+.topbar-brand {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 15px; font-weight: 700; letter-spacing: 2px; color: #fff;
+}
+
+/* 品牌标记。尺寸定死、不参与收缩 —— 顶栏变窄时先挤别的,不能把 LOGO 压扁。 */
+.brand-mark { width: 22px; height: 22px; flex: none; }
+
+.topbar-views { display: flex; gap: 4px; }
+
+.view-tab {
+    padding: 5px 14px;
+    font: inherit; font-size: 13px;
+    color: var(--dim);
+    background: none; border: 0; border-radius: 6px;
+    cursor: pointer;
+    transition: background .2s, color .2s;
+}
+.view-tab:hover { background: rgba(126, 200, 255, .08); color: var(--text); }
+.view-tab[aria-selected="true"] {
+    background: rgba(126, 200, 255, .14); color: #fff;
+}
+
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--dim);
+    min-width: 0;                              /* 允许内部省略号生效 */
+}
+    max-width: 320px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ================= 笔记视图(四格面板 + 可拖分隔) =================
+   ⚠️ 这里的 grid 只是**工作台挂载之前的兜底**(挂载成功就由布局树接管,
+   .pw-host 那一套见 panel-workspace.css;挂载失败时也不至于四片叠在一起)。
+   右栏那两格(链接 / AI)各占旧 --side-w 的一半:它们现在是**两个同等面板**,
+   默认由布局树上下叠着,兜底这一层就简单并排,不再额外插一条假分隔条。 */
+.pane-notes {
+    grid-area: body;
+    display: grid;
+    /* 宽度走 CSS 变量,拖动时只改这两个值 —— 不去动 grid-template 的字符串。
+       两条 6px 的空列就是分隔条的命中区(见 .col-resizer)。 */
+    grid-template-columns:
+        var(--nav-w, 236px) 6px minmax(0, 1fr) 6px
+        calc(var(--side-w, 240px) / 2) calc(var(--side-w, 240px) / 2);
+    min-height: 0;                             /* 关键:否则子元素不能滚动 */
+}
+
+/* ---- 可拖的分隔条 ----
+   命中区 6px(好抓),视觉上仍是一条细线(::before 只占中间 2px,悬停才亮)。
+   不给它加 border:那会把两栏的边框叠成两条线。 */
+.col-resizer {
+    position: relative; cursor: col-resize;
+    background: none; border: 0; padding: 0;
+    -webkit-app-region: no-drag;              /* 别被顶栏的拖动区吞掉 */
+    touch-action: none;                       /* 指针事件要能持续收到 move */
+}
+.col-resizer::before {
+    content: ""; position: absolute; inset: 0 2px;
+    background: transparent; transition: background .15s ease;
+}
+.col-resizer:hover::before,
+.col-resizer:focus-visible::before,
+.col-resizer[data-dragging]::before { background: rgba(126, 200, 255, .35); }
+.col-resizer:focus-visible { outline: none; }
+@media (prefers-reduced-motion: reduce) {
+    .col-resizer::before { transition: none; }
+}
+
+/* ---- 左:笔记列表 ---- */
+.notes-nav {
+    display: flex; flex-direction: column; min-height: 0;
+    /* ⚠️ 底色走 `--pw-fill`(工作台按面板 id 声明,见 panel-workspace.css):
+       分隔条要把两侧的底色接起来,两边**必须取同一个值**,否则边界上会多出一处台阶。
+       工作台没挂上(兜底 grid)时退回原来的字面值,外观一点不变。 */
+    background: var(--pw-fill, rgba(18, 16, 15, .72));
+}
+/* ⚠️ 这条右边线只在**没挂上工作台**的兜底布局里有意义(那时没有任何东西分隔两栏)。
+   工作台挂上之后,边界那条线由分隔条的 `::after` 画 —— 这里再画一条就是
+   同一处两条线(用户报的"多余的分割线"里就有它;像素扫描能数出来)。 */
+.pane-notes:not(.pw-host) .notes-nav { border-right: 1px solid rgba(126, 200, 255, .10); }
+.notes-nav-head { display: flex; gap: 6px; padding: 8px; }
+.notes-nav-head input { flex: 1; min-width: 0; padding: 6px 10px; font-size: 13px; }
+.notes-nav-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+
+.note-list { list-style: none; margin: 0; padding: 0 6px; }
+.note-list button {
+    display: block; width: 100%;
+    padding: 6px 9px; margin-bottom: 1px;
+    background: none; border: 0; border-radius: 6px;
+    color: var(--dim); font: inherit; font-size: 13px; text-align: left;
+    cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.note-list button:hover { background: rgba(126, 200, 255, .08); color: var(--text); }
+.note-list button[aria-selected="true"] {
+    background: rgba(126, 200, 255, .14); color: #fff;
+}
+.note-list .note-sub {
+    display: block; font-size: 11px; color: var(--faint);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---- 树状目录 ----
+   文件夹行是「文件夹按钮 + 在此新建笔记」两枚按钮的 flex 行,所以必须覆盖上面
+   `.note-list button` 的 `display:block; width:100%` —— 否则两个按钮各占一整行。
+   缩进统一由 JS 写进 `--depth`,笔记与文件夹用同一个换算,层级才对得齐。 */
+.note-list .note-dir-row { display: flex; align-items: center; gap: 2px; }
+.note-list .note-dir {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center; gap: 6px;
+    padding-left: calc(9px + var(--depth, 0) * 14px);
+}
+.note-list button[data-path] { padding-left: calc(9px + var(--depth, 0) * 14px); }
+
+/* ---- 非笔记文件行(png / docx / json / txt) ----
+   它们与笔记同处一层、缩进同一套换算(所以也带 data-path,上面那条规则直接管到),
+   但**视觉上必须能一眼分开**:变暗一档 + 右侧给文件大小 —— 否则用户会把它们
+   当成"打不开的笔记"。按扩展名分色只是帮扫读,不承载信息。 */
+.note-list .note-other {
+    display: flex; align-items: center; gap: 8px;
+    color: var(--faint);
+}
+.note-list .note-other:hover { color: var(--dim); }
+.note-list .note-other-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-list .note-other-size { flex: none; font: 10px/1 var(--mono); color: var(--faint); }
+.note-list .note-other[data-kind="image"] .note-other-name { color: #8fb8d8; }
+.note-list .note-other[data-kind="media"] .note-other-name { color: #c9a0d8; }
+.note-list .note-other[data-kind="data"]  .note-other-name { color: #d8b36a; }
+
+/* ---- 纯文本笔记行(.txt)----
+   它与笔记、与非笔记文件是**三种**东西,必须一眼分得开:
+     · 笔记        —— 亮的、可编辑、有标签与链接;
+     · 纯文本      —— 同样可编辑,但**不参与 Markdown**(本行:等宽字 + 一点暖色);
+     · 其他文件    —— 最暗、只能丢给系统程序。
+   所以这里取"比笔记暗一档、比 other 亮一档",名字用等宽体(它本来就是纯文本)。 */
+.note-list .note-text {
+    display: flex; align-items: center; gap: 8px;
+    color: var(--dim);
+}
+.note-list .note-text:hover { color: var(--fg); }
+.note-list .note-text .note-text-name {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: var(--mono); font-size: 12px;
+}
+.note-list .note-text .note-text-size { flex: none; font: 10px/1 var(--mono); color: var(--faint); }
+/* 右端一枚小标记:让人一眼看出"这是纯文本模式打开的" */
+.note-list .note-text .note-text-name::before { content: "T "; color: var(--faint); font-size: 10px; }
+.note-list .note-text[aria-selected="true"] .note-text-name { color: #fff; }
+
+/* ---- 「打不开」的笔记行(.md 里含非法字节 / NUL)----
+   它照常列出来 —— 它是**用户的文件**,在列表里凭空消失比"列着但打不开"更吓人。
+   但必须一眼看出不一样,否则用户会点开、以为开物坏了:
+     · 整行压暗一档(它不是"可用的笔记");
+     · 右端一枚红框小标「打不开」。
+   颜色只承担"这行不一样"这一件事;**具体原因在状态行里说**(点开或悬停都能看到) ——
+   行里塞不下,也不该塞(原因可能很长)。 */
+.note-list .note-unreadable { color: var(--faint); }
+.note-list .note-unreadable:hover { color: var(--dim); }
+.note-list .note-unreadable .note-unreadable-tag {
+    margin-left: 6px; padding: 0 4px; border-radius: 3px;
+    font: 10px/1.6 var(--mono); color: var(--error);
+    border: 1px solid currentColor;
+}
+.note-list .note-unreadable[aria-selected="true"] { color: var(--dim); }
+
+/* ---- 拖动:落点反馈 ----
+   三种反馈必须**一眼能分开**,否则用户不知道松手会发生什么:
+     · drag-into   整行高亮描边  = 进这个文件夹
+     · drag-before / drag-after  一条 2px 线 = 插到它前/后(其实落到它所在文件夹)
+     · drag-forbid 红框 + 一句原因 = 松手什么都不做
+   行要 position:relative 才能把那条线绝对定位在行的边缘上。 */
+.note-list button[data-path],
+.note-list button[data-folder] { position: relative; }
+
+.note-list.drag-active { cursor: grabbing; }
+.note-list .drag-source { opacity: .45; }
+
+.note-list .drag-into {
+    background: rgba(126, 200, 255, .12);
+    box-shadow: inset 0 0 0 1px var(--accent);
+    border-radius: 6px;
+    color: var(--text);
+}
+.note-list .drag-before::before,
+.note-list .drag-after::after {
+    content: ""; position: absolute; left: 8px; right: 8px; height: 2px;
+    background: var(--accent); border-radius: 2px;
+}
+.note-list .drag-before::before { top: -1px; }
+.note-list .drag-after::after { bottom: -1px; }
+
+.note-list .drag-forbid {
+    background: rgba(224, 138, 138, .12);
+    box-shadow: inset 0 0 0 1px var(--error);
+    border-radius: 6px;
+}
+.note-list .drag-forbid::after {
+    content: attr(data-drag-forbid);
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    font: 10px/1 var(--mono); color: var(--error);
+    background: var(--bg); padding: 2px 5px; border-radius: 4px;
+    white-space: nowrap; max-width: 70%; overflow: hidden; text-overflow: ellipsis;
+}
+.note-list .note-dir-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-caret {
+    flex: none; width: 10px; font-size: 9px; line-height: 1;
+    transition: transform .15s ease;
+}
+.note-list .note-dir[aria-expanded="false"] .note-caret { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) {
+    .note-caret { transition: none; }
+}
+/* 「在此文件夹新建笔记」平时不抢视觉;键盘 Tab 到它时也要看得见 */
+.note-list .note-dir-add {
+    flex: none; width: 22px; padding: 4px 0; opacity: 0;
+    font-size: 13px; text-align: center;
+}
+.note-list .note-dir-row:hover .note-dir-add,
+.note-list .note-dir-add:focus-visible { opacity: 1; }
+
+/* 新建文件夹的内联输入行(不用原生对话框:Electron 里 window.prompt 不可用) */
+.note-new-row { padding: 2px 0 4px; }
+.note-new-input {
+    width: 100%; padding: 6px 9px;
+    font: inherit; font-size: 13px;
+    color: var(--text); background: rgba(126, 200, 255, .06);
+    border: 1px solid var(--accent); border-radius: 6px; outline: none;
+}
+
+/* ---- 笔记列表的右键菜单 ----
+   外观与工作台标签条的右键菜单(.pw-menu)取同一套令牌:同一个界面里的两种右键菜单
+   要是一眼看出不是一套东西,用户会以为其中一个是系统的。
+   定位是 fixed(视口坐标):列表容器是 overflow-y:auto,在里面做绝对定位会被裁在
+   容器边缘 —— 贴近底部的那几行右键就只剩半条菜单。 */
+.note-menu {
+    position: fixed; z-index: 60;
+    display: flex; flex-direction: column; gap: 2px;
+    min-width: 132px; max-width: 60%;
+    background: var(--glass); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 4px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .5);
+    font-size: 11.5px;
+}
+.note-menu-item {
+    display: block; width: 100%; text-align: left;
+    background: transparent; border: 0; color: var(--text);
+    font: inherit; font-size: 11.5px; padding: 5px 7px; border-radius: 6px;
+    cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.note-menu-item:hover { background: rgba(255, 255, 255, .08); }
+/* 浮层是给键盘用的,焦点必须看得见(与 .pw-menu-item 一样:悬停与聚焦分开表达) */
+.note-menu-item:focus-visible { outline: 1px solid var(--accent); }
+/* 「删除笔记」两步确认的告警态(文案已换成「再点一次确认删除」)。
+   为什么用 data 属性而不是再加一个 class:这一项必须**仍然是** .note-menu-item
+   (样式与"菜单里有哪几项"都按它认),加 class 会让它从那套选择器里掉出去。
+   用 --error 这一枚既有的失败红,不新引颜色。 */
+.note-menu-item[data-menu-danger="true"] {
+    color: var(--error);
+    background: rgba(224, 138, 138, .14);
+}
+
+/* ---- 改名态那一行 ----
+   缩进与其它行同一套换算(--depth),否则输入框会跳到别的层级上,
+   看着像"换了一篇笔记"。 */
+.note-rename-row { padding: 1px 0; }
+.note-rename-input {
+    width: 100%; padding: 6px 9px;
+    padding-left: calc(9px + var(--depth, 0) * 14px);
+    font: inherit; font-size: 13px;
+    color: var(--text); background: rgba(126, 200, 255, .06);
+    border: 1px solid var(--accent); border-radius: 6px; outline: none;
+}
+
+/* ---- 标签面板(方案 4:工具条 + 前 6 个 + 「+N」)----
+   为什么改:原先的换行胶囊会随标签数量长高(实测 9 个 138px → 30 个 346px),
+   把笔记列表一路挤上去。现在头部固定一行,标签默认只放 6 个,其余折进「+N」,
+   于是**高度与标签数量无关**(148px 恒定)。 */
+.tag-panel { padding: 8px 10px 10px; border-top: 1px solid rgba(126, 200, 255, .08); }
+.tag-head-row { display: flex; align-items: center; gap: 2px; margin-bottom: 7px; }
+.tag-head-row .tag-title { font-size: 12px; color: var(--dim); margin-right: auto; }
+.tag-tool {
+    width: 20px; height: 20px; display: grid; place-items: center;
+    background: none; border: 0; border-radius: 5px;
+    color: var(--faint); font: 12px/1 inherit; cursor: pointer;
+}
+.tag-tool:hover { background: rgba(126, 200, 255, .10); color: var(--accent); }
+.tag-tool:focus-visible { color: var(--accent); outline: 1px solid var(--accent); }
+
+.tag-filter-row { margin: 0 0 7px; }
+.tag-filter-input {
+    width: 100%; padding: 4px 8px;
+    font: inherit; font-size: 12px;
+    color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 6px; outline: none;
+}
+.tag-filter-input:focus { border-color: var(--accent); }
+
+.tag-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.tag-chip {
+    display: inline-flex; align-items: baseline; gap: 4px;
+    padding: 2px 8px; font-size: 11px; color: var(--dim);
+    background: var(--surface); border: 1px solid transparent; border-radius: 999px;
+    cursor: pointer;
+}
+.tag-chip:hover { color: var(--accent); }
+.tag-chip[aria-pressed="true"] { background: rgba(126, 200, 255, .18); color: #fff; }
+/* 计数弱化:名字是主信息,数量是次要信息 —— 挤在同一个字号里读起来要分辨两次 */
+.tag-count {
+    font: 10px/1 var(--mono); color: var(--faint);
+    /* 与名字之间只用间距分隔;背景色让它在深色里也站得住 */
+}
+.tag-chip[aria-pressed="true"] .tag-count { color: rgba(255, 255, 255, .75); }
+.tag-more { border: 1px dashed var(--border); color: var(--faint); }
+.tag-more:hover { border-color: var(--accent); color: var(--accent); }
+.tag-empty { font-size: 11px; color: var(--faint); }
+
+/* 列表顶部那条筛选提示:选中标签后出现,并带一个 × 直接清除 */
+.tag-filter-bar {
+    display: flex; align-items: center; gap: 5px;
+    margin: 0 6px 6px; padding: 3px 6px 3px 8px;
+    font-size: 11px; color: var(--dim);
+    background: rgba(126, 200, 255, .12); border-radius: 6px;
+}
+.tag-filter-bar .tag-filter-name { color: #fff; font-weight: 600; }
+.tag-filter-clear {
+    margin-left: auto; width: 18px; height: 18px;
+    display: grid; place-items: center;
+    background: none; border: 0; border-radius: 4px;
+    color: var(--dim); font: 13px/1 inherit; cursor: pointer;
+}
+.tag-filter-clear:hover { background: rgba(255, 255, 255, .10); color: #fff; }
+
+/* ---- 中:编辑器 ---- */
+.note-main { display: flex; flex-direction: column; min-height: 0; position: relative; z-index: 1; }
+.note-empty { display: flex; align-items: center; justify-content: center; flex: 1; }
+
+.note-editor { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+.note-editor-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(126, 200, 255, .08);
+}
+.note-title-input {
+    flex: 1; min-width: 0;
+    padding: 4px 0;
+    font-size: 17px; font-weight: 600; color: #fff;
+    background: none; border: 0; border-bottom: 1px solid transparent;
+    outline: none;
+}
+.note-title-input:focus { border-bottom-color: var(--accent); }
+.note-path { font-size: 11px; color: var(--faint); max-width: 240px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 文档区:一整篇滚动,块与块之间连续。
+   光标所在块显示 textarea,其余块显示渲染结果 —— 所以这里的排版必须与
+   .md-view 里的预览样式保持一致,否则切进切出会"跳"。 */
+.note-doc {
+    --blk-gap: 6px;               /* 块间距。下面"连续正文行不留白"要用到它 */
+    flex: 1; min-height: 0;
+    overflow-y: auto;
+    padding: 18px 22px 40px;
+    font-size: 14.5px; line-height: 1.8;
+    cursor: text;
+}
+.note-doc .blk { margin: 0 0 var(--blk-gap); }
+.note-doc .blk:last-child { margin-bottom: 0; }
+
+/* 块的单位是**行**。Markdown 里同一段落的软换行本来就不产生段间距
+   (渲染成一整段),所以连续两行正文之间不额外留白 —— 否则原本一段话
+   会被显示成"每行隔开一截",和只读预览对不上。 */
+.note-doc .blk-type-paragraph + .blk-type-paragraph {
+    margin-top: calc(-1 * var(--blk-gap));
+}
+
+/* 空行自己也是一块(零长度)。给个最小高度,鼠标才点得到 ——
+   点不到就等于"光标放不到空行上",而按回车新起的那一行正是空行。 */
+.note-doc .blk-type-blank { min-height: 1.8em; }
+
+/* 正在编辑的块:稍微内缩并给出左侧强调线,一眼能看出"这块是源码" */
+.note-doc .blk-active {
+    margin: 2px 0 6px -10px;
+    padding-left: 9px;
+    border-left: 2px solid var(--accent);
+}
+.blk-input {
+    display: block; width: 100%;
+    padding: 2px 0;
+    font-family: var(--mono); font-size: 13.5px; line-height: 1.8;
+    color: var(--text); background: rgba(126, 200, 255, .04);
+    border: 0; border-radius: 4px;
+    outline: none; resize: none; overflow: hidden;
+}
+
+/* Markdown uses one rendered, editable surface rather than source/preview columns. */
+.note-doc .md-live-editor { min-height: 100%; outline: none; cursor: text; overflow-wrap: anywhere; }
+.note-doc .md-live-editor:focus { outline: none; }
+.live-markdown-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 5px; position: sticky; top: -18px; z-index: 2; padding: 6px 0; background: var(--panel, #171d28); }
+.live-markdown-status { margin-right: auto; color: var(--faint); font-size: 11px; }
+.live-markdown-tool { min-width: 30px; padding: 2px 7px; color: var(--text); background: var(--surface, #222b39); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+.live-markdown-content { min-height: 3em; outline: none; cursor: text; }
+
+/* ---- 全选整篇态(Ctrl+A)----
+   为什么需要它:这个编辑器是块级的,一篇笔记被切成 N 个块,每块是一个独立
+   textarea —— 跨块的原生选区在 DOM 上根本不存在,所以"整篇被选中"画不出系统
+   选区,只能自己表达。编辑器把状态写在根节点的 data-select-all 上(见
+   app/notes/editor.js 的 setSelectAll 说明),这里只负责让它**一眼看得出来**:
+   每一个块都罩一层底色 + 左侧一条色条,合起来就是"整篇都被选中了"。
+   ⚠️ 只用底色与描边,不加任何图标/svg(项目不喜欢图标)。 */
+.note-doc[data-select-all="1"] .blk {
+    background: rgba(126, 200, 255, .14);
+    box-shadow: inset 2px 0 0 var(--accent);
+    border-radius: 3px;
+}
+/* 编辑中的那一块有自己的左侧强调线(见 .blk-active),全选态下让它更亮一档,
+   这样"整篇选中"里仍然看得出光标在哪一块 —— 两个状态别互相打架。 */
+.note-doc[data-select-all="1"] .blk-active {
+    background: rgba(126, 200, 255, .22);
+}
+
+/* ---- 纯文本模式(.txt)的块与整篇预览 ----
+   纯文本的"渲染结果"就是它自己,所以这里只做两件事:**等宽** + **保留空白**。
+   ⚠️ 绝不能给它 .md-view 那一套(标题字号、代码块底色、列表缩进)—— 那就等于
+   偷偷按 Markdown 排版了,而用户要的是"和 Markdown 隔开"。 */
+.note-doc .blk-plain,
+.note-doc .text-view {
+    font-family: var(--mono);
+    font-size: 13.5px; line-height: 1.8;
+    white-space: pre-wrap;          /* 长行要能折,但空白与缩进照原样 */
+    word-break: break-word;
+    color: var(--text);
+}
+.note-doc .blk-plain { margin: 0; }
+/* 整篇预览时不要 .md-view 的段落下边距(纯文本的段落就是换行本身) */
+.note-doc .text-view { padding: 2px 0; }
+
+.note-status { padding: 6px 16px; margin: 0; border-top: 1px solid rgba(126, 200, 255, .06); }
+.note-status[data-state="dirty"] { color: var(--accent); }
+.note-status[data-state="error"] { color: var(--error); }
+
+/* ---- 右:反向链接(独立的一格面板) ----
+   上一版它和 AI 面板挤在同一个 `.note-side` 里(所以叫"链接与 AI")。现在它是工作台里
+   自己的那一格:靠布局树拿高度,不再需要"给它自己和 AI 分配高度"的那套上限。 */
+.note-links {
+    display: flex; flex-direction: column;
+    min-height: 0;
+    /* 与 .notes-nav 同一个理由:底色由面板声明(--pw-fill),分隔条才接得上 */
+    background: var(--pw-fill, rgba(18, 16, 15, .72));
+    /* 面板有多高就用多高,装不下时它自己滚。
+       ⚠️ 原来这里是 `.note-side-links { max-height: 46% }` —— 那是为了给**同格的**
+       AI 面板留地方;拆成两格之后这个上限只会白白留出一块空白。
+       ⚠️ 三段必须 `flex: none`:否则溢出时它们会被压扁(而不是滚动)。 */
+    overflow-y: auto;
+}
+.note-links > .side-block { flex: none; }
+.side-block { padding: 12px 14px; border-bottom: 1px solid rgba(126, 200, 255, .06); }
+.side-block h4 {
+    margin: 0 0 8px; font-size: 12px; font-weight: 600;
+    color: var(--dim); letter-spacing: .5px;
+}
+.link-list { list-style: none; margin: 0; padding: 0; }
+.link-list li { margin-bottom: 4px; }
+.link-list button {
+    display: block; width: 100%;
+    padding: 4px 6px;
+    background: none; border: 0; border-radius: 5px;
+    color: var(--muted); font: inherit; font-size: 12.5px; text-align: left;
+    cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.link-list button:hover { background: rgba(126, 200, 255, .08); color: var(--accent); }
+.link-list .link-meta { font-size: 11px; color: var(--faint); }
+
+/* ================= AI 面板(右栏常驻) =================
+   结构由 app/agent/panel.js 生成:状态区 / 消息流(气泡、工具卡、权限卡)/ 输入区。
+   选择器靠的是 id 与那几个 data-* 属性,自检也按同样一套断言 ——
+   改类名可以,改 id 与 data-* 不行。 */
+.agent-panel {
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
+    /* 同 .notes-nav:底色由面板声明(--pw-fill),分隔条才接得上 */
+    background: var(--pw-fill, rgba(14, 14, 14, .35));
+    /* 轮次轨的悬停摘要挂在这一层(它必须在滚动区**外面**,否则会被 overflow 裁掉),
+       所以这里要成为它的定位祖先。 */
+    position: relative;
+}
+
+/* 无障碍 live 区:视觉上**不占位**(用户要求面板不显示连接状态 —— 默认就是连接)。
+   它仍然在 DOM 里,状态变化照旧被读屏播报;机器可读的那一份在
+   #agentPanel[data-agent-state] 上,自检断言那个。 */
+.agent-sr-only {
+    position: absolute; width: 1px; height: 1px;
+    margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.agent-status .agent-state-text { color: var(--muted); }
+.agent-status .agent-state-error { color: var(--error); }
+
+/* 连不上时**在对话里**说清楚,并把「重试」放在这张卡上。
+   平时完全没有它 —— 面板不显示连接状态,只有出问题才占用视觉。 */
+.agent-notice {
+    display: flex; align-items: center; gap: 8px;
+    margin: 0 0 10px; padding: 8px 10px;
+    border: 1px solid var(--error); border-radius: var(--radius-sm);
+    background: rgba(224, 138, 138, .08);
+    font-size: 12px; color: var(--muted);
+}
+.agent-notice-text { flex: 1; min-width: 0; }
+
+/* 凭证卡片。缺凭证时显示中文原因 + "怎么配"的指引;里面永远不会有密钥值
+   (频道本身就只回 { ok, source, reason })。 */
+.agent-credential {
+    flex: none;
+    margin: 8px 12px 0;
+    padding: 9px 11px;
+    font-size: 12px; line-height: 1.7;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--dim);
+}
+.agent-credential strong { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; }
+.agent-credential p { margin: 0 0 6px; }
+.agent-credential p:last-child { margin-bottom: 0; }
+.agent-credential .agent-cred-howto { color: var(--faint); }
+.agent-credential[data-state="warn"] { border-color: var(--error); }
+.agent-credential[data-state="warn"] strong { color: var(--error); }
+
+.agent-messages {
+    flex: 1; min-height: 0;
+    overflow-y: auto;
+    padding: 10px 12px 12px;
+    /* 消息区是 **flex 行**:左边内容列 + 右边 34px 的轮次轨。
+       ⚠️ 滚动容器仍然是它自己(没有换容器)—— 面板里所有 scrollTop/scrollHeight 的口径不变。 */
+    display: flex; flex-direction: row; align-items: flex-start;
+    /* ------------------------------------------------------------------
+       用户要求:**消息区不要原生滚动条,只留轮次轨那一列小竖条。**
+       隐藏滚动条与"保留滚动能力"是两件事:这里只做前者 ——
+       滚轮、触控板、键盘(PageUp/PageDown/Home/End)、拖动选择时的自动滚动、
+       以及我们自己的 scrollTo,全部照旧(见 panel.js 的 tabindex 与 wheel 转发)。
+       ⚠️ 绝不能用 overflow:hidden 来"藏"它 —— 那会把滚动本身也关掉。
+       两条都写:标准属性给 Firefox/新版内核,伪元素给 WebKit/Chromium。
+       ------------------------------------------------------------------ */
+    scrollbar-width: none;
+}
+.agent-messages::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+}
+/* 内容列(消息 + 权限卡):占满除轨道外的宽度 */
+.agent-scroll-content { flex: 1 1 auto; min-width: 0; }
+
+/* ---------- 会话轮次导航轨(方案 D:状态语义轨)----------
+   一格 = 一根小竖条,颜色 = 这一轮的状态。它**常显**当前轮(不是悬停才出现):
+   原生滚动条没了之后,这一列就是消息区唯一的纵向位置指示物。
+   sticky 让它在长会话里钉在右上角不动。 */
+.agent-rail {
+    flex: none;
+    width: 34px;
+    position: sticky;
+    top: 0;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 9px;
+    padding: 2px 0 2px 4px;
+}
+.agent-rail[hidden] { display: none; }
+.agent-rail .tick {
+    position: relative;
+    width: 22px; height: 16px;
+    display: flex; align-items: center; justify-content: center;
+    border: 0; background: none; padding: 0; flex: none;
+    cursor: pointer;
+}
+.agent-rail .tick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
+/* 那一根小竖条。**只有这一根** —— demo 里 D 方案那根"轮内进度细条"没有落地:
+   真机上"生成正文"没有分母,按既定规矩不画填充条(生成中只做脉冲)。 */
+.agent-rail .tick .mark {
+    display: block; width: 3px; height: 12px; border-radius: 2px;
+    background: rgba(255, 255, 255, .18);
+    transition: background .16s ease, height .16s ease, box-shadow .16s ease;
+}
+.agent-rail .tick.ok .mark { background: rgba(255, 255, 255, .30); }
+.agent-rail .tick.tool .mark { background: rgba(126, 200, 255, .5); }
+.agent-rail .tick.failed .mark { background: rgba(224, 138, 138, .9); }
+.agent-rail .tick:hover .mark { background: rgba(255, 255, 255, .55); }
+/* 当前轮:绿色 + 更高 + 光晕。常显 —— 这是"我读到哪了"的唯一指示物。 */
+.agent-rail .tick.cur .mark {
+    background: var(--ok); height: 14px;
+    box-shadow: 0 0 7px rgba(111, 208, 140, .45);
+}
+/* 生成中:脉冲(没有分母,所以**只有**脉冲,没有填充) */
+.agent-rail .tick.live .mark { animation: rail-pulse 1.1s ease-in-out infinite; }
+/* 新轮入场:短促地横向弹一下(与 demo 的 tickPop 同形) */
+.agent-rail .tick.new .mark { animation: rail-tick-pop .5s ease; }
+
+/* 悬停/聚焦摘要。挂在**面板**上而不是轨里:滚动区有 overflow,挂里面会被裁掉。
+   它同时是**图例**:标题里用中文写出状态(第 4 轮 · 含工具调用),颜色含义从文字里学。 */
+.agent-rail-tip {
+    position: absolute; right: 40px;
+    z-index: 30;
+    width: 210px;
+    transform: translateY(-50%);
+    padding: 7px 10px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--glass);
+    color: var(--muted); font-size: 12px; line-height: 1.5;
+    pointer-events: none;
+}
+.agent-rail-tip .h { color: var(--text); font-weight: 600; margin-bottom: 2px; }
+.agent-rail-tip .q { word-break: break-word; }
+.agent-rail-tip .s { margin-top: 3px; color: var(--faint); font-size: 11px; font-family: var(--mono); }
+
+/* 轮次轨的两个关键帧。⚠️ 前一行不紧跟注释 —— scopeCss 那个"注释 + @rule"的 bug
+   虽然已经修了(有回归测试),但这个组合仍然值得避开。 */
+@keyframes rail-pulse {
+    0%, 100% { opacity: .55; }
+    50% { opacity: 1; }
+}
+@keyframes rail-tick-pop {
+    0% { transform: scaleX(.3); opacity: 0; }
+    60% { transform: scaleX(1.25); opacity: 1; }
+    100% { transform: scaleX(1); }
+}
+
+/* 消息气泡。role 写在 data-role 上(自检按属性断言,不按类名后缀)。 */
+.agent-msg { margin-bottom: 8px; font-size: 13px; line-height: 1.7; }
+.agent-msg-text { padding: 7px 10px; border-radius: var(--radius-sm); white-space: pre-wrap; word-break: break-word; }
+.agent-msg[data-role="user"] { text-align: right; }
+.agent-msg[data-role="user"] .agent-msg-text {
+    display: inline-block; text-align: left;
+    background: rgba(126, 200, 255, .14); color: var(--text);
+}
+.agent-msg[data-role="assistant"] .agent-msg-text {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+}
+/* 还在流式的那一条:左边一道竖线,一眼能看出"这句话还没说完" */
+/* 生成中:左侧亮一条边(气泡样式**保持不变** —— 见下面 .agent-sweep 的说明) */
+.agent-msg[data-streaming="true"] .agent-msg-text { border-left: 2px solid var(--accent); }
+
+/* ---- 助手回复的 Markdown(收尾后渲染;只渲染助手,用户气泡保持纯文本)----
+   ⚠️ 必须把 white-space 收回来:气泡默认 pre-wrap(流式纯文本要靠它保留换行),
+   而块级内容的换行由 <p>/<br> 表达 —— 留着 pre-wrap 会让段落之间多出一堆空行。
+   ⚠️ 全是**后代**选择器,作用域仅限气泡内部:插件样式与笔记预览不受影响。 */
+.agent-msg-text.md { white-space: normal; }
+.agent-msg-text.md > *:first-child { margin-top: 0; }
+.agent-msg-text.md > *:last-child { margin-bottom: 0; }
+.agent-msg-text.md p { margin: 0 0 8px; }
+.agent-msg-text.md h1, .agent-msg-text.md h2, .agent-msg-text.md h3,
+.agent-msg-text.md h4, .agent-msg-text.md h5, .agent-msg-text.md h6 {
+    margin: 12px 0 6px; font-size: 13px; font-weight: 700; color: var(--text);
+}
+.agent-msg-text.md ul, .agent-msg-text.md ol { margin: 0 0 8px; padding-left: 20px; }
+.agent-msg-text.md li { margin-bottom: 2px; }
+.agent-msg-text.md blockquote {
+    margin: 0 0 8px; padding: 2px 0 2px 9px;
+    border-left: 2px solid var(--border); color: var(--faint);
+}
+.agent-msg-text.md hr { margin: 10px 0; border: 0; border-top: 1px solid var(--border); }
+/* 行内代码:等宽 + 一层很淡的底,和正文区分开又不刺眼 */
+.agent-msg-text.md code {
+    font: 11.5px/1.6 var(--mono);
+    padding: 1px 4px; border-radius: 4px;
+    background: rgba(255, 255, 255, .07); color: var(--muted);
+}
+html[data-theme="light"] .agent-msg-text.md code { background: rgba(0, 0, 0, .06); }
+/* 围栏代码:横向滚动,不许把面板撑宽;里面保留换行与缩进 */
+.agent-msg-text.md pre {
+    margin: 0 0 8px; padding: 8px 9px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: rgba(0, 0, 0, .28); overflow-x: auto;
+}
+html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04); }
+.agent-msg-text.md pre code {
+    padding: 0; background: none; color: var(--muted);
+    white-space: pre; font-size: 11.5px;
+}
+.agent-msg-text.md a { color: var(--accent); text-decoration: none; }
+.agent-msg-text.md a:hover { text-decoration: underline; }
+/* Markdown 图片(`![alt](https://…)`):宽度跟气泡,不撑破面板。
+   远程图能不能加载由 index.html 的 CSP img-src 决定(那里必须有 https:)。 */
+.agent-msg-text.md img {
+    display: block; max-width: 100%; height: auto;
+    margin: 0 0 8px; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); background: var(--surface);
+}
+
+/* 用户发出去的图:挂在**用户气泡**里回显(src 是渲染层自己的 blob: URL,字节不再过主进程)。
+   一张或多张都排在气泡里、宽度自适应气泡:max-width 100% + height auto,
+   高图再补一个 max-height,免得一张长截图把面板撑成一屏只有它。
+   圆角与气泡一致(--radius-sm,与 .agent-msg-text 同源)。 */
+.agent-msg-images {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    justify-content: flex-end;          /* 用户气泡在右侧(与 .agent-msg[data-role=user] 一致) */
+    margin-bottom: 6px;
+}
+/* 只有图、没有文字的气泡不该因为这条 margin 多出一截空白 */
+.agent-msg-images:last-child { margin-bottom: 0; }
+.agent-msg-image {
+    display: block;
+    max-width: 100%; max-height: 320px;
+    width: auto; height: auto;          /* 尺寸自适应:按原图比例缩,不拉伸 */
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+}
+
+/* 扫光:一道光从左往右扫过**正在生成的那段文字**。
+   ⚠️ 它必须作用在这一层内层 span 上,**不能**直接加在 .agent-msg-text 上:
+   那个元素有气泡底色与边框,一旦给它 `background-clip:text`,气泡的底会被一起
+   裁进字形里 —— 流式中文气泡的底色"消失",看起来像中途换了一套样式(实测踩到过)。
+   这里两层背景:上层是扫光带,下层是文字底色。**下层必须是实色** —— 这样
+   prefers-reduced-motion 把动画关掉时,文字仍然看得见,而不会变成一片透明。
+   ⚠️ 为什么 display:block:百分比 background-position 需要一个确定的参照宽度。
+   行内元素折行后 Chrome 按片段(box-decoration-break: slice)拼着画,光带落点会随
+   文字长度乱跳(实测踩到过);块级化之后 background-position 就是相对整块气泡,
+   光带走位才可预期 —— docs/kaiwu-sweep-demo.html 里定格测量过:
+   动画 30/40/50/60% 时,光带中心实测落在 0%/17%/50%/75% 屏宽处,正是设计值。
+   底色调暗一档到 --dim 是**必须的**:底色原本用 --muted(#cfccc7 已近白),
+   再叠 rgba(255,255,255,.5) 的宽带,带内 #e7e6e3、带外 #cfccc7,反差只有 1.28:1,
+   在真机上就是"看不出扫光"(用户反馈的原话)。改成 --dim 底 + 收窄加亮的光带,
+   反差 2.66:1(实测像素:带内 207 / 带外 135),光带才真的看得见;
+   代价只是流式文字比最终文字暗一档 —— 而收尾时正文会回到 --muted,
+   顺带成了一个"写完了"的信号。--dim 在气泡底上仍有 6.34:1,远高于 AA 的 4.5:1。 */
+.agent-sweep {
+    display: block;
+    background-image:
+        linear-gradient(100deg, transparent 44%, rgba(255, 255, 255, .9) 50%, transparent 56%),
+        linear-gradient(90deg, var(--dim), var(--dim));
+    background-size: 220% 100%, 100% 100%;
+    background-position: 0 0, 0 0;    /* 动画关掉时的静止态:光带停在文字右侧之外 */
+    background-repeat: no-repeat;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    animation: text-sweep 1.4s linear infinite;
+}
+@keyframes text-sweep {
+    from { background-position: 170% 0, 0 0; }
+    to { background-position: -70% 0, 0 0; }
+}
+/* 末字显影(B4):最新那几个字"正在显影"。
+   ⚠️ 这里**不能**用 mask —— 尾巴这层 span 自己是 `color: transparent` 又没有背景,
+   它什么都没画,遮罩自然没有东西可遮。实测过:mask 版的末行亮度剖面与"完全不处理"
+   的对照组**逐字节相同**(138 128 97),等于没写;换成"自己裁一层半透明罩子"之后,
+   同样三个采样点是 138 117 72,后两个字确实被压暗了。
+   罩子画在父层文字之上,而且**是半透明的**,所以扫光带扫到这几个字时仍然透得出来。 */
+.agent-tail {
+    background-image: linear-gradient(90deg, transparent 10%, var(--sweep-veil) 100%);
+    -webkit-background-clip: text; background-clip: text;
+}
+/* 减少动态偏好:这一条是必须的。动画关掉之后扫光带停在某一帧,
+   但下层那块实色仍在,文字照常可读;光标脉冲也一并停住。 */
+@media (prefers-reduced-motion: reduce) {
+    .agent-sweep { animation: none; }
+    .agent-think[data-live="true"] .agent-think-label::after { animation: none; }
+    /* 轮次轨:生成中的脉冲、新轮入场、以及那根竖条的过渡一起停掉。
+       位置指示(当前轮那格更高更亮)**照旧常显** —— 关的是动效,不是信息。 */
+    .agent-rail .tick .mark { animation: none; transition: none; }
+}
+
+/* ---- 思考内容(A2:收成一条可折叠的细条)----
+   为什么不做成一块灰字铺在答案上面:答案一长,读者得先扫过思考才能看到回复。
+   现在流式时只占一行「思考中…(N 字)」,字数实时在涨(它是"它真的在想"的唯一
+   可见证据),正文一开始就自动收起 —— 想看再点开。 */
+.agent-think {
+    margin-bottom: 8px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, .02);
+}
+.agent-think-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px; font-size: 11.5px; color: var(--faint);
+    cursor: pointer; list-style: none;
+}
+.agent-think-head::-webkit-details-marker { display: none; }
+.agent-think-caret { flex: none; font-size: 9px; transition: transform .15s ease; }
+.agent-think[open] .agent-think-caret { transform: rotate(90deg); }
+.agent-think-count { margin-left: auto; font: 10.5px/1 var(--mono); color: var(--faint); }
+/* 思考耗时(「3.2 秒」):紧跟标签。⚠️ 三个数字每秒都在变,**必须**等宽数字
+   (`tabular-nums`),否则整行的标签会跟着一跳一跳 —— 一个正在走的秒表最忌讳这个。 */
+.agent-think-time {
+    font: 10.5px/1 var(--mono); color: var(--faint);
+    font-variant-numeric: tabular-nums;
+}
+.agent-think[data-live="true"] .agent-think-time { color: var(--dim); }
+/* 思考条上的翻译控件(按需翻译:点「译」才翻一次)。
+   ⚠️ 它们长在 <summary> 里,所以点击必须 preventDefault —— 否则点一下「译」会顺带
+   把这条折叠块开合一次(见 panel.js 的 translationChips)。 */
+.agent-think-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.agent-think-count { margin-left: 8px; }
+.agent-think-chip {
+    font: 10.5px/1 var(--mono);
+    padding: 2px 7px; border-radius: 999px; cursor: pointer;
+    color: var(--dim); background: none; border: 1px solid var(--border);
+}
+.agent-think-chip:hover { color: var(--text); border-color: var(--border-hi); }
+.agent-think-chip.on { color: var(--accent); border-color: var(--accent); background: rgba(126, 200, 255, .10); }
+.agent-think-chip.busy { color: var(--ask); border-color: var(--ask); cursor: default; }
+.agent-think-body {
+    padding: 0 9px 7px;
+    font-size: 12px; line-height: 1.6; color: var(--faint);
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 120px; overflow-y: auto;
+}
+/* ---- 展开动效:逐行 × 每行从左到右 × 渐变浮现(三件事**同时**开始)----
+   数值来自方案选型(docs/kaiwu-think-reveal-merged-demo.html):
+     行间错开 70ms / 每行擦除 320ms / 每行淡入 260ms / 壳撑开 220ms。
+   ⚠️ 擦除用 linear:一带缓动就像"甩进来",不像"写出来"。
+   ⚠️ 动效挂在 [data-reveal] 上(一次性标记,播完由 panel.js 摘掉),
+      不是挂在 [open] 上 —— 后者会让每次重画都重播。
+   ⚠️ 只有收尾的思考条会切成 .agent-think-line(流式中不切),见 panel.js。 */
+.agent-think { --think-stagger: 70ms; --think-wipe: 320ms; --think-fade: 260ms; }
+.agent-think-grow { display: grid; grid-template-rows: 1fr; min-height: 0; }
+.agent-think[data-reveal="1"] .agent-think-grow {
+    animation: agent-think-grow 220ms cubic-bezier(.2, .75, .25, 1) both;
+}
+@keyframes agent-think-grow { from { grid-template-rows: 0fr } to { grid-template-rows: 1fr } }
+.agent-think-line { display: block; clip-path: inset(0 0 0 0); }
+.agent-think[data-reveal="1"] .agent-think-line {
+    animation:
+        agent-think-wipe var(--think-wipe) linear calc(var(--think-stagger) * var(--i, 0)) both,
+        agent-think-fade var(--think-fade) cubic-bezier(.2, .75, .25, 1)
+            calc(var(--think-stagger) * var(--i, 0)) both;
+}
+@keyframes agent-think-wipe { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
+@keyframes agent-think-fade {
+    from { opacity: 0; filter: blur(3px); transform: translateY(2px) }
+    to { opacity: 1; filter: blur(0); transform: none }
+}
+/* 系统里设了"减少动态效果"就基本瞬开 —— 动效是锦上添花,不能拿它顶用户的系统设置 */
+@media (prefers-reduced-motion: reduce) {
+    .agent-think[data-reveal="1"] .agent-think-grow,
+    .agent-think[data-reveal="1"] .agent-think-line { animation-duration: 1ms; }
+}
+/* 还在想的时候给一个光标:折叠着也要看得出"它没卡住" */
+.agent-think[data-live="true"] .agent-think-label { color: var(--dim); }
+.agent-think[data-live="true"] .agent-think-label::after {
+    content: ""; display: inline-block; width: 2px; height: 1em;
+    margin-left: 2px; vertical-align: -2px; background: var(--accent);
+    animation: caret-blink 1s steps(1, end) infinite;
+}
+@keyframes caret-blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
+
+/* 工具卡片 */
+.agent-tool {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    margin-bottom: 6px; padding: 6px 9px;
+    font-size: 12px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+.agent-tool-status {
+    flex: none; padding: 1px 7px; border-radius: 999px;
+    font-size: 11px; color: var(--dim);
+    background: rgba(255, 255, 255, .06);
+}
+.agent-tool-status[data-status="completed"] { color: var(--ok); background: rgba(111, 208, 140, .14); }
+.agent-tool-status[data-status="failed"],
+.agent-tool-status[data-status="error"] { color: var(--error); background: rgba(224, 138, 138, .14); }
+.agent-tool-title { color: var(--muted); word-break: break-word; }
+.agent-tool-kind { color: var(--faint); font-size: 11px; }
+
+/* ---- 一轮的"过程"折成一行(工具卡 + 中间回复)----
+   为什么要有它:一轮里可能跑几十次工具调用,一张卡一行铺下来,答案会被顶到屏幕外。
+   折起来只占一行「N 次工具调用 ›」,点开才看细节 —— 这与「思考」折叠条是同一套思路。
+   ⚠️ 里面的卡片**仍然在 DOM 里**(靠 details 收起),不是被删掉:自检要能选到它们,
+   用户点开也要立刻有东西,不能等一次重画。 */
+.agent-group {
+    margin-bottom: 8px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+.agent-group-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px; font-size: 11.5px; color: var(--dim);
+    cursor: pointer; list-style: none;
+}
+.agent-group-head::-webkit-details-marker { display: none; }
+.agent-group-caret { flex: none; font-size: 9px; transition: transform .15s ease; }
+.agent-group[open] .agent-group-caret { transform: rotate(90deg); }
+.agent-group-label { color: var(--dim); }
+/* 还有工具没跑完:给一个"它在动"的信号,省得用户以为卡住了 */
+/* 「这一轮没有文字回复」那一行:实测用户看到一屏折叠条、一个字答案都没有,
+   以为消息丢了 —— 这一行就是那句"没有答案"的明说。淡淡的,不抢眼,但一定看得见。 */
+.agent-noreply {
+    margin: 2px 0 8px; padding: 6px 9px;
+    font: 11.5px/1.6 var(--ui); color: var(--faint);
+    border-left: 2px solid var(--border); border-radius: 3px;
+    background: rgba(255, 255, 255, .015);
+}
+/* 组里"含回复"的小标记:答案被折在里面时,即便用户把它收起来也看得见 */
+.agent-group-answer {
+    flex: none; font: 10px/1 var(--mono); color: var(--accent);
+    border: 1px solid #2f4356; border-radius: 99px; padding: 2px 6px;
+}
+.agent-group-live { color: var(--accent); }
+.agent-group[data-live="true"] .agent-group-label { color: var(--muted); }
+/* 工具名去重后的那串(read ×3)推到最右,靠等宽字体与计数对齐 */
+.agent-group-tools { margin-left: auto; font: 10.5px/1 var(--mono); color: var(--faint); }
+/* 展开之后里面的卡片往里缩一点,才看得出它们属于上面那一行 */
+.agent-group[open] > .agent-tool,
+.agent-group[open] > .agent-msg { margin-left: 8px; margin-right: 8px; }
+.agent-group[open] > .agent-tool:first-of-type { margin-top: 4px; }
+
+/* 权限卡片:对端要提权时才出现(正常笔记流程不依赖它) */
+.agent-permission {
+    margin-bottom: 8px; padding: 9px 10px;
+    border: 1px solid var(--accent); border-radius: var(--radius-sm);
+    background: rgba(126, 200, 255, .08);
+}
+.agent-permission-title { margin-bottom: 7px; font-size: 12.5px; color: var(--text); }
+.agent-permission .btn { margin-right: 6px; }
+/* 这里原本有一条 `.agent-permission[data-resolved="true"] { … opacity: .7 }`(答完的授权卡
+   留在原地、变淡)。产品负责人要求"这个请求完也删":已决的授权卡现在由 panel.js 的
+   renderPermissions() **整个跳过**,DOM 里根本不会再有"已决的授权卡"(卡上那个
+   data-resolved 写入也一并删了)—— 规则永远匹配不到元素,属死规则,删掉。 */
+
+/* ---- 提问卡:模型用 ask_user_question 让你选一个 ----
+   为什么不是复用权限卡:两者语义完全不同("帮我选一个" vs "要不要放行"),而它们
+   在链路上走的是**同一个** ACP 方法(ACP 没有"问用户"这一条)—— 于是只能靠**画法**区分:
+   琥珀色 + 「提问」标记,一眼就不会被当成授权。 */
+.agent-question {
+    margin-bottom: 8px; padding: 9px 10px;
+    border: 1px solid var(--ask); border-radius: var(--radius-sm);
+    background: rgba(216, 179, 106, .07);
+}
+.agent-question-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 7px; }
+.agent-question-tag {
+    flex: none; font: 10.5px/1.6 var(--mono);
+    color: var(--ask); border: 1px solid var(--ask);
+    border-radius: 999px; padding: 1px 7px;
+}
+.agent-question-title { font-size: 12.5px; color: var(--text); }
+/* 选项做成整条可点的块(而不是权限卡那种小按钮):说明文字要跟着它走 */
+.agent-question-opt {
+    display: block; width: 100%; text-align: left;
+    margin: 0 0 6px; padding: 6px 9px;
+    font: inherit; font-size: 12.5px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; cursor: pointer;
+}
+.agent-question-opt:hover:not(:disabled) { border-color: var(--ask); }
+.agent-question-desc { display: block; margin-top: 1px; font-size: 11.5px; color: var(--faint); }
+/* 这里原本有两条"已决但还在"的样式,现在都成了死规则,一起删掉:
+   ① `.agent-question[data-resolved="true"] { opacity: .7 }` —— 上一轮做提问卡"问完就消失"时
+      就已经不可达(已决的提问卡由 renderPermissions() 整个跳过),这次顺手清掉;
+   ② `.agent-question-opt:disabled { cursor: default; opacity: .6 }` —— 按钮只会在"卡已决"时
+      被禁用,而"已决的卡"现在两类都不再渲染(见上面授权卡那条),于是这个伪类永远匹配不到
+      元素,同样属死规则。"一个请求只许回答一次"的保证不在这条样式上,而在 panel.js 的
+      answered 集合(单测里拿被摘掉的旧节点再点一次钉着)。 */
+
+/* ---- 输入区(方案 4:卡片式)----
+   两层结构决定了它"贴底不动":
+     .agent-panel (flex column)
+       ├ .agent-messages  flex:1 + overflow-y:auto   ← 只有它在滚
+       └ .agent-footer    flex:none                   ← 永远待在底部
+   卡片三行:上下文(状态点 + 这次会带上哪篇笔记)/ 输入框 / 动作。
+   ⚠️ footer 一旦挂进 .agent-messages,它就会跟着消息滚走(旧实现就是这样)。 */
+.agent-footer {
+    flex: none;
+    margin: 0 10px 10px;
+    padding: 8px 10px 9px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+/* 卡片顶端那一行:平时**整行不占位**(用户要求:聊天框上面干净,连状态点也不要了)。
+   它只有在"Agent 不正常"时才有内容:一句「正在连接 Agent…」(只在 connecting 时)
+   与「停止进程」按钮。
+
+   ⚠️ 为什么要有 `[hidden]` 这条:这一行的 `display:flex` 会**盖掉** `hidden` 自带的
+   `display:none`(同优先级下作者样式赢)—— 少了这条,整行会留下 20px 空行 + 6px 下间距,
+   正是"占着位置的空壳"。
+   ⚠️ 为什么高度钉死 20px:按钮在场时这一行就是那一个 20px 的小按钮,
+   卡片在"出事"这一刻**不该因为多出一行而跳动**(上一轮钉过的不变量:出现时 20、
+   不出现时不占位)。按钮自己 line-height:1.6 + 1px 边框 + 1px padding = 20px,正好装下。 */
+.agent-ctx-row { display: flex; align-items: center; gap: 6px; height: 20px; margin-bottom: 6px; }
+.agent-ctx-row[hidden] { display: none; }
+/* 「正在连接 Agent…」:握手最长 35 秒,那段时间面板不能一片静止。
+   只说正在做什么,**不写数字、不画进度** —— 分母(这一台机器这次要多久)不存在。
+   它自己也要能被 `hidden` 关掉(这条没有 display 规则,所以 `hidden` 天然生效)。 */
+.agent-ctx-hint { flex: none; font-size: 10.5px; color: var(--faint); }
+/* 进程级停止:出事才出现(见 panel.js renderStatus),所以它只是这一行里的一个可能成员,
+   不再是高度的来源 —— 高度由上面 .agent-ctx-row 的 20px 决定。 */
+.agent-ctx-stop {
+    flex: none; padding: 1px 6px;
+    background: none; border: 1px solid var(--border); border-radius: 5px;
+    color: var(--faint); font: inherit; font-size: 10px; line-height: 1.6; cursor: pointer;
+}
+.agent-ctx-stop:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
+.agent-ctx-stop:disabled { opacity: .45; cursor: default; }
+/* (已删除)`.agent-ctx-dot` / `.agent-ctx-key` / `.agent-ctx-key-on` / `.agent-context`:
+   状态点、密钥按钮与整段上下文文字都按用户要求去掉了。状态点原来只表达**上下文**
+   (有笔记=亮点、没有=灰点,判据在 .agent-footer[data-ctx] 上),不承担连接状态 ——
+   现在这份信息挂在输入框上:placeholder 短句 + title 全句(外加 data-ctx/data-ctx-text)。
+   密钥入口改在设置页(设置 → AI 与 Agent)。留着死样式只会让下一个读代码的人以为
+   界面上还有这些东西。 */
+/* 输入框占满一整行(卡片中间那行)。 */
+.agent-footer > input {
+    display: block; width: 100%;
+    padding: 6px 9px; font: inherit; font-size: 12.5px;
+    color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 8px; outline: none;
+}
+.agent-footer > input:focus { border-color: var(--accent); }
+/* 动作行:只有一颗球,而且**靠右**。
+   ⚠️ 原来那把"把按钮推到右边"的弹簧是左边那句「回车发送」的 `margin-right: auto`
+   (那句可见文本按用户要求删掉了)——它一走,按钮就会贴着左边。
+   所以这里由**这一行自己**给弹簧:`justify-content: flex-end`。
+   「回车能发送」那条信息走非视觉出口(input 的 aria-keyshortcuts / aria-label)。 */
+.agent-act-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 7px; }
+
+/* ============ 思考强度 / 模型:一枚小胶囊,紧挨球左侧 ============
+   用户拍板的位置与长相(三张参考图):
+     · 收起 = 当前档位的**一个汉字** + ▲(约 52px);展开 = 标签「思考强度 ▲」;
+     · 点浮层标题「中 ›」进模型清单(第 2 层);
+     · 浮层锚在胶囊上、从**右下角**长出来(它就在球左边,不能往右顶)。
+   ⚠️ 动效全部是**一次性**的(脉冲/抖动/呼吸/入场):由 panel.js 在事件那一刻加类、
+     动画结束摘掉。挂在常驻状态上的话,面板每次重画都会重播一遍(那一块会自己一鼓一鼓地动)。
+   ⚠️ 根属性 html[data-motion="off"] 的全局规则(settings-page.css)会把这里全部关掉;
+     下面还有一条 prefers-reduced-motion 兜底。关掉之后功能一个字节都不变。 */
+.agent-cfg-wrap { position: relative; display: inline-flex; }
+.agent-cfg {
+    display: inline-flex; align-items: center; gap: 5px;
+    font: 12px/1 var(--ui); color: var(--dim);
+    background: #1c1b19; border: 1px solid var(--border); padding: 6px 10px; border-radius: 999px;
+    cursor: pointer; white-space: nowrap;
+    transition: color .14s ease, border-color .14s ease, background .14s ease;
+}
+.agent-cfg::after { content: "▲"; font: 9px/1 var(--mono); color: var(--faint); transition: transform .18s cubic-bezier(.2,.8,.3,1); }
+.agent-cfg[aria-expanded="true"] { color: var(--fg); border-color: var(--border-hi); background: #232220; }
+.agent-cfg[aria-expanded="true"]::after { transform: rotate(180deg); }
+.agent-cfg:hover { border-color: var(--border-hi); color: var(--fg); }
+.agent-cfg.disabled, .agent-cfg:disabled { opacity: .45; cursor: not-allowed; }
+/* 换字:上滑淡入(与思考条逐行入场同一套语言) */
+.agent-cfg.swap { animation: agent-cfg-tick .14s cubic-bezier(.2,.8,.3,1); }
+@keyframes agent-cfg-tick { from { opacity: .2; } to { opacity: 1; } }
+/* 提交成功:一圈描边脉冲(一次性) */
+.agent-cfg.pulse { animation: agent-cfg-pulse .42s cubic-bezier(.2,.8,.3,1); }
+@keyframes agent-cfg-pulse { 0% { box-shadow: 0 0 0 0 rgba(126,200,255,.35); } 100% { box-shadow: 0 0 0 10px rgba(126,200,255,0); } }
+/* 失败:横向抖动 —— 这个交互最需要的反馈是"它没成"(一次性) */
+.agent-cfg.shake { animation: agent-cfg-shake .26s cubic-bezier(.36,.07,.19,.97); }
+@keyframes agent-cfg-shake {
+    10%, 90% { transform: translateX(-2px); } 20%, 80% { transform: translateX(3px); }
+    30%, 50%, 70% { transform: translateX(-4px); } 40%, 60% { transform: translateX(4px); }
+}
+/* 浮层:锚在胶囊上、右下角 origin;收起更快(它不需要被看清) */
+.agent-cfg-pop {
+    position: absolute; right: 0; bottom: calc(100% + 8px); width: 300px;
+    background: #1a1917; border: 1px solid var(--border-hi); border-radius: 14px; padding: 12px 13px 11px;
+    box-shadow: 0 22px 60px rgba(0,0,0,.65); transform-origin: 100% 100%; z-index: 40;
+    opacity: 0; transform: translateY(8px) scale(.94); pointer-events: none; visibility: hidden;
+    transition: opacity .13s ease, transform .13s cubic-bezier(.2,.8,.3,1), visibility 0s linear .13s;
+}
+.agent-cfg-pop.open {
+    opacity: 1; transform: none; pointer-events: auto; visibility: visible;
+    transition: opacity .19s ease, transform .19s cubic-bezier(.2,.8,.3,1), visibility 0s;
+}
+.agent-cfg-pane { display: none; }
+.agent-cfg-pane.on { display: block; animation: agent-cfg-slide .19s cubic-bezier(.2,.8,.3,1); }
+@keyframes agent-cfg-slide { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+.agent-cfg-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.agent-cfg-now { display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; font: 17px/1.2 var(--ui); color: var(--fg); }
+.agent-cfg-now .go { font: 12px/1 var(--mono); color: var(--faint); transition: transform .14s ease, color .14s ease; }
+.agent-cfg-now:hover .go { color: var(--accent); transform: translateX(2px); }
+.agent-cfg-tip { margin-left: auto; font: 10.5px/1 var(--mono); color: var(--faint); }
+/* 滑块:拖动中**不许**有过渡(跟手),松手才回弹 */
+.agent-cfg-track { position: relative; height: 28px; margin: 2px 2px 0; cursor: pointer; touch-action: none; border-radius: 8px; }
+.agent-cfg-track .rail { position: absolute; left: 0; right: 0; top: 50%; height: 4px; transform: translateY(-50%); background: #2b2926; border-radius: 99px; }
+.agent-cfg-track .fill { position: absolute; left: 0; top: 50%; height: 4px; transform: translateY(-50%); background: var(--accent); border-radius: 99px; width: 0; transition: width .24s cubic-bezier(.34,1.4,.5,1); }
+.agent-cfg-track .knob { position: absolute; top: 50%; left: 0; width: 19px; height: 19px; border-radius: 50%; background: #f4f7fb; transform: translate(-50%,-50%); box-shadow: 0 1px 5px rgba(0,0,0,.5); transition: left .24s cubic-bezier(.34,1.4,.5,1); }
+.agent-cfg-track.dragging { cursor: grabbing; }
+.agent-cfg-track.dragging .fill, .agent-cfg-track.dragging .knob { transition: none; }
+.agent-cfg-track.settle .knob { animation: agent-cfg-knob .24s cubic-bezier(.34,1.4,.5,1); }
+@keyframes agent-cfg-knob {
+    0% { transform: translate(-50%,-50%) scale(1); } 35% { transform: translate(-50%,-50%) scale(1.22); }
+    100% { transform: translate(-50%,-50%) scale(1); }
+}
+.agent-cfg-track:focus-visible { outline: 2px solid rgba(126,200,255,.5); outline-offset: 3px; }
+.agent-cfg-stops { display: flex; justify-content: space-between; margin: 2px 0 0; font: 10.5px/1.6 var(--ui); color: var(--faint); }
+.agent-cfg-stops span { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; transition: color .14s ease; }
+.agent-cfg-stops span.on { color: var(--fg); }
+.agent-cfg-desc { margin: 11px 0 0; font-size: 11.5px; line-height: 1.65; color: var(--dim); min-height: 34px; }
+.agent-cfg-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid #262523; margin-top: 10px; padding-top: 9px; font: 11px/1.5 var(--ui); color: var(--faint); }
+/* 「重连以启用图片」:图片能力是**连接建立那一刻**定下的,换模型之后要重新握手才生效 ——
+   这是唯一一件非重连不可的事,所以给它一颗按钮(代价写进 title:会话上下文会清零)。
+   ⚠️ 这里**不写 display**:写了就会和 [hidden]{display:none} 同权重、按源码顺序压过它,
+      于是"该藏起来"时它还在(实测踩过这个权重坑)。 */
+.agent-cfg-renew {
+    margin-left: auto; flex: none;
+    font: 11px/1 var(--ui); color: var(--accent); background: none;
+    border: 1px solid #2f4356; padding: 5px 9px; border-radius: 7px; cursor: pointer;
+    transition: color .14s ease, border-color .14s ease;
+}
+.agent-cfg-renew:hover { border-color: var(--accent); }
+.agent-cfg-renew:disabled { opacity: .5; cursor: not-allowed; }
+.agent-cfg-back { display: block; font: 11.5px/1 var(--ui); color: var(--dim); background: none; border: 0; padding: 0 0 9px; cursor: pointer; }
+.agent-cfg-back:hover { color: var(--fg); }
+.agent-cfg-grp { font: 10.5px/1 var(--mono); color: var(--faint); padding: 6px 8px 5px; letter-spacing: .04em; }
+/* 清单逐条错开入场(与思考条的 --think-stagger 同一个做法) */
+.agent-cfg-opt { display: flex; align-items: flex-start; gap: 8px; padding: 7px 8px; border-radius: 8px; cursor: pointer;
+    animation: agent-cfg-in .2s cubic-bezier(.2,.8,.3,1) both; animation-delay: calc(var(--i, 0) * 22ms); }
+@keyframes agent-cfg-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.agent-cfg-opt:hover, .agent-cfg-opt.on { background: #232220; }
+.agent-cfg-opt .mark { flex: none; width: 13px; font: 11px/1.6 var(--mono); color: var(--accent); }
+.agent-cfg-opt.on .mark { animation: agent-cfg-check .22s cubic-bezier(.34,1.4,.5,1); }
+@keyframes agent-cfg-check { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+.agent-cfg-opt .txt { min-width: 0; }
+.agent-cfg-opt .t1 { display: block; font: 12.5px/1.5 var(--ui); color: var(--fg); }
+.agent-cfg-opt .t2 { display: block; font: 11px/1.5 var(--ui); color: var(--faint); }
+.agent-cfg-empty { margin: 6px 2px; font-size: 11.5px; color: var(--faint); }
+@media (prefers-reduced-motion: reduce) {
+    .agent-cfg, .agent-cfg-pop, .agent-cfg-pane, .agent-cfg-opt, .agent-cfg-track .fill, .agent-cfg-track .knob {
+        animation: none !important; transition: none !important;
+    }
+}
+
+/* ============ 那颗球:发送 / 取消 合成一个控件 ============
+   用户拍板:原来的「发送」「取消」两个文字按钮换成这颗只有眼睛的小机器人
+   (**不要极光** —— 那是另一个 demo 的方向)。空闲=发送、执行中=取消,
+   靠 .agent-orb[data-mode] 与 disabled 表达三态,文案走 aria-label / title。
+   球径 44px:app/lib/robot-face.js 里 ⑥ 机灵那一组手感数就是按 44 算的
+   (眼睛 4.95px / 身体 2.23px)—— 改尺寸要连那边一起看,否则幅度对不上。 */
+.agent-orb {
+    position: relative; width: 44px; height: 44px; padding: 0; border: 0; background: none;
+    cursor: pointer; display: inline-block; transition: transform .16s ease;
+}
+.agent-orb:hover { transform: scale(1.05); }
+.agent-orb:active { transform: scale(.94); }
+.agent-orb:focus-visible { outline: 2px solid rgba(255,255,255,.7); outline-offset: 3px; }
+/* 禁用(没连上、也不能发视频草稿时):灰掉、别给手型 —— 与 .btn:disabled 的语义一致 */
+.agent-orb:disabled { opacity: .45; cursor: default; }
+.agent-orb:disabled:hover { transform: none; }
+.agent-orb-bot { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.agent-orb-bot svg { width: 100%; height: 100%; display: block; overflow: visible; }
+/* ⚠️ 眼睛的 transform 是**每帧**写上去的,绝不能有过渡 —— 有过渡就会和逐帧插值打架,
+   看起来像在抖。眨眼用 scaleY 压扁,那一下才要 90ms 的过渡。 */
+.agent-orb-look { transition: none; }
+.agent-orb-eye { transform-box: fill-box; transform-origin: center; transition: transform .09s ease; }
+.agent-orb.is-blinking .agent-orb-eye { transform: scaleY(.06); }
+/* 执行中(=可点它取消):轻轻呼吸一下。空闲时它是完全静止的 ——
+   两态的差别"靠动效区分",这也是用户对这颗球的要求之一。 */
+@keyframes agent-orb-breathe { from { transform: scale(1); } to { transform: scale(1.055); } }
+.agent-orb[data-mode="cancel"] .agent-orb-bot { animation: agent-orb-breathe 1.4s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) {
+    .agent-orb, .agent-orb-bot, .agent-orb-eye { animation: none !important; transition: none !important; }
+}
+/* 编辑点用的**镜像元素**(见 panel.js 的 caretMirrorFor):一个与 textarea 逐项同排版的隐藏 div,
+   排版属性(字体/内边距/边框/宽度/换行规则)由 JS 每次测量前从 getComputedStyle 抄一遍,
+   这里只钉三条:不占位、不可见、不可点 —— 它绝不能影响笔记正文自己的排版。
+   ⚠️ position:fixed 是**刻意**的:它的 left/top 用 textarea 的**视口矩形**,
+   这样与"容器的定位上下文"无关(笔记块 .blk 不是定位元素,用 absolute 会把原点算错,
+   实测过一次:原点错了 → 量出来的点在框外 → 一直走"看整块"的兜底,而不是看光标)。 */
+.agent-caret-mirror {
+    position: fixed; visibility: hidden; pointer-events: none; overflow: hidden;
+    border-style: solid; border-color: transparent; background: none;
+}
+
+/* ---- 黏贴截图:待发图片的 chip 行 ----
+   位置在**输入框正上方**(见 app/agent/panel.js 的 imageRowEl)。空时整行 hidden,
+   所以没有图片时这张卡片的高度与从前完全一样。
+   图片来自剪贴板,是不可信输入:节点全部 createElement 建出来,文件名走 textContent。 */
+.agent-image-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-bottom: 6px;
+}
+.agent-image-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    max-width: 100%;
+    padding: 3px 5px 3px 3px;
+    border: 1px solid var(--border); border-radius: 7px;
+    background: var(--surface-2);
+}
+/* chip 自己可聚焦:图片不是控件,但键盘用户要能走到它上面读到 aria-label */
+.agent-image-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.agent-image-thumb {
+    flex: none; width: 26px; height: 26px;
+    object-fit: cover; border-radius: 4px;
+    background: var(--surface); border: 1px solid var(--border);
+}
+/* 造不出缩略图时的占位方块(环境里没有 createObjectURL) */
+.agent-image-thumb-empty {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; color: var(--faint);
+}
+.agent-image-name {
+    min-width: 0; max-width: 190px;
+    font-size: 11px; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.agent-image-del {
+    flex: none; width: 17px; height: 17px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: none; border-radius: 4px;
+    color: var(--faint); font: inherit; font-size: 13px; line-height: 1;
+    cursor: pointer;
+}
+.agent-image-del:hover { color: var(--error); background: var(--surface); }
+/* 被拒/发不出去的那一句中文原因:就在输入框下面,不藏进日志 */
+.agent-image-notice {
+    margin: 6px 0 0;
+    font-size: 11px; line-height: 1.5;
+    color: var(--error);
+}
+
+/* ---- 视频理解:待理解视频的卡片行 ----
+   位置同样在输入框上方(图片行下面)。文件名来自用户本机的任意文件 = 不可信输入,
+   节点全部 createElement,文件名走 textContent。
+   卡片上**常驻**一句"这个模型听不到声音"——那是这个功能最容易让人误解的地方,
+   必须在用户决定"要不要点理解"的那一刻就能看到。 */
+.agent-video-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-bottom: 6px;
+}
+.agent-video-chip {
+    display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    max-width: 100%;
+    padding: 4px 6px;
+    border: 1px solid var(--border); border-radius: 7px;
+    background: var(--surface-2);
+}
+.agent-video-name {
+    min-width: 0; max-width: 200px;
+    font-size: 11px; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.agent-video-size { font-size: 10px; color: var(--faint); }
+/* 卡片上没有「理解」按钮了(触发点只有「发送」),所以这里不再有 .agent-video-chip .btn */
+.agent-video-del {
+    flex: none; width: 17px; height: 17px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: none; border-radius: 4px;
+    color: var(--faint); font: inherit; font-size: 13px; line-height: 1;
+    cursor: pointer;
+}
+.agent-video-del:hover { color: var(--error); background: var(--surface); }
+/* 音频说明:占满一行,放在 chip 底部 */
+.agent-video-audio {
+    flex: 1 1 100%;
+    font-size: 10px; line-height: 1.45; color: var(--faint);
+}
+/* 被拒/失败/缺密钥的那一句中文原因 */
+.agent-video-notice {
+    margin: 6px 0 0;
+    font-size: 11px; line-height: 1.5;
+    color: var(--error);
+}
+/* 缺密钥时才出现的"填一次"那一行 */
+.agent-video-key {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    margin-top: 6px;
+}
+.agent-video-key-hint { flex: 1 1 100%; font-size: 10px; line-height: 1.45; color: var(--faint); }
+.agent-video-key-input {
+    flex: 1; min-width: 140px;
+    padding: 5px 8px; font-size: 12px;
+}
+/* 状态读数 / 警告 / 明文后果 / 操作反馈:各占一整行,互不覆盖。
+   分开写是刻意的 —— 一次保存失败不该把"当前用的是环境变量"那句话盖掉。 */
+.agent-video-key-status { flex: 1 1 100%; font-size: 10.5px; color: var(--text); }
+.agent-video-key-warn {
+    flex: 1 1 100%; font-size: 10px; line-height: 1.5;
+    color: var(--warn, var(--accent));
+}
+.agent-video-key-detail { flex: 1 1 100%; font-size: 10px; line-height: 1.5; color: var(--faint); }
+.agent-video-key-result { flex: 1 1 100%; font-size: 10px; line-height: 1.5; color: var(--faint); }
+/* 卡片自己的收起入口:靠右、安静(它是个退路,不该抢"保存"的位置) */
+.agent-video-key-close {
+    flex: none; margin-left: auto; padding: 1px 7px;
+    background: none; border: 1px solid var(--border); border-radius: 5px;
+    color: var(--faint); font: inherit; font-size: 10px; line-height: 1.6; cursor: pointer;
+}
+.agent-video-key-close:hover { color: var(--accent); border-color: var(--accent); }
+/* 消息流里的视频卡片与用量读数 */
+.agent-msg-video {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-bottom: 6px; padding: 4px 8px;
+    border: 1px solid var(--border); border-radius: 7px;
+    background: var(--surface-2);
+    font-size: 11px; color: var(--text);
+}
+.agent-msg-video-tag { font-size: 10px; color: var(--faint); }
+.agent-msg-video-size { font-size: 10px; color: var(--faint); }
+.agent-msg-usage { margin-top: 5px; font-size: 10px; color: var(--faint); }
+/* 三段耗时(上传/首字/生成):等宽字体,好让每次运行的读数上下对齐、一眼能比。
+   它是**自标定**那一行 —— 每次真实运行都会把这三个数写在这里。 */
+.agent-msg-timings {
+    margin-top: 3px;
+    font-family: var(--mono); font-size: 10px; color: var(--faint);
+}
+
+/* ================= 方案 C:四段真实状态行 =================
+   对着 docs/kaiwu-send-motion-demo.html 里的 .stages / .stage-row / .sbar 写。
+   三条刻意的选择:
+     ① 每行前面有一个**字符**标记(· / ▸ / ✓ / ✕)——只靠颜色深浅不明确,读屏也读不出;
+     ② 条子只有 3px 高、只在**有真百分比**的那一段才填(上传)。等待与生成没有分母,
+        条子恒为 0:画一条会动的假条比不画更糟(用户会拿它当剩余时间的依据);
+     ③ 宽度动画是 .12s linear —— 上传的百分点是离散报上来的,线性过渡能让它看起来
+        是"走"而不是"跳"(但**不改数字本身**)。
+   颜色沿用既有 token:doing 用 accent、done 用 ok、failed 用 error。 */
+.stages {
+    display: flex; flex-direction: column; gap: 7px;
+    min-width: 280px;
+    margin-bottom: 6px;
+}
+.stage-row {
+    display: flex; gap: 8px; align-items: baseline;
+    font-size: 12.5px; color: var(--faint);
+}
+.stage-row .mark { width: 14px; flex: none; font-family: var(--mono); }
+.stage-row.doing { color: var(--muted); }
+.stage-row.doing .mark { color: var(--accent); }
+.stage-row.done { color: var(--dim); }
+.stage-row.done .mark { color: var(--ok); }
+.stage-row.failed { color: var(--error); }
+.stage-row.failed .mark { color: var(--error); }
+.stage-body { flex: 1; min-width: 0; }
+.stage-label { margin-right: 6px; }
+/* 读数(已交给连接 37% / 已等待 12.3 秒 / 已生成 210 字):安静一点,别跟标签抢 */
+.stage-detail { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.sbar {
+    height: 3px; border-radius: 2px; overflow: hidden;
+    margin-top: 3px;
+    background: rgba(255, 255, 255, .08);
+}
+.sbar i {
+    display: block; height: 100%; width: 0;
+    background: var(--accent);
+    transition: width .12s linear;
+}
+.stage-row.failed .sbar i { background: var(--error); }
+
+/* ⚠️ 没有分母的那两段(等待首个字 / 生成正文)**不画轨道** ——
+   一根永远是 0% 的空轨道,用户读到的是"卡住了"(真机反馈的原话),这与
+   "拿不到读数就不画条"自相矛盾;而画一条会走的假进度条更糟(会被当成剩余时间)。
+   换成一条来回游走的细光带:它说的是"在等、不知道还要多久",与"进度"是两件事。 */
+.sbar.indeterminate { background: transparent; }
+.sbar.indeterminate i {
+    /* 略宽、更亮、更快 —— 用户反馈"看不出在动"。但仍然**明确是"不确定"**:
+       它是一条来回游走的窄光带(两端渐隐、只占 40% 宽),不是从左往右填的进度条。 */
+    width: 40%;
+    background: linear-gradient(90deg, rgba(126, 200, 255, 0), var(--accent), rgba(126, 200, 255, 0));
+    opacity: .8;
+    animation: stage-band-drift 1.1s ease-in-out infinite alternate;
+}
+/* 收尾/失败、又没有百分比的行:位置留着但什么都不画
+   (直接 display:none 会让整块高度跳一下) */
+.sbar.idle { background: transparent; }
+@keyframes stage-band-drift {
+    from { transform: translateX(0); }
+    to { transform: translateX(150%); }      /* 40% 宽的带子走完剩下的 60% */
+}
+/* 取消:在飞的时候才有。它是个退路,所以安静地靠右 —— 但必须看得见
+   (169.5 MB 那条实测要等 47–71 秒,上行慢的时候是几分钟)。 */
+.stage-cancel { align-self: flex-start; margin-top: 2px; }
+
+
+/* ⚠️ 这两条**必须**在最后,而且必须存在:
+   `hidden` 属性在 UA 样式表里是 `display:none`,而**作者样式表的任何 display
+   都会盖掉它**(作者 > UA,与选择器权重无关)。上面 `.agent-image-row` 写了
+   `display:flex`,于是没有这一条时"空行 + margin-bottom:6px"照样参与布局 ——
+   页面上多出 6px 高度、整个工作台因此多出一条纵向滚动条,布局断言随之整体偏移
+   (实测:三栏宽度各少 6px)。这类"看起来没显示、其实占了位置"的错法没有报错,
+   只有几何断言抓得到,所以这里显式关掉。 */
+.agent-image-row[hidden],
+.agent-image-notice[hidden],
+.agent-video-row[hidden],
+.agent-video-notice[hidden],
+.agent-video-key[hidden] { display: none; }
+
+/* 替身/旧结构里那套一行式输入区:保持可用(真外壳已换成上面的卡片) */
+.agent-input-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.agent-input-row input {
+    flex: 1; min-width: 0;
+    padding: 7px 10px; font-size: 13px;
+}
+.agent-input-row .btn { padding: 6px 12px; font-size: 12.5px; }
+
+
+/* ================= 服务状态点 ================= */
+/* 底部那条"服务状态条"已经去掉(服务随应用启动,不需要用户点;状态摆在
+   用到它的工具面板里,见 base.css 的 .svc)。状态点供插件面板的服务徽标使用。 */
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.status-dot[data-status="ready"]    { background: #4ade80; }
+.status-dot[data-status="external"] { background: var(--accent); }
+.status-dot[data-status="starting"] { background: #fbbf24; }
+.status-dot[data-status="failed"]   { background: #f87171; }
+
+/* ================= 首启向导 ================= */
+.onboarding {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+}
+.onboarding-card {
+    width: min(560px, calc(100vw - 48px));
+    padding: 34px 36px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface);
+}
+.onboarding-title {
+    margin: 0 0 10px; font-size: 26px; letter-spacing: 4px; color: #fff;
+}
+.onboarding-lead { margin: 0 0 12px; font-size: 15px; color: var(--text); }
+.onboarding-note { margin: 0 0 18px; font-size: 13px; line-height: 1.8; color: var(--dim); }
+.onboarding-note code {
+    padding: 1px 5px; font-family: var(--mono); font-size: 12px;
+    background: rgba(0, 0, 0, .35); border-radius: 4px;
+}
+.onboarding-path {
+    margin-bottom: 18px; padding: 10px 12px;
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    background: rgba(0, 0, 0, .3); border-radius: var(--radius-sm);
+    word-break: break-all;
+}
+.onboarding-actions { margin-bottom: 16px; }
+.onboarding-foot { margin: 0; font-size: 12px; color: var(--faint); }
+.linklike {
+    padding: 0; font: inherit; font-size: 12px; color: var(--accent);
+    background: none; border: 0; text-decoration: underline; cursor: pointer;
+}
+
+/* ================= 笔记预览的最小 Markdown 样式 ================= */
+.md-view h1, .md-view h2, .md-view h3 {
+    color: #fff; margin: 18px 0 8px; line-height: 1.4;
+}
+.md-view h1 { font-size: 22px; }
+.md-view h2 { font-size: 18px; }
+.md-view h3 { font-size: 16px; }
+.md-view p { margin: 0 0 10px; }
+.md-view ul, .md-view ol { margin: 0 0 10px; padding-left: 22px; }
+.md-view li { margin-bottom: 3px; }
+.md-view code {
+    padding: 1px 5px; font-family: var(--mono); font-size: 12.5px;
+    background: rgba(0, 0, 0, .35); border-radius: 4px; color: var(--accent);
+}
+.md-view pre {
+    margin: 0 0 10px; padding: 12px 14px; overflow-x: auto;
+    background: rgba(0, 0, 0, .35); border-radius: var(--radius-sm);
+}
+.md-view pre code { padding: 0; background: none; }
+.md-view blockquote {
+    margin: 0 0 10px; padding-left: 12px;
+    border-left: 3px solid var(--border); color: var(--dim);
+}
+.md-view hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+.md-view a.wikilink { color: var(--accent); cursor: pointer; text-decoration: none; }
+.md-view a.wikilink:hover { text-decoration: underline; }
+.md-view a.wikilink.missing { color: var(--faint); border-bottom: 1px dashed var(--faint); }
+.md-view table { border-collapse: collapse; margin: 0 0 10px; }
+.md-view th, .md-view td {
+    padding: 5px 10px; border: 1px solid var(--border); font-size: 13px;
+}
+.md-view th { background: rgba(255, 255, 255, .04); }
+
+/* ================= 粒子星空背景 ================= */
+#starfield { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+/* ================= 无障碍 ================= */
+@media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ============ 状态动画(接进真身):形状归状态、位置归注视 ============
+   除"连不上"以外**全部零额外图层** —— 七态都靠现有那两只眼睛的 transform/opacity 表达:
+     连接中=上移 + 半闭(scaleY)   已停止=压成一条线    等待=放大 1.08 且不动
+     思考中=上移 + 慢画圈          流式=左右扫读        长任务=两眼分开 + 放大
+   颜色只动**头**的 fill:思考中→青蓝、流式→青绿(与 demo 一致:白=闲着/用不了,彩=在干活)。
+   ⚠️ 位置类的 transform 与逐帧写的 `.look` 是两层:暂停注视时由 CSS 摆位置,JS 不写(见 panel.js)。 */
+.agent-orb[data-face="starting"] .agent-orb-look { transform: translateY(-2.8px); }
+.agent-orb[data-face="starting"] .agent-orb-eye { transform: scaleY(.62); }
+.agent-orb[data-face="stopped"] .agent-orb-look { transform: translateY(.6px); }
+.agent-orb[data-face="stopped"] .agent-orb-eye { transform: scaleY(.14); }
+.agent-orb[data-face="failed"] .agent-orb-eye { opacity: .5; }
+.agent-orb[data-face="thinking"] .agent-orb-look { transform: translateY(-2.0px); }
+.agent-orb[data-face="thinking"] .agent-orb-eye { animation: faceOrbit 1.9s ease-in-out infinite; }
+.agent-orb[data-face="streaming"] .agent-orb-eye { animation: faceSweep 1.15s ease-in-out infinite; }
+.agent-orb[data-face="waiting"] .agent-orb-look { transform: scale(1.08); }
+.agent-orb[data-face="longtask"] .agent-orb-eye[data-eye="l"] { transform: translateX(-1.3px) scale(1.06); }
+.agent-orb[data-face="longtask"] .agent-orb-eye[data-eye="r"] { transform: translateX(1.3px) scale(1.06); }
+@keyframes faceOrbit { 0%,100% { transform: translate(0,-.5px); } 25% { transform: translate(1.2px,0); }
+  50% { transform: translate(0,.5px); } 75% { transform: translate(-1.2px,0); } }
+@keyframes faceSweep { 0%,100% { transform: translateX(-1.6px); } 50% { transform: translateX(1.6px); } }
+/* 头部的颜色:思考青蓝 / 流式青绿(缓慢循环,不刺眼) */
+@keyframes faceThink { 0%,100% { fill: #8ea2ff; } 50% { fill: #c48bff; } }
+@keyframes faceStream { 0%,100% { fill: #7bf0c8; } 50% { fill: #5ad1ff; } }
+.agent-orb[data-face="thinking"] .agent-orb-head { animation: faceThink 4.5s ease-in-out infinite; }
+.agent-orb[data-face="streaming"] .agent-orb-head { animation: faceStream 3.6s ease-in-out infinite; }
+
+/* ============ 连不上:9 片全白撕裂 + 熄灯掉电 ============
+   ⚠️ 这一层**只在 failed/crashed 时存在**(panel.js 进这一态才建、离开就整体回收)——
+   9 张脸副本 + 一堆动画常驻着是纯空耗(离屏实测:这一套在主线程上约 9.7% 单核)。
+   结构:没有完整底脸,脸**由 9 条横片拼成** ⟹ 任何一片错位都会在中间露背景(缺口)。
+   节奏:静 70% → 撕 400ms(片内换 4 次)→ 静;熄灯 2.4s 一轮,最低 0.12。 */
+.agent-orb-tear { position: absolute; inset: 0; display: block; }
+.agent-orb-tear > i { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden;
+  display: block; will-change: transform; }
+.agent-orb-tear svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.agent-orb-tear .agent-orb-head { fill: #f2f6ff; }
+.agent-orb-tear .agent-orb-eye { fill: #0b0d16; }
+/* 失败态:整颗球一起熄灯(用户这次明确要"反复变暗又亮起",与"亮度恒定"那条相反) */
+.agent-orb[data-face="failed"] { animation: faceLightsOut 2.4s steps(1, end) infinite; }
+@keyframes faceLightsOut {
+  0%,18% { opacity: .9; } 19%,33% { opacity: .28; } 34%,47% { opacity: .85; }
+  48%,66% { opacity: .12; } 67%,78% { opacity: .55; } 79%,100% { opacity: .9; }
+}
+@keyframes faceTear {
+  0%,70% { transform: translateX(0); } 72% { transform: translateX(var(--ta)); }
+  79% { transform: translateX(var(--tb)); } 86% { transform: translateX(var(--tc)); }
+  93% { transform: translateX(var(--td)); } 96%,100% { transform: translateX(0); }
+}
+@keyframes faceVanish { 0%,83% { opacity: 1; } 84%,90% { opacity: 0; } 91%,100% { opacity: 1; } }
+.agent-orb-tear > i { animation: faceTear 1.6s steps(1, end) infinite; }
+.agent-orb-tear > i:nth-child(3n) { animation: faceTear 1.6s steps(1, end) infinite, faceVanish 1.6s steps(1, end) infinite; }
+/* ⚠️ prefers-reduced-motion:冻在"撕开且有缺口"的一帧,亮度取**中间值 .72**
+   (不取最暗那帧 —— 那样看着像没渲染出来)。 */
+@media (prefers-reduced-motion: reduce) {
+  .agent-orb, .agent-orb *, .agent-orb-tear > i { animation: none !important; }
+  .agent-orb[data-face="failed"] { opacity: .72; }
+  .agent-orb-tear > i { transform: translateX(var(--ta)); }
+  .agent-orb[data-face="failed"] .agent-orb-eye { opacity: .45; }
+}
+
+/* ---- 输入区 = 方案 ③「底部小栏」(用户拍板)----
+   上一版是"卡片里再套一个有独立边框的小输入框";现在:
+     · textarea 铺满卡片上半部:无边框/无底色/无圆角/焦点不另画圈 —— 卡片边框就是它的边框;
+     · 下半部一条**很矮**的栏只放球(右对齐),两栏之间**不画分隔线**(画了就变回"框里套框");
+     · 随内容长高:panel.js 按 scrollHeight 设高度,到 --agent-input-max 之后**内部滚**(卡片不再长);
+     · 聚焦反馈交给**卡片**::focus-within 描边转蓝 + 一圈很淡的外环(敲字时"整张卡"在回应你)。
+   ⚠️ 球那一栏必须占 44px(球是 44px,不许压小),所以卡片最短高度天然比"角上悬浮"高一档 ——
+      这也是方案 ③ 的固有代价(见 docs/kaiwu-input-area-demo.html 的说明)。 */
+.agent-footer #agentInput {
+    display: block; width: 100%; box-sizing: border-box; margin: 0; padding: 0;
+    border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit;
+    line-height: 1.55; resize: none; overflow-y: hidden; outline: none;
+    max-height: var(--agent-input-max, 7em);      /* 上限之后内部滚 */
+}
+.agent-footer #agentInput:focus, .agent-footer #agentInput:focus-visible {
+    outline: none; box-shadow: none; border: 0;   /* 焦点环不画:整张卡片就是那个"框" */
+}
+.agent-footer .agent-act-row {
+    display: flex; justify-content: flex-end; align-items: center;
+    margin: 0; padding: 0; min-height: 0;
+}
+.agent-footer .agent-act-row .agent-orb { margin-bottom: -5px; }   /* 球贴卡片下沿,矮栏本身仍然很矮 */
+.agent-footer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(111,141,255,.22); }

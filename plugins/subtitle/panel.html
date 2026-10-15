@@ -1,0 +1,50 @@
+<!-- 字幕格式互转面板 -->
+<!-- 面板在用户第一次点开这个工具时才被注入 DOM,所以 index.js 顶层的 -->
+<!-- getElementById 一定拿到 null —— 所有查询都放在 setup(el, ctx) 里(设计文档 §5.3)。 -->
+<div class="tool-block">
+    <h3>字幕格式互转</h3>
+    <p class="tool-block-desc">
+        在 SRT / VTT / ASS 之间互相转换。源格式会自动识别，不用手动选。
+    </p>
+
+    <p class="hint">
+        SRT：绝大多数剪辑软件和播放器都认，PR、达芬奇导出字幕一般是这个格式<br>
+        VTT：网页播放器（HTML5 video）专用的格式，时间码用点号而不是逗号<br>
+        ASS：带样式信息的字幕格式，能做字体、位置、特效，时间单位是厘秒（1/100 秒）
+    </p>
+
+    <div class="field-row mt-md">
+        <span class="hint">
+            识别到的源格式：<strong id="subtitleDetected">等待输入…</strong>
+        </span>
+    </div>
+
+    <textarea id="subtitleInput" class="code-out mt-sm" rows="10" spellcheck="false"
+              placeholder="把字幕内容粘贴到这里……或者把 .srt / .vtt / .ass 文件直接拖到这儿"></textarea>
+
+    <div class="field-row mt-sm">
+        <div class="field">
+            <label for="subtitleTarget">转换成</label>
+            <select id="subtitleTarget">
+                <option value="srt">SRT（.srt）</option>
+                <option value="vtt">VTT（.vtt）</option>
+                <option value="ass">ASS（.ass）</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" id="subtitleRun">开始转换</button>
+        <button class="btn" id="subtitleClear">清空</button>
+    </div>
+
+    <!-- 出错时显示在这里，带具体行号 -->
+    <p class="hint mt-sm" id="subtitleStatus"></p>
+
+    <div class="mt-md">
+        <textarea id="subtitleOutput" class="code-out" rows="10"
+                  spellcheck="false" placeholder="转换结果会显示在这里"></textarea>
+        <div class="field-row mt-sm">
+            <button class="btn btn-sm" id="subtitleCopy" disabled>复制结果</button>
+            <button class="btn btn-sm" id="subtitleDownload" disabled>下载文件</button>
+            <span class="hint" id="subtitleCount"></span>
+        </div>
+    </div>
+</div>

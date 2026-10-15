@@ -1,0 +1,9 @@
+# Task 1 read-only review
+
+Review new note canvas storage against note-canvas-storage-brief.md, 2026-10-09-note-canvas.md and note-canvas-storage-report.md. Approved extensions: opaque vault token to bind operations to current vault, canvas.readNote/writeNote CAS channels, minimal optional beforeWrite hook in existing note-index.js. User explicitly requires direct edit and preserve dirty worktree, so no commits/branches were made. This is a review of current scoped additions, not all prior user changes in Git diff.
+
+Read-only, no edit/stage/commit/reset. Owned new files app/lib/note-canvas.js, electron/notes/canvas-ipc.js, tests/note-canvas*.test.js. Shared existing files only review canvas-related additions in app/runtime/ctx.js, app/lib/manifest-schema.js, electron/preload.cjs, electron/main.js; beforeWrite/atomic guard additions in electron/notes/note-index.js. Inspect full surrounding functions when necessary, but do not label unrelated historical code new findings.
+
+First spec compliance, then code quality and safety. Read real code and tests, optionally rerun focused tests. Critical: path escapes (lex/realpath/symlink), accidental overwrites / duplicate creation, async vault switch at final write, CAS serialization, permission/bridge correctness, old notes behavior preservation, invalid images. API contracts consistent with UI brief. JSON Canvas supported subset outputs format-safe values. Security/data loss findings must use reproducible input and file/line, explain actual consequence, not hypothetical broad TOCTOU native process races outside app threat model.
+
+Return <=15 lines with spec verdict, quality verdict, Critical/Important/Minor, verification evidence and report path. Full review report main will persist based on your findings. A clean review must explicitly say no blocking findings.

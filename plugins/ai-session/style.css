@@ -1,0 +1,167 @@
+/* AI 会话台账(插件面板)—— **单列**版。
+   作用域由 scopeCss 加 [data-plugin="ai-session"] 前缀,所以这里只管自己这一片。
+
+   与上一版的区别:右栏(详情/回看)整块删掉了 —— 面板只有清单这一列;行自己就是按钮;
+   右键出浮层菜单;失败原因长在行上。 */
+
+.ses-pane {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: #131211;
+  color: #e8e6e3;
+  font: 13px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+/* 一列,占满整片 */
+.ses-list {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ---------------- 清单头 ---------------- */
+.ses-lhead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 11px 7px;
+  font: 10.5px/1 ui-monospace, Consolas, monospace;
+  color: #6b6660;
+  letter-spacing: .06em;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #131211;
+  border-bottom: 1px solid #1c1b1a;
+}
+.ses-count { color: #4e4a45; }
+.ses-new {
+  margin-left: auto;
+  font: 11.5px/1 inherit;
+  color: #0e0e0e;
+  background: #7ec8ff;
+  border: 1px solid #7ec8ff;
+  border-radius: 7px;
+  padding: 4px 8px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ses-new:disabled { color: #565049; background: #1a1917; border-color: #2a2927; cursor: not-allowed; font-weight: 400; }
+.ses-new + .ses-refresh { margin-left: 0; }
+.ses-refresh {
+  margin-left: auto;
+  font: 11.5px/1 inherit;
+  color: #9a9590;
+  background: #1c1b19;
+  border: 1px solid #33312e;
+  border-radius: 7px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.ses-refresh:hover { border-color: #57534e; color: #e8e6e3; }
+
+/* 清单级的话(读不到台账之类)。成功路径上它是空的 —— 自检钉着这一条。 */
+.ses-lerr {
+  font: 11.5px/1.7 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: #f0c4bf;
+  padding: 0 11px;
+}
+.ses-lerr:empty { display: none; }
+
+/* ---------------- 行(行自己就是按钮) ---------------- */
+.ses-day {
+  padding: 9px 11px 3px;
+  font: 10.5px/1 ui-monospace, Consolas, monospace;
+  color: #565049;
+  letter-spacing: .06em;
+}
+.ses-row {
+  padding: 8px 11px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  outline: none;
+}
+.ses-row + .ses-row { border-top: 1px solid #1c1b1a; }
+.ses-row:hover { background: #191817; }
+/* 键盘用户:焦点必须看得见(行就是那个按钮) */
+.ses-row:focus-visible,
+.ses-row:focus { background: #1a1917; border-left-color: #7ec8ff; }
+.ses-row.current .ses-title { color: #7ec8ff; }
+.ses-title {
+  font-size: 13px;
+  color: #e8e6e3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ses-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  font: 11px/1.6 ui-monospace, Consolas, monospace;
+  color: #6b6660;
+}
+.ses-model { color: #7a736b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
+.ses-badge {
+  font: 10px/1.6 ui-monospace, Consolas, monospace;
+  padding: 0 6px;
+  border-radius: 99px;
+  border: 1px solid #33312e;
+  color: #9a9590;
+}
+.ses-badge.live, .ses-badge.resumable { color: #7ddc9a; border-color: #274434; }
+.ses-badge.gone { color: #e8c07d; border-color: #4a3f2a; }
+.ses-empty-turn { color: #6b6660; }
+
+/* 失败原因**长在这一行上**(右栏与提示条都没了,静默就是"点了没反应") */
+.ses-row-err {
+  margin-top: 5px;
+  border: 1px solid #4a2c2a;
+  background: rgba(255, 138, 128, .08);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: #f0c4bf;
+  white-space: pre-wrap;
+}
+
+/* ---------------- 右键浮层 ---------------- */
+.ses-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 148px;
+  padding: 4px;
+  background: #1a1917;
+  border: 1px solid #57534e;
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .6);
+}
+.ses-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: 12.5px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: #e8e6e3;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+.ses-menu-item:hover, .ses-menu-item:focus { background: #242322; outline: none; }
+
+/* ---------------- 空态 ---------------- */
+.ses-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: #6b6660;
+  font-size: 12.5px;
+  line-height: 1.8;
+}
+.ses-empty-big { display: block; margin-bottom: 4px; font-size: 14px; color: #9a9590; }

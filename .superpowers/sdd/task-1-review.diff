@@ -1,0 +1,104 @@
+# Task 1 delta review package
+Baseline: exact file snapshots captured before Task 1; no commits created per user instruction.
+
+## electron\app-menu.js
+warning: in the working copy of 'E:\project\kaiwu\.superpowers\sdd\snapshots\task-1\electron\app-menu.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'E:\project\kaiwu\electron\app-menu.js', LF will be replaced by CRLF the next time Git touches it
+diff --git "a/E:\\project\\kaiwu\\.superpowers\\sdd\\snapshots\\task-1\\electron\\app-menu.js" "b/E:\\project\\kaiwu\\electron\\app-menu.js"
+index c068515..4848f86 100644
+--- "a/E:\\project\\kaiwu\\.superpowers\\sdd\\snapshots\\task-1\\electron\\app-menu.js"
++++ "b/E:\\project\\kaiwu\\electron\\app-menu.js"
+@@ -5,24 +5,25 @@
+ // 「macOS 与 Windows 结构对不对」都能用 `node --test` 直接钉住,
+ // 接线(Menu.buildFromTemplate + setApplicationMenu)留在 main.js。
+ //
+ // 背景:在此之前全项目没有任何 setApplicationMenu,BrowserWindow 也没设
+ // autoHideMenuBar,所以窗口顶部露出来的是 Electron 的原生英文菜单。
+ 
+ /**
+  * @param {{platform?:string, isDev?:boolean,
+  *          views?:Array<{id:string,label:string,open?:boolean,active?:boolean}>,
+  *          tools?:Array<{id:string,label:string,open?:boolean,active?:boolean}>,
+- *          onAddView?:(id:string)=>void}} [options]
++ *          onAddView?:(id:string)=>void,
++ *          onOpenPreferences?:()=>void}} [options]
+  * @returns {Array<object>} Electron 的 MenuItem 模板
+  */
+-export function buildMenuTemplate({ platform = process.platform, isDev = false, views = [], tools = [], onAddView = null } = {}) {
++export function buildMenuTemplate({ platform = process.platform, isDev = false, views = [], tools = [], onAddView = null, onOpenPreferences = null } = {}) {
+     const darwin = platform === 'darwin';
+     const sep = { type: 'separator' };
+ 
+     // 开发者项只在 --dev 下出现。
+     // 产品菜单里摆一个「开发者工具」是内部实现泄漏;但开发时又离不开它,
+     // 所以做成开关而不是直接删掉代码。
+     const devView = isDev
+         ? [
+             { label: '重新加载', role: 'reload' },
+             { label: '强制重新加载', role: 'forceReload' },
+@@ -57,20 +58,22 @@ export function buildMenuTemplate({ platform = process.platform, isDev = false,
+     const editMenu = {
+         label: '编辑',
+         submenu: [
+             { label: '撤销', role: 'undo' },
+             { label: '重做', role: 'redo' },
+             sep,
+             { label: '剪切', role: 'cut' },
+             { label: '复制', role: 'copy' },
+             { label: '粘贴', role: 'paste' },
+             { label: '全选', role: 'selectAll' },
++            sep,
++            { label: '首选项…', click: () => onOpenPreferences?.() },
+         ],
+     };
+ 
+     const viewMenu = {
+         label: '视图',
+         submenu: [
+             ...devView,
+             { label: '实际大小', role: 'resetZoom' },
+             { label: '放大', role: 'zoomIn' },
+             { label: '缩小', role: 'zoomOut' },
+
+## tests\app-menu.test.js
+warning: in the working copy of 'E:\project\kaiwu\.superpowers\sdd\snapshots\task-1\tests\app-menu.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'E:\project\kaiwu\tests\app-menu.test.js', LF will be replaced by CRLF the next time Git touches it
+diff --git "a/E:\\project\\kaiwu\\.superpowers\\sdd\\snapshots\\task-1\\tests\\app-menu.test.js" "b/E:\\project\\kaiwu\\tests\\app-menu.test.js"
+index b7f90f2..22422b4 100644
+--- "a/E:\\project\\kaiwu\\.superpowers\\sdd\\snapshots\\task-1\\tests\\app-menu.test.js"
++++ "b/E:\\project\\kaiwu\\tests\\app-menu.test.js"
+@@ -55,20 +55,34 @@ test('dev 时开发者项都在', () => {
+ 
+ test('macOS 首项是应用菜单,Windows 不是', () => {
+     const mac = buildMenuTemplate({ platform: 'darwin' });
+     assert.equal(mac[0].label, '开物', 'macOS 第一项应当是应用自己的名字');
+     assert.ok(mac[0].submenu.some(i => i.role === 'about'), '应用菜单里要有「关于」');
+ 
+     const win = buildMenuTemplate({ platform: 'win32' });
+     assert.equal(win.some(m => m.label === '开物'), false, 'Windows 不该有那一条应用菜单');
+ });
+ 
++test('编辑菜单在 Windows 与 macOS 都提供首选项入口', () => {
++    for (const platform of PLATFORMS) {
++        let opened = 0;
++        const edit = buildMenuTemplate({ platform, onOpenPreferences: () => { opened += 1; } })
++            .find((menu) => menu.label === '编辑');
++        assert.deepEqual(edit.submenu.slice(-3).map((item) =>
++            item.type === 'separator' ? 'separator' : item.label), ['全选', 'separator', '首选项…']);
++        edit.submenu.at(-1).click();
++        assert.equal(opened, 1);
++        assert.deepEqual(edit.submenu.filter((item) => item.role).map((item) => item.role),
++            ['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll']);
++    }
++});
++
+ test('每个可点项都有 role 或 click —— 否则会渲染成一个按不动的死项', () => {
+     for (const platform of PLATFORMS) {
+         for (const menu of buildMenuTemplate({ platform })) {
+             for (const item of menu.submenu ?? []) {
+                 if (item.type === 'separator') continue;
+                 assert.ok(item.role !== undefined || typeof item.click === 'function',
+                     `${menu.label} / ${item.label ?? '(无标签)'} 既没有 role 也没有 click`);
+             }
+         }
+     }

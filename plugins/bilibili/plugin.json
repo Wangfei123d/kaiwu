@@ -1,0 +1,30 @@
+{
+  "id": "bilibili",
+  "name": "B站解析下载",
+  "version": "1.0.0",
+  "description": "粘贴 B 站视频链接或 BV 号,解析后加入下载队列",
+  "author": "wangfei",
+  "entry": "index.js",
+  "order": 60,
+  "permissions": ["log", "services", "settings", "clipboard"],
+  "contributes": {
+    "tools": [
+      { "id": "bilibili", "title": "B站解析下载", "icon": "bilibili",
+        "panel": "panel.html", "style": "style.css", "workspacePane": true }
+    ],
+    "services": [
+      {
+        "id": "bilidown-api",
+        "label": "B站解析服务",
+        "cwd": "bilidown",
+        "command": "node",
+        "args": ["kaiwu-launcher.mjs"],
+        "port": 3302,
+        "healthPath": "/health",
+        "healthTimeoutMs": 8000,
+        "autoStart": true,
+        "stopOnExit": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "id": "douyin",
+  "name": "抖音解析",
+  "version": "1.0.0",
+  "description": "粘贴分享文案或链接,解析无水印视频 / 图集",
+  "author": "wangfei",
+  "entry": "index.js",
+  "order": 50,
+  "permissions": ["log", "services", "cookies", "browser"],
+  "contributes": {
+    "tools": [
+      { "id": "douyin", "title": "抖音解析", "icon": "video",
+        "panel": "panel.html", "style": "style.css", "workspacePane": true }
+    ],
+    "cookieLogin": {
+      "title": "登录抖音(开物)",
+      "loginUrl": "https://www.douyin.com/",
+      "cookieDomain": "douyin.com",
+      "target": { "service": "douyin-api", "path": "/douyin/cookie" }
+    },
+    "browserFetch": {
+      "allow": ["https://www.douyin.com/"],
+      "capture": ["/aweme/v1/web/aweme/detail/"]
+    },
+    "services": [
+      {
+        "id": "douyin-api",
+        "label": "抖音解析服务",
+        "cwd": "douyin_parse",
+        "command": ".python-runtime/python.exe",
+        "args": ["web_api.py"],
+        "port": 3301,
+        "healthPath": "/health",
+        "autoStart": true,
+        "stopOnExit": true
+      }
+    ]
+  }
+}

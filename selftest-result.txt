@@ -1,0 +1,92 @@
+[PASS] 主进程已就绪
+[PASS] 渲染进程已载入页面 — toolbox://shell/index.html?testVault=C%3A%5CUsers%5C18014%5CAppData%5CLocal%5CTemp%5Ckaiwu-selftest-vault-aXKPRi
+[PASS] IPC 桥不在 window 上且 Node 能力未泄漏
+[PASS] 页面经 toolbox:// 载入 — toolbox://shell/index.html?testVault=C%3A%5CUsers%5C18014%5CAppData%5CLocal%5CTemp%5Ckaiwu-selftest-vault-aXKPRi
+[PASS] 自定义协议支持 fetch
+[PASS] 越界请求被拒绝 — 403
+[PASS] 畸形百分号编码被拒绝 — 400
+[PASS] 外壳初始化完成
+[PASS] 页面没有未捕获的异常 — []
+[PASS] 指定了笔记库时不显示首启向导 — 向导可见=false
+[PASS] 外壳已显示
+[PASS] 向导的计算样式确实是 display:none(hidden 没被 CSS 覆盖) — onboarding.display=none
+[PASS] 外壳的计算样式不是 none — shell.display=grid
+[PASS] 已配置笔记库时启动后停在笔记界面而不是向导 — {"onb":false,"shell":true,"ready":{"view":"notes","vault":"C:\\Users\\18014\\AppData\\Local\\Temp\\kaiwu-selftest-vault-aXKPRi","notes":5,"activated":10,"broken":1,"testVault":"C:\\Users\\18014\\AppData\\Local\\Temp\\kaiwu-selftest-vault-aXKPRi"}}
+       启动阶段状态: {"view":"notes","vault":"C:\\Users\\18014\\AppData\\Local\\Temp\\kaiwu-selftest-vault-aXKPRi","notes":5,"activated":10,"broken":1,"testVault":"C:\\Users\\18014\\AppData\\Local\\Temp\\kaiwu-selftest-vault-aXKPRi"}
+[PASS] 启动后停在笔记视图,工具不会自动打开或切换主视图 — {"notes":true,"settings":true}
+[PASS] 启动时六个指定工具均不在工作台布局中 — []
+[PASS] 笔记列表把三篇正主都列出来了(不含非笔记文件与文件夹行) — {"count":7,"noteNames":["乙篇.md","全选篇.md","孤岛.md","甲篇.md","龙篇.md"]}
+[PASS] ★列表里"打不开"的 .md 一眼能看出来(机器可读的 data-readable + 一枚「打不开」小标) — {"readable":"false","tag":"打不开","title":"龙篇.md\n「龙篇.md」不是能安全打开的文本文件:字节既不是合法 UTF-8,也认不出是哪种中文编码(可能被别的程序写坏了)—— 为避免把它改坏,开物不打开它"}
+[PASS] 它照常被列出来 —— 它是**用户的文件**,列表里凭空消失比"列着但打不开"更吓人 — ["乙篇.md","全选篇.md","孤岛.md","甲篇.md","龙篇.md"]
+[PASS] 悬停就能看到原因(与其它行同一套 title 手法) — "龙篇.md\n「龙篇.md」不是能安全打开的文本文件:字节既不是合法 UTF-8,也认不出是哪种中文编码(可能被别的程序写坏了)—— 为避免把它改坏,开物不打开它"
+[PASS] ★点开含非法字节的 .md → 状态行给出**人话原因**(带文件名,而不是有损打开后一屏乱码) — "打开失败:Error invoking remote method 'notes:read': Error: 「龙篇.md」不是能安全打开的文本文件:字节既不是合法 UTF-8,也认不出是哪种中文编码(可能被别的程序写坏了)—— 为避免把它改坏,开物不打开它"
+[PASS] 被拒的笔记**没有**进编辑器(不是"打开了、只是显示成乱码") — {"path":"","titleBox":""}
+[PASS] 被拒时也没有在磁盘上留下任何痕迹(.bak / 原子写临时文件) — ["龙篇.md"]
+[PASS] 树里把 .txt 列成一行**纯文本笔记**(不是"只能交给系统程序"的附件行) — "纯文本.txt"
+[PASS] 点开 .txt → 在正文格里打开(纯文本模式) — "纯文本.txt"
+[PASS] 纯文本模式:Markdown 语法**一条都不生效**(# 行不成标题、[[…]] 不成链接) — {"heading":false,"wikilinks":0,"blocks":4}
+[PASS] 纯文本模式:HTML 被转义(没有真的 <img> 元素,原文以文字显示) — {"realImg":0}
+[PASS] 纯文本的标题框是只读的(标题就是文件名;改名走右键菜单) — {"readOnly":true}
+[PASS] 链接面板对纯文本明说"不参与链接与标签"(不是三张莫名其妙的空表) — {"back":"纯文本文件不参与链接与标签(不解析 [[…]] 与 #标签)","out":"纯文本文件不参与链接与标签(不解析 [[…]] 与 #标签)","un":"纯文本文件不参与链接与标签(不解析 [[…]] 与 #标签)"}
+[PASS] 纯文本:就地改第一行(编辑器那套"当前块是源码"照旧可用)
+[PASS] 纯文本:改动真的落到磁盘,而且**只动了改过的那一行** — "第一行被开物改过\n见 [[甲篇]] 与 #标签\n<img src=x onerror=\"alert(1)\">\n最后一行"
+[PASS] 顶栏不再有「库路径 + 更换」那两块(撤干净,不留空槽)
+[PASS] 顶栏品牌是矢量标记,不是纯文字 — {"ok":true,"size":"22x22","text":"开物","stroke":"rgb(255, 255, 255)","dotFill":"rgb(126, 200, 255)"}
+[PASS] 标记尺寸 22×22(没有被压扁) — 22x22
+[PASS] 标记旁边仍保留「开物」字标 — "开物"
+[PASS] 标记用 currentColor 描边,并有点缀色节点(颜色来自令牌,没写死) — rgb(255, 255, 255) / rgb(126, 200, 255)
+[PASS] 有内联 SVG favicon(不必为它加一条协议白名单) — data:image/svg+xml,%3Csvg xmlns=
+[PASS] 「新建」按钮换成了矢量图标,不再有文字 — {"ok":true,"text":"","label":"新建笔记","size":"16x16","stroke":"rgb(232, 230, 227)","btnColor":"rgb(232, 230, 227)"}
+[PASS] 图标按钮带 aria-label(没有可读文本时它是必需的,不是可选项) — 新建笔记
+[PASS] 图标 16×16,描边跟随按钮文字色(不写死颜色) — {"ok":true,"text":"","label":"新建笔记","size":"16x16","stroke":"rgb(232, 230, 227)","btnColor":"rgb(232, 230, 227)"}
+[PASS] 「新建文件夹」按钮有矢量图标(不是文字,也不是空白) — {"ok":true,"label":"新建文件夹","size":"16x16","fill":"none","stroke":"rgb(232, 230, 227)","btnColor":"rgb(232, 230, 227)","paths":2}
+[PASS] 「新建文件夹」图标也是 16×16 且描边跟随按钮文字色 — {"ok":true,"label":"新建文件夹","size":"16x16","fill":"none","stroke":"rgb(232, 230, 227)","btnColor":"rgb(232, 230, 227)","paths":2}
+[PASS] 「新建文件夹」图标是描边式的(fill 必须是 none,否则按钮里是一块黑) — fill=none
+[PASS] 「新建文件夹」按钮带 aria-label — 新建文件夹
+[PASS] 图标悬停动效确实定义了 — 长度=13232
+[PASS] 并且有 prefers-reduced-motion 兜底(连 transform 一起取消,不是只关 transition) — 块内规则=.icon-plus | .icon-folder-plus | .icon-btn:hover:not(:disabled) .icon-plus,
+    .icon-btn:active:not(:disabled) .icon-plus,
+    .icon-btn:hover:not(:disabled) .icon-folder-plus,
+    .icon-btn:active:not(:disabled) .icon-folder-plus | .icon-btn:hover:not(:disabled)
+[PASS] 「新建文件夹」图标同样有 reduced-motion 兜底(它用的是缩放,更容易被忽略) — 块内规则=.icon-plus | .icon-folder-plus | .icon-btn:hover:not(:disabled) .icon-plus,
+    .icon-btn:active:not(:disabled) .icon-plus,
+    .icon-btn:hover:not(:disabled) .icon-folder-plus,
+    .icon-btn:active:not(:disabled) .icon-folder-plus | .icon-btn:hover:not(:disabled)
+[PASS] 鼠标移上去图标真的转了(规则写了不等于生效) — none (无旋转) → matrix(0.00565053, 0.999984, -0.999984, 0.00565053, 0, 0) (89.7°)
+[PASS] 指针真的落在按钮上(:hover 匹配 —— 这一条与合成输入无关) — #noteNew:hover 匹配数=1
+[PASS] 鼠标移开后转回原状 — matrix(0.00565053, 0.999984, -0.999984, 0.00565053, 0, 0) → none (无旋转) · 移开后 :hover 匹配数=0
+[PASS] 应用菜单已设置成中文(不再露 Electron 的原生英文菜单) — ["文件","编辑","视图","窗口"]
+[PASS] 自检(非 --dev)下不含开发者项 — ["文件","编辑","视图","窗口"]
+[PASS] 点开笔记后编辑器可见
+[FAIL] 文档区渲染出多个块 — blocks=0
+       打开笔记后的状态: {"inputs":0,"anyTextarea":0,"blocks":0,"active":null,"status":"上次修改:2026/10/14 23:00:32","path":"甲篇.md","editorHidden":false,"paneHidden":false}
+[FAIL] 打开笔记后就已经有一个源码输入框(不用再点一下) — inputs=0
+[FAIL] 而且源码的就是第 0 块(与「新建笔记」同一条规则)
+[PASS] 预览渲染出标题 — "<div class=\"md-live-editor md-view live-markdown\" data-testid=\"markdown-editor\">"
+[FAIL] 预览把 wiki 链接渲染成可点元素
+[FAIL] 预览里指向未写笔记的链接标成 missing
+[PASS] 收起编辑态后没有任何输入框(只有光标所在块才是源码)
+[FAIL] 点某一块后该块变成源码输入框 — inputs=0
+[FAIL] 源码块里是该块的原文 — ""
+[FAIL] 其余块仍然是渲染结果(不是全部变成源码)
+[PASS] 反向链接面板列出乙篇 — count=1
+[PASS] 「还没写的」列出未解析链接 — count=1
+[PASS] 切到预览后没有任何输入框(预览不可编辑) — inputs=0
+[PASS] 预览模式仍渲染出内容
+[FAIL] 自检过程未抛异常 — Cannot read properties of null (reading 'click')
+       STACK Error: Cannot read properties of null (reading 'click')
+       PAGELOG [console] [notes] 打开失败 Error: Error invoking remote method 'notes:read': Error: 「龙篇.md」不是能安全打开的文本文件:字节既不是合法 UTF-8,也认不出是哪种中文编码(可能被别的程序写坏了)—— 为避免把它改坏,开物不打开它 (toolbox://shell/notes/notes-view.js:1791)
+       PAGE-ERRORS null
+       [console] [shell] 自检模式:已指向临时笔记库 (toolbox://shell/main.js:744)
+       [console] [palette] 调色板 & 渐变已就绪 (toolbox://shell/runtime/ctx.js:31)
+       [console] [subtitle] 字幕格式互转已就绪 (toolbox://shell/runtime/ctx.js:31)
+       [console] [note-canvas] 笔记画布已登记 (toolbox://shell/runtime/ctx.js:31)
+       [console] [drama] 短剧工作台:画布面板与项目面板已登记 (toolbox://shell/runtime/ctx.js:31)
+       [console] [ai-session] AI 会话台账:面板已登记 (toolbox://shell/runtime/ctx.js:31)
+       [console] [shell] 插件 acceptance-broken 在 manifest 阶段失败:contributes.tools[0].panel: acceptance-broken\plugin.json: panel 必须是插件目录内的相对路径 (toolbox://shell/main.js:715)
+       [console] [drama] 短剧画布就绪 · 根=C:\Users\18014\AppData\Local\Temp\kaiwu-selftest-drama-RK9Dpk (toolbox://shell/runtime/ctx.js:31)
+       [console] [notes] 打开失败 Error: Error invoking remote method 'notes:read': Error: 「龙篇.md」不是能安全打开的文本文件:字节既不是合法 UTF-8,也认不出是哪种中文编码(可能被别的程序写坏了)—— 为避免把它改坏,开物不打开它 (toolbox://shell/notes/notes-view.js:1791)
+       [console] [openView] doc · 纯文本.txt → doc ←     at Object.openView (toolbox://shell/shell/panel-workspace.js:1092:33) <-     at onOpenNote (toolbox://shell/main.js:530:56) <-     at open (toolbox://shell/notes/notes-view.js:1789:25) (toolbox://shell/shell/panel-workspace.js:1096)
+       [console] [openView] doc · 甲篇.md → doc ←     at Object.openView (toolbox://shell/shell/panel-workspace.js:1092:33) <-     at onOpenNote (toolbox://shell/main.js:530:56) <-     at open (toolbox://shell/notes/notes-view.js:1789:25) (toolbox://shell/shell/panel-workspace.js:1096)
+       [console] [openView] doc · 甲篇.md → doc ←     at Object.openView (toolbox://shell/shell/panel-workspace.js:1092:33) <-     at onOpenNote (toolbox://shell/main.js:530:56) <-     at open (toolbox://shell/notes/notes-view.js:1742:52) <-     at HTMLButtonElement.<anonymous> (toolbox://shell/notes/notes-view.js:617:45) (toolbox://shell/shell/panel-workspace.js:1096)
+自检失败:68 项里有 9 项未通过

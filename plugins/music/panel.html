@@ -1,0 +1,30 @@
+<div class="tool-block">
+    <h3>音乐搜索试听</h3>
+    <p class="tool-block-desc">
+        搜索、试听、下载。数据来自本地 QQMusicapi 服务。
+    </p>
+
+    <!-- 服务状态条:取代旧站那句"用之前要先双击 start-music-api.bat"。
+         内容由共享的 createServiceBadge 生成,这里只留容器。 -->
+    <div id="musicService" class="mt-sm"></div>
+
+    <!-- 搜索行:回车或点按钮都能触发 -->
+    <div class="tool-search mt-md">
+        <input type="text" id="musicKeyword" placeholder="输入歌名或歌手名,回车搜索">
+        <button class="tool-search-btn" id="musicSearchBtn" type="button">搜索</button>
+    </div>
+
+    <!-- 播放器:点歌后显示,封面 + 信息 + 原生音频控件 -->
+    <div class="music-player" id="musicPlayer">
+        <img id="musicCover" alt="歌曲封面">
+        <div class="music-info">
+            <p id="musicTitle"></p>
+            <p id="musicArtist"></p>
+            <audio id="musicAudio" controls preload="none"></audio>
+            <p class="music-error" id="musicError"></p>
+        </div>
+    </div>
+
+    <!-- 搜索结果列表(JS 动态生成) -->
+    <ul class="music-list" id="musicList"></ul>
+</div>

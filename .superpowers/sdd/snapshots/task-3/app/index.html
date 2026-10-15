@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="Content-Security-Policy"
+              content="default-src 'self' toolbox:; img-src 'self' toolbox: data: blob: https:; media-src 'self' toolbox: blob: https:; style-src 'self' toolbox: 'unsafe-inline'; script-src 'self' toolbox:; connect-src 'self' toolbox: http://localhost:* http://127.0.0.1:*">
+        <!-- img-src 里的 https: 是**为生图加的**:模型给的图片是 CDN 上的 https 链接,
+             不加这一条 <img> 会被 CSP 直接拦掉(静默不显示,什么都不报)。
+             media-src 早就允许 https: —— 这里只是把图片对齐到同一个口径。
+             代价:模型选的任意 https 图片都能被加载(理论上可做追踪信标);要收紧的话,
+             正解是让**主进程**取字节再经 toolbox:// 伺服,而不是让渲染进程直连。 -->
+        <title>开物</title>
+        <!-- 图标:RB2 的实心方片版(顶栏用的是同一副骨架的 RB1 线形版)。
+             内联 data URI 而不是外部文件 —— 省一次请求,也不必为它加一条协议白名单。
+             颜色写死在这里是有意的:favicon 不在页面里,拿不到 CSS 令牌。 -->
+        <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='6' y='6' width='88' height='88' rx='20' fill='%237ec8ff'/%3E%3Cpath fill='%230e0e0e' d='M38 24h10v20l20-20h13L58 47l23 29H68L48 55v21H38Z'/%3E%3C/svg%3E">
+        <link rel="stylesheet" href="toolbox://shell/styles/tokens.css">
+        <link rel="stylesheet" href="toolbox://shell/styles/base.css">
+        <link rel="stylesheet" href="toolbox://shell/styles/shell.css">
+        <!-- 平铺可停靠面板(工作台)的样式。必须在 shell.css **之后** ——
+             它要压过 .pane-notes 的 grid 定义(靠 .pw-host 这个新类,不靠顺序)。 -->
+        <link rel="stylesheet" href="toolbox://shell/styles/panel-workspace.css">
+        <!-- 设置视图(方案 D)的样式 + 「减少动态效果(强制关)」那条全局规则。 -->
+        <link rel="stylesheet" href="toolbox://shell/styles/settings-page.css">
+    </head>
+    <body>
+        <canvas id="starfield"></canvas>
+
+        <!-- 首启向导:没有 Vault 时占据整个界面。
+             刻意不用弹窗 —— 这是一个必须做选择的流程,不是一个可选提示。 -->
+        <div class="onboarding" id="onboarding" hidden>
+            <div class="onboarding-card">
+                <h1 class="onboarding-title">开物</h1>
+                <p class="onboarding-lead" id="onboardingLead">
+                    先选一个文件夹当你的笔记库。
+                </p>
+                <p class="onboarding-note" id="onboardingNote">
+                    笔记就是普通的 <code>.md</code> 文件,放在你自己选的目录里 ——
+                    用别的编辑器能打开,能用 git 管,也能随时整个拷走。
+                </p>
+                <div class="onboarding-path" id="onboardingPath" hidden></div>
+                <div class="onboarding-actions">
+                    <button class="btn btn-primary" id="onboardingChoose" type="button">
+                        选择文件夹
+                    </button>
+                </div>
+                <p class="onboarding-foot">
+                    也可以先跳过 —— 工具和 AI 面板仍然能用,只是没有笔记上下文。
+                    <button class="linklike" id="onboardingSkip" type="button">跳过</button>
+                </p>
+            </div>
+        </div>
+
+        <div class="shell" id="shell" hidden>
+            <!-- 顶栏:视图切换 + 笔记库 -->
+            <header class="topbar">
+                <!-- 品牌:RB1 线形标记 + 「开物」字标。
+                     标记只用 currentColor 与 --accent,不写死颜色 ——
+                     以后做浅色主题时它自动跟着走,不用回来改这里。 -->
+                <div class="topbar-brand">
+                    <svg class="brand-mark" viewBox="0 0 100 100"
+                         aria-hidden="true" focusable="false">
+                        <g fill="none" stroke="currentColor" stroke-width="16"
+                           stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M28 20 V80"/>
+                            <path d="M28 50 L72 21"/>
+                            <path d="M28 50 L72 79"/>
+                        </g>
+                        <circle cx="28" cy="50" r="14" fill="var(--accent)"/>
+                    </svg>开物
+                </div>
+
+                <nav class="topbar-views" role="tablist" aria-label="主视图">
+                    <button class="view-tab" id="viewNotes" type="button" role="tab"
+                            aria-selected="true" data-view="notes">笔记</button>
+                    <!-- 设置是整屏视图,不属于平铺工作台,布局树管不到它。 -->
+                    <button class="view-tab" id="viewSettings" type="button" role="tab"
+                            aria-selected="false" data-view="settings">设置</button>
+                </nav>
+
+                <!-- 顶栏的「库路径 + 更换」按用户要求**撤掉**了:换库这件事现在只剩设置里那一个入口
+                     (设置 → 笔记库,走 onboarding.open())。这里不留空槽、不留占位。 -->
+
+            </header>
+
+            <!-- 笔记视图:左列表 + 中编辑 + 右链接 + 右 AI(四格)。
+                 面板**同时**是平铺工作台里的一格:JS 起来后会把下面这四个面板
+                 (以及底部那 24px 的读数条)交给工作台,由布局树决定它们的位置。
+                 ⚠️ JS 没起来/工作台挂载失败时,.pw-host 不会被加上,.pw-desk /
+                 .pw-bar 保持 display:none —— 这时走上面那条 grid 兜底(四格依次排开,
+                 链接与 AI 各占旧右栏的一半),一点不变。 -->
+            <section class="pane-notes" id="paneNotes">
+                <!-- 工作台:树画在 #panelTree 里,提示浮层叠在 .pw-desk 之上 -->
+                <div class="pw-desk" id="panelWorkspace">
+                    <div class="pw-stack" id="panelTree"></div>
+                    <!-- 落点提示:整块(中间/某一侧)与底部那条带 -->
+                    <div class="pw-hint" id="panelHint"></div>
+                    <div class="pw-hint pw-band" id="panelBand"></div>
+                </div>
+                <!-- 拖乱之后的唯一出口 + 用户明确要的"证据"(实时布局树文本) -->
+                <div class="pw-bar">
+                    <button class="btn btn-sm" id="layoutReset" type="button"
+                            title="恢复成默认布局(链接与 AI 叠在右侧)">重置布局</button>
+                    <span class="pw-tree-label">布局树</span>
+                    <span class="pw-tree" id="layoutTree" aria-label="当前布局树"></span>
+                </div>
+
+                <aside class="notes-nav">
+                    <div class="notes-nav-head">
+                        <input type="search" id="noteSearch" placeholder="搜索笔记…" aria-label="搜索笔记">
+                        <!-- 纯图标按钮:没有可读文本,所以 aria-label 是必需的,不是可选项 -->
+                        <button class="btn btn-sm icon-btn" id="noteNewFolder" type="button"
+                                title="新建文件夹" aria-label="新建文件夹">
+                            <svg class="icon-folder-plus" viewBox="0 0 24 24"
+                                 aria-hidden="true" focusable="false">
+                                <path d="M3.5 7.2A1.7 1.7 0 0 1 5.2 5.5h3.4l1.9 2h8.3a1.7 1.7 0 0 1 1.7 1.7v7.6a1.7 1.7 0 0 1-1.7 1.7H5.2a1.7 1.7 0 0 1-1.7-1.7Z"/>
+                                <path d="M12 10.6v4.6 M9.7 12.9h4.6"/>
+                            </svg>
+                        </button>
+                        <button class="btn btn-sm icon-btn" id="noteNew" type="button"
+                                title="新建笔记" aria-label="新建笔记">
+                            <svg class="icon-plus" viewBox="0 0 24 24"
+                                 aria-hidden="true" focusable="false">
+                                <path d="M12 5 V19 M5 12 H19"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="notes-nav-scroll">
+                        <!-- 标签筛选提示条:选中某个标签后出现在**列表顶部**。
+                             以前这个信息只藏在标签 chip 的浅色底上 —— 标签区一滚动,
+                             用户就不知道列表为什么变短了。 -->
+                        <div class="tag-filter-bar" id="tagFilterBar" hidden>
+                            <span>筛选中:</span>
+                            <b class="tag-filter-name" id="tagFilterName"></b>
+                            <button class="tag-filter-clear" id="tagFilterClear" type="button"
+                                    aria-label="清除标签筛选" title="清除筛选">×</button>
+                        </div>
+                        <ul class="note-list" id="noteList"></ul>
+                        <div class="tag-panel" id="tagPanel"></div>
+                    </div>
+                </aside>
+
+                <div class="col-resizer" id="navResizer" role="separator"
+                     aria-orientation="vertical" tabindex="0"
+                     aria-label="调整笔记列表宽度" title="拖动调整宽度(双击复位)"></div>
+
+                <main class="note-main" id="noteMain">
+                    <div class="note-empty" id="noteEmpty">
+                        <p class="hint">左边选一篇笔记,或者新建一篇。</p>
+                    </div>
+
+                    <div class="note-editor" id="noteEditor" hidden>
+                        <div class="note-editor-head">
+                            <input type="text" id="noteTitle" class="note-title-input"
+                                   placeholder="笔记标题" aria-label="笔记标题">
+                            <span class="note-path" id="notePath"></span>
+                            <button class="btn btn-sm" id="noteModeBtn" type="button"
+                                    title="在实时预览与只读预览之间切换">预览</button>
+                            <button class="btn btn-sm" id="noteSave" type="button" disabled>保存</button>
+                        </div>
+                        <!-- 单容器:光标所在块是源码,其余是渲染结果。
+                             这样滚动起来是一整篇,而不是被切成两半。 -->
+                        <div class="note-doc" id="noteDoc"></div>
+                    </div>
+
+                    <!-- ⚠️ 状态行**必须留在 `#noteEditor` 外面**:它是「笔记正文」这一格的
+                         状态,不是编辑器的一部分。
+                         为什么(真窗口实测踩到):一篇开不了的笔记(编码解不开 / 路径越界 /
+                         文件已被删)走的是"拒绝打开"那条路 —— 而那时 `#noteEditor` 是
+                         `hidden`,状态行原先在它里面。于是 `#noteStatus` 的文字**设了、
+                         计算样式也是红的,就是看不见**(`offsetParent === null`,rect 是 0×0):
+                         用户点了那篇笔记,界面上什么反应都没有,连原因都读不到。
+                         挪出来之后:没有笔记打开时它挂在空状态下方;有笔记时它仍在老位置
+                         (`.note-main` 是 flex 列,编辑器 `flex:1`,状态行按内容高度贴底),
+                         所以既有的视觉与像素读数都不动。 -->
+                    <p class="note-status hint" id="noteStatus"></p>
+                </main>
+
+                <!-- 侧栏宽度可拖。放在两栏之间而不是给栏加 border:
+                     6px 的命中区比 1px 的边好抓多了,视觉上仍是一条细线。
+                     role=separator + tabindex:键盘也能调(←/→)。 -->
+                <div class="col-resizer" id="sideResizer" role="separator"
+                     aria-orientation="vertical" tabindex="0"
+                     aria-label="调整右侧栏宽度" title="拖动调整宽度(双击复位)"></div>
+
+                <!-- 链接面板(反向链接 / 出链 / 还没写的)。**自己是工作台里的一格** ——
+                     与 AI 面板完全同等:同样的拖动手柄、同样的投放区、同样的比例持久化。
+                     上一版它是 `.note-side` 里的上半块(与 AI 挤在一个面板里),旧布局档里的
+                     合并 id `side` 由 panel-tree.js 的 migrateLegacyTree 就地拆成 links + ai。 -->
+                <aside class="note-links">
+                    <section class="side-block">
+                        <h4>反向链接</h4>
+                        <ul class="link-list" id="backlinkList"></ul>
+                    </section>
+                    <section class="side-block">
+                        <h4>出链</h4>
+                        <ul class="link-list" id="outlinkList"></ul>
+                    </section>
+                    <section class="side-block">
+                        <h4>还没写的</h4>
+                        <ul class="link-list" id="unresolvedList"></ul>
+                    </section>
+                </aside>
+
+                <!-- AI 面板。打开就是对话:外壳建好面板后自动发一次 agent:start
+                     (自检模式 ?testVault= 下不自动连,#agentRetry 是显式入口)。
+                     **面板上不显示连接状态**(默认就是连接):视觉上只有对话与输入卡片,
+                     状态另有一份机器可读的 #agentPanel[data-agent-state](由面板同步),
+                     读屏则靠下面那个视觉隐藏的 live 区。
+                     ⚠️ 它自己是工作台里的一格(上一版是被包在 `.note-side` 里的下半块)。 -->
+                <section class="agent-panel" id="agentPanel"
+                         data-agent-state="stopped" aria-label="AI 对话">
+                    <!-- 状态 live 区:视觉上**不显示**(用户要求:面板不要连接状态,默认就是连接)。
+                         它仍然留在 DOM 里 —— 读屏要知道状态变化;机器可读的那一份是
+                         #agentPanel[data-agent-state],自检断言它,不断言文案。
+                         「重试」默认停在这里(反正是隐藏的),连接失败时由面板把它搬进
+                         对话里的那张失败提示卡。 -->
+                    <div class="agent-status agent-sr-only" id="agentStatus" role="status"
+                         aria-live="polite">
+                        <button class="btn btn-sm" id="agentRetry" type="button"
+                                aria-label="重试连接">重试</button>
+                    </div>
+
+                    <!-- 凭证卡片:只有 { ok, source, reason } 三个叶子字段,
+                         结构上就没有密钥值可显示。缺凭证时由面板填字并显示。 -->
+                    <div class="agent-credential" id="agentCredential" hidden></div>
+
+                    <!-- 消息流容器:面板把气泡、思考、工具卡片与权限卡片都画在
+                         它的顶层;失败提示卡是它的第一个孩子(见 .agent-notice)。
+                         **输入区不在它里面**(见下面那条注释)。 -->
+                    <div class="agent-messages" id="agentMessages"></div>
+
+                    <!-- 输入区(方案 4:卡片式)。**必须是消息滚动区的兄弟,不是它的孩子** ——
+                         挂进 #agentMessages 就会跟着消息一起滚:实测面板 456px、消息区撑满
+                         406px,而输入栏落在 409–466,往上翻历史时它就滚出视野了。
+                         卡片三行:上下文(**平时整行 hidden,不占高度** —— 连状态点也按用户
+                         要求删了;只有 Agent 不正常时才多出「停止进程」)/ 输入框 / 动作。 -->
+                    <footer class="agent-footer">
+                        <!-- 那一行平时**整行 hidden、不占高度**(用户要求:聊天框上面干净)。
+                             它有两个用途,都只在"Agent 不正常"时出现:
+                               · 「正在连接 Agent…」—— 握手最长 35 秒,那段时间面板不能一片静止;
+                               · 「停止进程」—— 卡住时的退路,位置一直在同一处,不用重新学;
+                                 另一条常驻入口在「设置 → AI 与 Agent → 停止 Agent 进程」。
+                             显隐与文案都由 panel.js 的 renderStatus() 控制。
+                             「这次会带上哪篇笔记」不丢:改挂在**输入框**上(placeholder 短句 +
+                             title 全句,见 panel.js 的 renderContext())。 -->
+                        <div class="agent-ctx-row" hidden>
+                            <span class="agent-ctx-hint" hidden></span>
+                            <button class="agent-ctx-stop" id="agentKill" type="button" hidden
+                                    aria-label="停止 Agent 进程" title="停止 Agent 进程">停止进程</button>
+                        </div>
+                        <!-- 输入区 = 方案 ③「底部小栏」(用户拍板):
+                               上面是**铺满卡片**的多行 textarea —— 它没有自己的边框/底色/圆角/焦点环,
+                               卡片那张边框就是它的边框;下面一条**很矮**的栏只放那颗球(右对齐)。
+                               两栏之间**不画分隔线**(画了就变回"框里套框")。
+                             ⚠️ 用户要求把两处可见文案**都删掉**:
+                                 · 「没有打开的笔记 —— 只发问题本身」(那行上下文提示)
+                                 · placeholder「就当前笔记提问…」
+                               信息一个字都没丢,只是**全部改走非视觉通道**(见 panel.js 的 renderContext):
+                                 · title     —— 悬停可见,仍是完整那句「会带上笔记:《X》/ 没有打开的笔记 …」;
+                                 · aria-label —— 把同一句并进标签里,读屏念得到;
+                                 · data-ctx / data-ctx-text —— 机器可读那份照旧(断言不依赖中文)。
+                               所以这里**没有 placeholder 属性**(留空 = 没有任何可见引导文字)。 -->
+                        <textarea id="agentInput" rows="1" aria-label="对 AI 提问(回车发送,Shift+回车换行)"
+                                  aria-keyshortcuts="Enter"></textarea>
+                        <!-- 发送与取消**合成一颗球**(用户拍板):空闲=发送、执行中=取消,
+                             点一下分别走 send() / cancel()。所以这里只剩一个控件 ——
+                             原来的 #agentSend / #agentStop 两个文字按钮都撤了。
+                             ⚠️ 里面那层小机器人(头 + 眼睛)由 panel.js 的 ensureOrb() 造:
+                             外壳只给按钮本身,没有 JS 时它退化成一颗空的圆形按钮,
+                             而不是一个"坏掉"的控件。文案一律走 aria-label / title
+                             (纯图形按钮没有可见文字,语义一个字都没少)。 -->
+                        <div class="agent-act-row">
+                            <!-- 思考强度 / 模型:一枚小胶囊,**紧挨球的左侧**(用户拍板的位置)。
+                                 收起态只显示当前档位的短名(一个汉字)+ ▲,展开态换成标签「思考强度 ▲」;
+                                 点浮层标题进模型清单 —— 层级、动效与请求都在 panel.js 的 ensureConfig()。
+                                 ⚠️ 壳只给按钮与它外面那层锚点(浮层要锚在按钮上、又要从右下角长出来);
+                                 浮层本身由 panel.js 造 —— 与球里那张脸同一条路。 -->
+                            <span class="agent-cfg-wrap" id="agentCfgWrap">
+                                <button class="agent-cfg" id="agentCfg" type="button"
+                                        aria-haspopup="true" aria-expanded="false"
+                                        aria-label="思考强度" title="思考强度"></button>
+                            </span>
+                            <button class="agent-orb" id="agentSend" type="button"
+                                    aria-label="发送" title="发送"></button>
+                        </div>
+                    </footer>
+                </section>
+            </section>
+
+            <!-- 设置视图(设计稿方案 D:左导航 + 搜索 + 表单)。
+                 骨架只放"搜索框 / 左导航 / 表单容器 / 顶部总览"四个**空**节点,
+                 每一项都由 app/settings/settings-view.js 用 createElement 画出来 ——
+                 那些项的读数是活的(密钥状态、布局树、索引篇数),写死在 HTML 里只会过期。 -->
+            <section class="pane-settings" id="paneSettings" hidden>
+                <div class="settings-head">
+                    <input type="search" class="settings-search" id="settingsSearch"
+                           placeholder="搜索设置项(试试:密钥 / 布局 / 服务 / 动效)"
+                           aria-label="搜索设置项">
+                    <span class="settings-overview" id="settingsOverview"></span>
+                </div>
+                <div class="settings-split">
+                    <nav class="settings-nav" id="settingsNav" role="tablist"
+                         aria-label="设置分区"></nav>
+                    <div class="settings-body" id="settingsBody"></div>
+                </div>
+            </section>
+        </div>
+
+        <div id="toast" role="status" aria-live="polite"></div>
+        <script type="module" src="toolbox://shell/main.js"></script>
+    </body>
+</html>

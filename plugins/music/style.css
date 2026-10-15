@@ -1,0 +1,99 @@
+/* 音乐插件私有样式。运行时会给每条选择器自动加上
+   [data-plugin="music"] 前缀,所以这里写平铺选择器即可,不会串味。
+   通用控件(.btn / .field / .code-out / .hint …)已在 base.css 里,不重复。 */
+
+/* 服务状态徽标的样式在 base.css(.svc 系列)—— 那是共享组件,
+   不在这里重复。 */
+
+/* ---- 搜索行 ---- */
+/* `.tool-search` / `.tool-search-btn` 的样式**不在**这里,在 base.css。
+   原因:它们会被加上 [data-plugin="music"] 前缀,而 douyin / bilibili 两个插件
+   用的是同一套类名 —— 写在这里等于那两个插件拿不到样式(真踩过)。 */
+
+/* ---- 搜索结果列表 ---- */
+/* 一行四列:歌名 / 歌手 / 专辑 / 时长 */
+.music-list { list-style: none; }
+
+.music-item {
+    display: grid;
+    grid-template-columns: 1.2fr .8fr 1fr 48px;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background .2s;
+}
+
+.music-item:hover { background: var(--surface-2); }
+
+.music-item.playing { background: rgba(126, 200, 255, .08); }
+
+.music-item-name {
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;        /* 超长歌名显示省略号,不撑破布局 */
+    white-space: nowrap;
+}
+
+.music-item.playing .music-item-name { color: var(--accent); }
+
+.music-item-singer, .music-item-album {
+    font-size: 14px;
+    color: var(--dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.music-item-time {
+    font-size: 13px;
+    color: var(--faint);
+    text-align: right;
+}
+
+/* 空状态 / 错误提示共用的样式 */
+.music-empty {
+    color: var(--dim);
+    font-size: 14px;
+    padding: 12px 4px;
+    line-height: 1.7;
+}
+
+/* ---- 播放器:封面 + 歌曲信息 + 原生音频控件 ---- */
+.music-player {
+    display: none;                  /* 默认藏着,点了歌才 show 出来 */
+    align-items: center;
+    gap: 16px;
+    margin: 4px 0 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.music-player.show { display: flex; }
+
+.music-player img {
+    width: 64px; height: 64px;
+    border-radius: var(--radius-sm);
+    background: #2a2928;            /* 封面加载完成前的占位色 */
+    object-fit: cover;
+}
+
+.music-info { flex: 1; min-width: 0; }   /* min-width:0 允许长歌名换行,不撑破 flex */
+
+.music-info #musicTitle { color: #fff; font-size: 16px; }
+
+.music-info #musicArtist { color: var(--dim); font-size: 14px; margin-bottom: 8px; }
+
+.music-info #musicAudio { width: 100%; height: 36px; }
+
+.music-error {
+    display: none;
+    color: #e08c7c;
+    font-size: 13px;
+    margin-top: 6px;
+}
+
+.music-error.show { display: block; }

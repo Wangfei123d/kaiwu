@@ -1,0 +1,470 @@
+/* 公开设计系统。
+   插件可以直接使用这里的类名,不需要自己重写按钮和输入框。
+   插件私有的样式请写进自己插件的 style.css —— 那份会被运行时自动加上
+   [data-plugin="<id>"] 前缀,不会互相串味(见设计文档 §6.4)。 */
+
+/* ================= 基础设置 ================= */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* hidden 属性必须真的生效。
+   浏览器规范里 [hidden] 只是 UA 样式表的 `display: none`,**优先级最低** ——
+   任何作者写的 display(flex/grid/block)都会把它压过去。
+   本项目真踩过这个坑:`.onboarding { display: flex }` 让
+   `el.hidden = true` 完全失效,于是"选完文件夹后卡在向导界面",
+   而日志显示隐藏明明成功了 —— 排查时极易误判成时序问题。
+   !important 是这里唯一可靠的做法,因为 .onboarding / .shell / .pane-* 等
+   都设了 display。 */
+[hidden] { display: none !important; }
+
+html {
+    background-color: var(--bg);
+}
+
+body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    color: var(--text);
+    /* 背景色只写在 html 上,body 保持透明:
+       body 的背景会盖住 z-index 更低的粒子画布 */
+    line-height: 1.6;
+    overflow: hidden;               /* 滚动交给 .content,外壳本身不滚 */
+}
+
+/* ================= 工具面板内的小节 ================= */
+/* 一个工具可能有多个功能区,每块一个 .tool-block */
+.tool-block {
+    padding: 22px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.tool-block h3 { font-size: 16px; color: #fff; margin-bottom: 6px; }
+
+/* 小节标题前的短竖线,呼应旧站标题装饰 */
+.tool-block h3::before {
+    content: "";
+    display: inline-block;
+    width: 3px; height: 15px;
+    background: var(--accent);
+    border-radius: 2px;
+    margin-right: 10px;
+    vertical-align: -2px;
+}
+
+.tool-block-desc {
+    font-size: 13px;
+    color: var(--dim);
+    margin-bottom: 18px;
+}
+
+/* ================= 通用表单控件 ================= */
+/* 一行横排的控件组,放不下自动换行 */
+.field-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+}
+
+.field-row + .field-row { margin-top: 14px; }
+
+/* 纵向排列的"标签 + 控件" */
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.field > label {
+    font-size: 13px;
+    color: var(--dim);
+}
+
+/* 输入框统一风格 */
+input[type="text"],
+input[type="number"],
+input[type="search"],
+select,
+textarea {
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: border-color .25s;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+select:focus,
+textarea:focus { border-color: var(--accent); }
+
+input::placeholder, textarea::placeholder { color: var(--faint); }
+
+select:disabled,
+input:disabled { color: var(--faint); cursor: not-allowed; }
+
+/* ---- 下拉框 ---- */
+/* 两点必须做,否则深色界面上下拉框是"白底黑字加蓝条"的浏览器原生样子:
+   1. 箭头自绘。原生箭头跟着系统主题走,`appearance: none` 关掉它换成一个
+      内联 SVG(带 # 的颜色要写成 %23,否则 data URI 直接被截断)。
+   2. 弹出列表由 Chromium 单独绘制,**普通 CSS 管不到它**,它跟的是
+      `color-scheme` —— 见 tokens.css 的注释。 */
+select {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 36px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2.2 4.6 6 8.4l3.8-3.8' fill='none' stroke='%239b9791' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    cursor: pointer;
+}
+
+select:hover:not(:disabled) { border-color: var(--border-hi); }
+
+/* 尽量也让选项行跟着深色(Chromium 对 option 的支持不完整,属尽力而为;
+   真正起作用的是 color-scheme) */
+select option { color: var(--text); background: #232120; }
+select option:disabled { color: var(--faint); }
+
+/* 原生取色器:去掉默认内边距,让它跟其他控件一样高 */
+input[type="color"] {
+    width: 60px;
+    height: 40px;
+    padding: 0;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 4px; }
+input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
+
+/* 滑块:轨道 + 圆形把手(浏览器默认样式太丑,得自己画) */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+}
+
+/* ---- 按钮 ---- */
+.btn {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color .25s, border-color .25s, opacity .25s, background .25s;
+}
+
+.btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 按下与键盘聚焦:鼠标点不出来区别,但这两条让控件"有反应" */
+.btn:active:not(:disabled) { transform: translateY(1px); }
+
+.btn:focus-visible,
+.tool-search-btn:focus-visible {
+    outline: 2px solid rgba(126, 200, 255, .55);
+    outline-offset: 2px;
+}
+
+/* 主按钮:实心强调色 */
+.btn-primary {
+    color: #1a1919;
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+}
+
+.btn-primary:hover { color: #1a1919; opacity: .85; }
+
+.btn:disabled {
+    color: var(--faint);
+    border-color: var(--border);
+    background: var(--surface);
+    cursor: not-allowed;
+    opacity: .6;
+}
+
+.btn:disabled:hover { color: var(--faint); border-color: var(--border); }
+
+/* 小号按钮:卡片里的"复制""下载" */
+.btn-sm { padding: 6px 14px; font-size: 13px; }
+
+/* ---- 纯图标按钮 ----
+   只有图标、没有文字,所以 padding 要收窄,否则会留下一个左右不对称的按钮;
+   line-height:0 去掉行高带来的额外高度,让图标真正居中。 */
+.icon-btn { padding: 6px 8px; line-height: 0; }
+
+.icon-plus {
+    display: block;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: transform .18s ease;
+}
+
+/* 「新建文件夹」的图标。
+   ⚠️ 它必须**自己**有一套几何:SVG 没有 width/height 时会退化成 300×150 的
+   默认尺寸,而 fill 默认是黑色 —— 少写这一段,按钮里会是一大块黑色形状
+   (实测第一版就是这样:class 写在 HTML 里,样式却漏了)。
+   与 .icon-plus 保持同一套描边参数,两个按钮的图标看起来才是一套。 */
+.icon-folder-plus {
+    display: block;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform .18s ease;
+}
+
+/* 悬停时转 90°:+ 旋转后终点形态不变,所以过程看得见、结果不突兀 ——
+   比"变成另一个图标"温和得多。按下时再收一点,给一个即时反馈。 */
+.icon-btn:hover:not(:disabled) .icon-plus { transform: rotate(90deg); }
+.icon-btn:active:not(:disabled) .icon-plus { transform: rotate(90deg) scale(.86); }
+
+/* 文件夹**不旋转**:一个文件夹转 90° 在视觉上说不通,它只用一点缩放做反馈。 */
+.icon-btn:hover:not(:disabled) .icon-folder-plus { transform: scale(1.1); }
+.icon-btn:active:not(:disabled) .icon-folder-plus { transform: scale(.92); }
+
+/* 减少动态偏好:这不是可选项。
+   注意不能只把 transition 关掉 —— 那样旋转会"瞬间完成",位移依然发生。
+   要连同 transform 一起取消,改用颜色变化来保持悬停反馈。 */
+@media (prefers-reduced-motion: reduce) {
+    /* 两条各写各的、不合并成一个多选择器规则:自检里那条"图标自己的 transition 被关掉"
+       的断言是按**选择器精确匹配** `.icon-plus` 的(合并成 `.icon-plus, .icon-folder-plus`
+       会让它匹配不到,于是断言变红)。细分也让"删掉哪一条"这件事一目了然。 */
+    .icon-plus { transition: none; }
+    .icon-folder-plus { transition: none; }
+    .icon-btn:hover:not(:disabled) .icon-plus,
+    .icon-btn:active:not(:disabled) .icon-plus,
+    .icon-btn:hover:not(:disabled) .icon-folder-plus,
+    .icon-btn:active:not(:disabled) .icon-folder-plus { transform: none; }
+    .icon-btn:hover:not(:disabled) { color: var(--accent); }
+}
+
+/* ================= 搜索/解析行(输入框 + 主按钮) ================= */
+/* music / douyin / bilibili 三个插件的"长输入框 + 一个主按钮"共用这一套。
+ *
+ * 为什么必须放在这里:这套样式原先只写在 music 插件的 style.css 里,而插件样式
+ * 会被运行时加上 [data-plugin="music"] 前缀 —— 另外两个插件用了同样的类名却
+ * 一条规则都拿不到,于是「解析」按钮和输入框都是浏览器默认外观(实测截图确认)。
+ * 共享组件的样式一律放 base.css,插件里不再各写一份。 */
+.tool-search {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.tool-search input {
+    flex: 1;
+    min-width: 0;                       /* 不加的话长 placeholder 会把按钮挤出去 */
+    padding: 10px 16px;
+    font-size: 15px;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: border-color .25s, background .25s;
+}
+
+.tool-search input:focus {
+    border-color: var(--accent);
+    background: rgba(126, 200, 255, .06);
+}
+
+.tool-search input::placeholder { color: var(--faint); }
+
+/* 主按钮:实心强调色 + 一点点上浮感,和链接式的次要操作区分开 */
+.tool-search-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 22px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    color: #12110f;
+    background: linear-gradient(180deg, #9ad6ff, var(--accent));
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(126, 200, 255, .22);
+    transition: filter .2s, box-shadow .2s, transform .1s, opacity .2s;
+}
+
+.tool-search-btn:hover:not(:disabled) {
+    filter: brightness(1.08);
+    box-shadow: 0 3px 16px rgba(126, 200, 255, .34);
+}
+
+.tool-search-btn:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: 0 1px 6px rgba(126, 200, 255, .2);
+}
+
+.tool-search-btn:disabled {
+    opacity: .5;
+    cursor: default;
+    box-shadow: none;
+}
+
+/* 按钮里的小图标跟着文字颜色走,尺寸统一 */
+.tool-search-btn svg { width: 15px; height: 15px; flex: none; }
+
+/* ================= 拖拽上传区 ================= */
+/* 调色板的"图片取色"和图片工具的批量上传共用这个样式 */
+.drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 36px 20px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, .02);
+    color: var(--dim);
+    font-size: 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .25s, background .25s, color .25s;
+}
+
+.drop-zone:hover,
+.drop-zone.dragover {                    /* dragover 由 JS 在拖入时加 */
+    border-color: var(--accent);
+    background: rgba(126, 200, 255, .06);
+    color: var(--text);
+}
+
+.drop-zone-hint { font-size: 12px; color: var(--faint); }
+
+/* 拖拽区里的大图标,用纯 CSS 画一个圆形轮廓 */
+.drop-icon {
+    width: 34px; height: 34px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    opacity: .7;
+}
+
+/* ================= 代码输出框 ================= */
+.code-out {
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--accent);
+    background: rgba(0, 0, 0, .35);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    resize: vertical;
+    outline: none;
+    word-break: break-all;
+}
+
+.code-out:focus { border-color: var(--accent); }
+
+/* 把文件拖到这个文本框上时高亮,提示"可以松手了" */
+.code-out.dragover {
+    border-color: var(--accent);
+    background: rgba(126, 200, 255, .08);
+}
+
+/* 状态提示:成功绿 / 失败红 */
+.status-ok    { color: var(--ok) !important; }
+.status-error { color: var(--error) !important; }
+
+/* ================= 服务状态徽标 ================= */
+/* 结构由 app/shell/service-badge.js 生成,music / douyin / bilibili 三个插件共用。
+   放在 base.css 而不是各插件的 style.css:它是共享组件的样式,
+   抄三份就会各自漂移。 */
+.svc { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--dim); }
+.svc .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.svc .status-dot[data-status="ready"]    { background: #4ade80; }
+.svc .status-dot[data-status="external"] { background: var(--accent); }
+.svc .status-dot[data-status="starting"] { background: #fbbf24; }
+.svc .status-dot[data-status="failed"]   { background: #f87171; }
+.svc .svc-hint { margin-left: 2px; }
+
+/* ================= 间距 / 尺寸小工具 ================= */
+.mt-sm { margin-top: 12px; }
+.mt-md { margin-top: 18px; }
+.mt-lg { margin-top: 26px; }
+
+.w-sm { width: 120px; }
+.w-md { width: 200px; }
+
+/* 面板内的小提示文字 */
+.hint { font-size: 12px; color: var(--faint); line-height: 1.7; }
+
+/* ================= 全局提示 Toast ================= */
+/* 固定在屏幕底部居中,由 app/lib/utils.js 的 toast() 控制显隐 */
+#toast {
+    position: fixed;
+    left: 50%;
+    bottom: 36px;
+    z-index: 3000;                       /* 比一切都高 */
+    padding: 10px 22px;
+    font-size: 14px;
+    color: var(--text);
+    background: rgba(26, 25, 25, .96);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+    /* 默认隐藏:透明 + 下沉 12px,加 show 类后回到原位 */
+    opacity: 0;
+    transform: translate(-50%, 12px);
+    pointer-events: none;                /* 不挡任何点击 */
+    transition: opacity .25s, transform .25s;
+}
+
+#toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}

@@ -1,0 +1,20 @@
+<div class="tool-block">
+    <h3>哔哩哔哩视频解析下载</h3>
+    <p class="tool-block-desc">
+        粘贴 B 站视频链接或 BV 号,解析后可以加入下载队列。
+    </p>
+    <p class="hint">
+        下载和音视频合并都由 Bilidown 完成,进度去它的界面看。<br>
+        首次使用需要到 Bilidown 界面扫码登录一次(登录状态会记住)。
+    </p>
+
+    <div id="biliService" class="mt-sm"></div>
+
+    <div class="tool-search mt-md">
+        <input type="text" id="biliInput" placeholder="粘贴 B 站视频链接或 BV 号">
+        <button class="tool-search-btn" id="biliBtn" type="button">解析</button>
+    </div>
+
+    <!-- 解析结果(JS 动态生成:封面 / 标题 / UP主 / 分P / 清晰度 / 下载按钮) -->
+    <div class="bili-result" id="biliResult"></div>
+</div>

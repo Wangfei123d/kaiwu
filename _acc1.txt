@@ -1,0 +1,401 @@
+﻿node.exe : npm warn Unknown env config "side-effects-cache". This will stop working in the next major version of npm. S
+ee `npm help npmrc` for supported config options.
+At line:1 char:1
++ & "D:\nodejs/node.exe" "D:\nodejs/node_modules/npm/bin/npm-cli.js" ru ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm warn Unknow...config options.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+> kaiwu@0.1.0 selftest:acceptance
+> node electron/run-selftest.js --acceptance
+
+[PASS] 主进程已就绪
+[PASS] 渲染进程已载入页面 — toolbox://shell/index.html?testVault=C%3A%5CUsers%5C18014%5CAppData%5CLocal%5CTemp%5Ckaiwu-selftest-vault-8R2c9g
+[PASS] IPC 桥不在 window 上且 Node 能力未泄漏
+[PASS] 页面经 toolbox:// 载入 — toolbox://shell/index.html?testVault=C%3A%5CUsers%5C18014%5CAppData%5CLocal%5CTemp%5Ckaiwu-selftest-vault-8R2c9g
+[PASS] 自定义协议支持 fetch
+[PASS] 越界请求被拒绝 — 403
+[PASS] 畸形百分号编码被拒绝 — 400
+[PASS] 外壳初始化完成
+[PASS] 页面没有未捕获的异常 — []
+[PASS] 指定了笔记库时不显示首启向导 — 向导可见=false
+[PASS] 外壳已显示
+[PASS] 向导的计算样式确实是 display:none(hidden 没被 CSS 覆盖) — onboarding.display=none
+[PASS] 外壳的计算样式不是 none — shell.display=grid
+[PASS] 已配置笔记库时启动后停在笔记界面而不是向导 — {"onb":false,"shell":true,"ready":{"view":"notes","vault":"C:\\Users\\18014\\AppData\\Local\\Temp\\kaiwu-selftest-vault-8R2c9g","notes":3,"activated":8,"broken":1,"testVault":"C:\\Users\\18014\\AppData\\Local\\Temp\\kaiwu-selftest-vault-8R2c9g"}}
+       启动阶段状态: {"view":"notes","vault":"C:\\Users\\18014\\AppData\\Local\\Temp\\kaiwu-selftest-vault-8R2c9g","notes":3,"activated":8,"broken":1,"testVault":"C:\\Users\\18014\\AppData\\Local\\Temp\\kaiwu-selftest-vault-8R2c9g"}
+[PASS] 启动后停在笔记视图,没被侧栏的自动选中带进工具视图 — {"notes":true,"tools":false}
+[PASS] 笔记列表列出 3 篇笔记 — count=3
+[PASS] 顶栏不再有「库路径 + 更换」那两块(撤干净,不留空槽)
+[PASS] 顶栏品牌是矢量标记,不是纯文字 — {"ok":true,"size":"22x22","text":"开物","stroke":"rgb(255, 255, 255)","dotFill":"rgb(126, 200, 255)"}
+[PASS] 标记尺寸 22×22(没有被压扁) — 22x22
+[PASS] 标记旁边仍保留「开物」字标 — "开物"
+[PASS] 标记用 currentColor 描边,并有点缀色节点(颜色来自令牌,没写死) — rgb(255, 255, 255) / rgb(126, 200, 255)
+[PASS] 有内联 SVG favicon(不必为它加一条协议白名单) — data:image/svg+xml,%3Csvg xmlns=
+[PASS] 「新建」按钮换成了矢量图标,不再有文字 — {"ok":true,"text":"","label":"新建笔记","size":"16x16","stroke":"rgb(232, 230, 227)","btnColor":"rgb(232, 230, 227)"}
+[PASS] 图标按钮带 aria-label(没有可读文本时它是必需的,不是可选项) — 新建笔记
+[PASS] 图标 16×16,描边跟随按钮文字色(不写死颜色) — {"ok":true,"text":"","label":"新建笔记","size":"16x16","stroke":"rgb(232, 230, 227)","btnColor":"rgb(232, 230, 227)"}
+[PASS] 「新建文件夹」按钮有矢量图标(不是文字,也不是空白) — {"ok":true,"label":"新建文件夹","size":"16x16","fill":"none","stroke":"rgb(232, 230, 227)","btnColor":"rgb(232, 230, 227)","paths":2}
+[PASS] 「新建文件夹」图标也是 16×16 且描边跟随按钮文字色 — {"ok":true,"label":"新建文件夹","size":"16x16","fill":"none","stroke":"rgb(232, 230, 227)","btnColor":"rgb(232, 230, 227)","paths":2}
+[PASS] 「新建文件夹」图标是描边式的(fill 必须是 none,否则按钮里是一块黑) — fill=none
+[PASS] 「新建文件夹」按钮带 aria-label — 新建文件夹
+[PASS] 图标悬停动效确实定义了 — 长度=13232
+[PASS] 并且有 prefers-reduced-motion 兜底(连 transform 一起取消,不是只关 transition) — 块内规则=.icon-plus | .icon-folder-plus | .icon-btn:hover:not(:disabled) .icon-plus,
+    .icon-btn:active:not(:disabled) .icon-plus,
+    .icon-btn:hover:not(:disabled) .icon-folder-plus,
+    .icon-btn:active:not(:disabled) .icon-folder-plus | .icon-btn:hover:not(:disabled)
+[PASS] 「新建文件夹」图标同样有 reduced-motion 兜底(它用的是缩放,更容易被忽略) — 块内规则=.icon-plus | .icon-folder-plus | .icon-btn:hover:not(:disabled) .icon-plus,
+    .icon-btn:active:not(:disabled) .icon-plus,
+    .icon-btn:hover:not(:disabled) .icon-folder-plus,
+    .icon-btn:active:not(:disabled) .icon-folder-plus | .icon-btn:hover:not(:disabled)
+[PASS] 鼠标移上去图标真的转了(规则写了不等于生效) — none (无旋转) → matrix(0.00548673, 0.999985, -0.999985, 0.00548673, 0, 0) (89.7°)
+[PASS] 指针真的落在按钮上(:hover 匹配 —— 这一条与合成输入无关) — #noteNew:hover 匹配数=1
+[PASS] 鼠标移开后转回原状 — matrix(0.00548673, 0.999985, -0.999985, 0.00548673, 0, 0) → none (无旋转) · 移开后 :hover 匹配数=0
+[PASS] 应用菜单已设置成中文(不再露 Electron 的原生英文菜单) — ["文件","编辑","视图","窗口"]
+[PASS] 自检(非 --dev)下不含开发者项 — ["文件","编辑","视图","窗口"]
+[PASS] 点开笔记后编辑器可见
+[PASS] 文档区渲染出多个块 — blocks=6
+       打开笔记后的状态: {"inputs":1,"anyTextarea":1,"blocks":6,"active":"0","status":"上次修改:2026/9/25 18:16:51","path":"甲篇.md","editorHidden":false,"paneHidden":false}
+[PASS] 打开笔记后就已经有一个源码输入框(不用再点一下) — inputs=1
+[PASS] 而且源码的就是第 0 块(与「新建笔记」同一条规则)
+[PASS] 预览渲染出标题 — "<div class=\"blk blk-type-heading\" data-blk=\"0\"><h1>甲篇</h1></div><div class=\"blk "
+[PASS] 预览把 wiki 链接渲染成可点元素
+[PASS] 预览里指向未写笔记的链接标成 missing
+[PASS] 收起编辑态后没有任何输入框(只有光标所在块才是源码)
+[PASS] 点某一块后该块变成源码输入框 — inputs=1
+[PASS] 源码块里是该块的原文 — "# 甲篇"
+[PASS] 其余块仍然是渲染结果(不是全部变成源码)
+[PASS] 反向链接面板列出乙篇 — count=1
+[PASS] 「还没写的」列出未解析链接 — count=1
+[PASS] 切到预览后没有任何输入框(预览不可编辑) — inputs=0
+[PASS] 预览模式仍渲染出内容
+[PASS] 触发保存
+[PASS] 改动落到了磁盘 — "gs: [自检]\n---\n# 甲篇\n\n见 [[乙篇]] 与 [[还没写]]。 自检追加。\n\n#自检\n"
+[PASS] 未编辑的块保持原样(逐块替换不重排全文) — "---\ntags: [自检]\n---\n# 甲篇\n\n见 [[乙篇]] 与 [[还没写]]。 自检追加。\n\n#自检\n"
+[PASS] 保存下来的内容没有重复(提交是幂等的) — 出现次数=1 末尾="--\n# 甲篇\n\n见 [[乙篇]] 与 [[还没写]]。 自检追加。\n\n#自检\n"
+[PASS] 能切换到另一篇笔记
+[PASS] 点第一块后它变成源码(那一行不再是渲染结果) — {"beforeClick":{"rendered":true},"afterClick":{"rendered":false,"active":"0","inputs":1},"afterEnter":{"rendered":true,"active":"1","inputs":1,"html":"<div class=\"blk blk-type-heading\" data-blk=\"0\"><h1>乙篇</h1></div><div class=\"blk blk-type-blank blk-a"},"afterArrow":"2","ok":true}
+[PASS] 回车后上一行立刻渲染,不用再点鼠标 — {"rendered":true,"active":"1","inputs":1,"html":"<div class=\"blk blk-type-heading\" data-blk=\"0\"><h1>乙篇</h1></div><div class=\"blk blk-type-blank blk-a"}
+[PASS] 回车后源码态跳到下一块 — {"rendered":true,"active":"1","inputs":1,"html":"<div class=\"blk blk-type-heading\" data-blk=\"0\"><h1>乙篇</h1></div><div class=\"blk blk-type-blank blk-a"}
+[PASS] 任何时刻只有一个源码块 — {"rendered":true,"active":"1","inputs":1,"html":"<div class=\"blk blk-type-heading\" data-blk=\"0\"><h1>乙篇</h1></div><div class=\"blk blk-type-blank blk-a"}
+[PASS] ↓ 能跳出当前块进入下一块 — active=2
+[PASS] 验收UI:单击一次就进入这一行的编辑(不用连点两次) — active=0
+[PASS] 验收UI:光标落在点到的那一格附近(不是甩到行尾) — caret=2(第 0 块是「# 甲篇」,点最左侧应当是源码偏移 2 —— 标题前缀)
+[PASS] 验收UI:拖选能跨行(选中的块数 ≥ 2,不再被掐在一行里) — {"text":"\n\n回","blocks":["0","1","2"],"inputs":0}
+[PASS] 验收UI:拖选时不进入编辑态(否则 DOM 一换,选择就被掐断) — inputs=0
+[PASS] 侧栏有「新建文件夹」入口,点了出现内联输入行
+[PASS] 验收UI:新建的文件夹出现在树里(空目录也要看得见 —— 它不在笔记清单里) — folder=验收目录
+[PASS] 验收UI:能在文件夹里新建笔记(路径带目录前缀) — path=验收目录/未命名.md
+[PASS] 验收UI:树里的笔记按层级缩进(--depth = 1) — --depth="1"
+[PASS] 标签面板列出标签 — count=1
+[PASS] 标签面板有工具条(过滤 / 排序 / 收起,都带 aria-label) — ["过滤标签","当前按数量排序,点击改为按名称","收起标签栏"]
+[PASS] 标签的名字与计数是分开的两段(不再糊成「#自检 1」) — [{"name":"#自检","count":"1"}]
+[PASS] 点「收起」后标签区只剩头部一行(高度不再随标签数量走) — chips=0
+[PASS] 再点一次能展开回来
+[PASS] 选中标签后,列表**顶部**出现「筛选中:#… ×」(列表为什么变短一眼可见) — {"hidden":false,"name":"#自检","notes":1}
+[PASS] 筛选真的作用在列表上(不是只有提示条) — before=4 after=1
+[PASS] 点 × 清除筛选,列表条数恢复 — {"hidden":true,"notes":4}
+[PASS] 工作台已挂载:外壳四片 + 插件贡献的那片都由布局树排列 — {"host":true,"ids":["notes","doc","drama","links","ai"]}
+[PASS] 默认布局:左中右三列一字排开、两侧各自贴边、中间最宽;右栏里链接在上、AI 在下 — {"nav":[0,235],"doc":[242,479],"links":[1028,46,239,281],"ai":[1028,334,239,389]}
+[PASS] 默认宽度与改动前逐像素一致(左 236 / 右栏整列 240;比例制,所以窗口缩放也成立) — 左=235px 右栏=239/239px
+[PASS] 右栏内部按 42 / 58 上下分(链接略小于 AI —— "打开就是对话"那条硬要求的落点) — links=281px ai=389px → 0.419
+[PASS] 每片面板在容器里真实可见、尺寸非零(只断言"节点存在"是不够的) — [["notes",235,677,true,235,643],["doc",479,677,true,479,643],["drama",293,677,true,293,643],["links",239,281,true,239,247],["ai",239,389,true,239,355]]
+[PASS] 插件 pane:宿主带 data-plugin、样式表已注入且带作用域前缀 — {"hostDataPlugin":"drama","styleInjected":true,"styleLen":6514,"styleScoped":true,"paneDisplay":"flex","canvasOverflow":"hidden"}
+[PASS] 插件 pane:样式**真的生效**(display/overflow 是插件 CSS 里写的那个值) — {"display":"flex","overflow":"hidden"}
+[PASS] 高度链:工作台没有把文档顶出视口(body 是 overflow:hidden,不该有滚动余量) — {"winH":758,"paneNotesH":712,"paneNotesMinH":"0px","deskH":677,"docScrollH":758,"footerBottom":713,"footerInside":true}
+[PASS] 高度链:.pane-notes 没有超过视口(它是 grid item,必须显式 min-height:0) — {"h":712,"minH":"0px","winH":758}
+[PASS] 高度链:AI 对话的输入卡片在窗口内(这条曾经被推出窗外,看不到也点不到) — {"footerBottom":713,"winH":758}
+[PASS] 短剧画布:插件那片 pane 真的进了布局树、而且有真实尺寸 — {"w":293,"h":643}
+[PASS] 短剧画布:项目清单来自主进程(临时笔记库里的「自检项目」) — {"options":["自检项目"],"value":"自检项目"}
+[PASS] 短剧画布:把项目里的 3 个节点与 1 条连线都画出来了 — {"n":3,"edges":1,"titles":["稿子","拼装","备注"]}
+[PASS] 短剧画布:节点标题就是图里的 title(不是 id、也不是空) — ["稿子","拼装","备注"]
+[PASS] 短剧画布:卡片上把**入边槽位**显式画出来了(引擎按边的顺序取输入)
+[PASS] 短剧画布:点「运行全部」→ 引擎真的跑了,并回报"跑完 3 个节点" — 自检项目 · 跑完 3 个节点(实跑 3,缓存命中 0)
+[PASS] 短剧画布:三个节点都变成"已跑过"(✓),不再显示"没跑过"的破折号 — [["a","✓"],["b","✓"],["c","✓"]]
+[PASS] ★ 短剧画布:什么都不改再跑一次 → **0 实跑**(全命中指纹缓存,不重复烧钱) — 自检项目 · 跑完 3 个节点(实跑 0,缓存命中 3)
+[PASS] 短剧画布:缓存命中时状态写"✓ 缓存"(用户看得出这次没真跑) — ["✓ 缓存","✓ 缓存","✓ 缓存"]
+[PASS] 短剧画布:切到工具视图再切回来,画布从 graph.json 重建出来(不是空白) — 3
+[PASS] 面板本体就在那一格里(不是空壳:notes-nav / note-main / note-links / agent-panel) — ["aside|-|notes-nav","main|noteMain|note-main","div|-|pane-plugin","aside|-|note-links","section|agentPanel|agent-panel"]
+[PASS] ★ 抓手不再可聚焦(整片拖动已删,规格 §1.2)、容器 role=region + aria-label 取当前标签(读屏可达) — [["notes",-1,"region","笔记列表(当前标签)"],["doc",-1,"region","甲篇(当前标签)"],["drama",-1,"region","短剧画布(当前标签)"],["links",-1,"region","链接(当前标签)"],["ai",-1,"region","AI 对话(当前标签)"]]
+[PASS] 分隔条都带读数(旧 id 继续可用,键盘可调);条数与面板数相称 — [{"id":"navResizer","role":"separator","tab":0,"min":43,"max":671,"now":235},{"id":"sideResizer","role":"separator","tab":0,"min":46,"max":726,"now":479},{"id":"","role":"separator","tab":0,"min":32,"max":500,"now":293},{"id":"","role":"separator","tab":0,"min":40,"max":630,"now":281}]
+[PASS] 底部的布局树文本实时可读(用户要看的那份"证据"),而且是**嵌套**的(右栏里再分上下) — {row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]
+[PASS] 静止态(默认布局):「笔记列表 | 笔记正文」之间只有两片各自的框,缝里**没有亮线** — {"rect":{"x":219,"y":106,"width":41,"height":160},"boundary":{"from":15,"to":23,"paneA":16,"paneB":23},"frames":[[14,14,14],[14,14,14]],"framesBrightness":[14,14],"innerBright":[],"innerRgb":[14,14,14,14,14],"lines":"0:39,34,28 1:14,14,14 2:14,14,14 3:14,14,14 4:14,14,14 5:14,14,14 6:14,14,14 7:14,14,14 8:14,14,14 9:14,14,14 10:14,14,14 11:14,14,14 12:14,14,14 13:14,14,14 14:14,14,14 15:14,14,14 16:14,14,14 17:14,14,14 18:14,14,14 19:14,14,14 20:14,14,14 21:14,14,14 22:14,14,14 23:14,14,14 24:14,14,14 25:14,14,14 26:14,14,14 27:14,14,14 28:14,14,14 29:14,14,14 30:14,14,14 31:14,14,14 32:14,14,14 33:14,14,14 34:14,14,14 35:13,12,12 36:25,26,27 37:50,53,56 38:21,21,20 39:23,23,23 40:23,23,23 41:23,23,23 42:23,23,23 43:23,23,23 44:23,23,23 45:23,23,23 46:23,23,23 47:23,23,23 48:23,23,23 49:23,23,23 50:23,23,23 51:23,23,23"}
+[PASS] 静止态(默认布局):「链接 ↔ AI 对话」之间也只有两片各自的框,缝里**没有亮线** — {"rect":{"x":1088,"y":311,"width":160,"height":41},"boundary":{"from":15,"to":22,"paneA":16,"paneB":23},"frames":[[23,23,23],[14,14,14]],"framesBrightness":[23,14],"innerBright":[],"innerRgb":[23,23,24,17,14],"lines":"0:23,23,23 1:23,23,23 2:23,23,23 3:23,23,23 4:23,23,23 5:23,23,23 6:23,23,23 7:23,23,23 8:23,23,23 9:23,23,23 10:23,23,23 11:23,23,23 12:23,23,23 13:23,23,23 14:23,23,23 15:23,23,23 16:23,23,23 17:23,23,23 18:23,23,23 19:24,24,24 20:17,17,17 21:14,14,14 22:14,14,14 23:14,14,14 24:14,14,14 25:14,14,14 26:13,13,13 27:17,17,17 28:40,42,44 29:41,44,46 30:14,15,16 31:17,18,19 32:17,18,19 33:17,18,19 34:17,18,19 35:17,18,19 36:17,18,19 37:17,18,19 38:17,18,19 39:17,18,19 40:17,18,19 41:17,18,19 42:17,18,19 43:17,18,19 44:17,18,19 45:17,18,19 46:17,18,19 47:17,18,19 48:17,18,19 49:17,18,19 50:17,18,19 51:17,18,19"}
+[PASS] 重画 / 重新量一遍都不写布局存档(挂载那条路就是这两步;不拖不动、不写存档) — {"before":"{\"v\":4,\"tree\":{\"dir\":\"row\",\"sizes\":[18.85,38.43,23.55,19.17]","changed":false}
+[PASS] 两条侧栏分隔条都在,而且是可聚焦的 separator(不是只靠鼠标) — {"nav":{"x":238,"y":86,"role":"separator","min":43,"max":671,"now":235},"side":{"x":724,"y":86,"role":"separator","min":46,"max":726,"now":479}}
+[PASS] 拖左分隔条:笔记列表真的变宽了(而且 CSS 变量跟着走) — 235 → 315(315px)
+[PASS] 拖正文右边那条分隔条:左边那格真的变宽了(两格此消彼长,不是纹丝不动) — 正文 399 → 459 · 右栏 239 → 239
+[PASS] 宽度落进了设置(__global / ui.navWidth),重启后还在 — 设置里=315 实际=315
+[PASS] 双击分隔条复位到默认宽度(236) — nav=236
+[PASS] 键盘 ←/→ 也能调宽度(无障碍:不是只能拖鼠标) — nav=252(236 + 16)
+[PASS] 能切到工具视图
+[PASS] 能切回笔记视图
+[PASS] 尺寸角标:焦点离开分隔条后,工作台上"正在调尺寸"的标记也摘掉了(静止态的前提) — {"active":"BODY","resizing":false}
+[PASS] 尺寸角标:静止时**看不见**(opacity=0),但文本仍是这一片的真实尺寸 — {"text":"172×677","opacity":"0","nameLeft":16,"nameW":46,"headX":40,"headY":54,"headHover":false,"headFocus":false,"resizing":false}
+[PASS] 尺寸角标:鼠标悬停标签条时显形(opacity=1),而标签**一个字都没动**(不是被挤出来的) — {"route":"cdp","idle":"0","hover":"1","headHover":true,"nameIdle":[16,46],"nameHover":[16,46]}
+[PASS] 尺寸角标:指针移开后淡出(回到 opacity=0) — {"text":"172×677","opacity":"0","nameLeft":16,"nameW":46,"headX":40,"headY":54,"headHover":false,"headFocus":false,"resizing":false,"awayAt":{"x":6,"y":266}}
+[PASS] 尺寸角标:拖分隔条时显形(opacity=1,随 .pw-resizing 一起,松手/取消后收回) — {"during":{"opacity":"1","resizing":true},"afterCancel":false}
+[PASS] 拖动被取消(pointercancel)时布局一点没动(只验"看得见"这一件事,不该改布局) — {"during":{"dragging":1,"hint":true,"leftovers":1},"after":{"hint":false,"leftovers":0},"before":"{row 17% / 45% / 19% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","now":"{row 17% / 45% / 19% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]"}
+[PASS] 尺寸角标:拖分隔条调尺寸时显形,而且数字**跟着变**(不是停在旧数字上) — {"start":"172×677","during":{"opacity":"1","text":"250×677","resizing":true},"afterUp":false}
+[PASS] ★ 拖一枚标签到 ai 的右边缘 → 右侧长出**单标签新槽位**(槽位 id 是 slot:<序号>,不是视图名) — {"ids":["notes","doc","drama","ai","slot:1"],"newSlotId":"slot:1","ai":{"id":"ai","tabs":["ai"],"active":0,"mode":"dropdown","cur":"AI 对话"},"fresh":{"id":"slot:1","tabs":["links"],"active":0,"mode":"dropdown","cur":"链接"},"tree":"{row 17% / 45% / 19% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {row 70% / 30%}[ AI 对话 , 链接 ] ]"}
+[PASS] 拖动中那一枚标签半透明、落点提示亮起,松手后收起(规格 §6) — {"dragging":true,"during":true,"after":false}
+[PASS] 没有留下任何临时类 / 插入线(拖动结束必须清干净,规格 §6)
+[PASS] 拖动之后各片面板仍在容器里真实可见、尺寸非零(搬走一枚不会让谁消失) — [["notes",210,677,210,644],["doc",563,677,563,643],["drama",233,677,233,643],["ai",162,677,162,644],["slot:1",70,677,70,644]]
+[PASS] 底部布局树文本跟着变了(证据是实时的) — {row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ] → {row 17% / 45% / 19% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {row 70% / 30%}[ AI 对话 , 链接 ] ]
+[PASS] 新槽位与 AI **真的并排**(左右)、等高,而不是还叠着 — {"ai":[1028,46,162],"fresh":[1197,46,70]}
+[PASS] 拖动后布局存档落进设置(带命名空间与版本号) — {"v":4,"tree":{"dir":"row","sizes":[16.86,45.24,18.73,19.17],"children":
+[PASS] 存档往返:主进程读回来的档解出的树 == 界面上正在显示的那棵树(下一次启动走的就是这条路径) — {row 17% / 45% / 19% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {row 70% / 30%}[ AI 对话 , 链接 ] ]
+[PASS] 解回来的树视图一个不少(按**标签**判,不是按槽位 id) — notes,doc,drama,ai,links
+[PASS] 旧档迁移:含 side 的档就地拆成 links + ai(排布与比例都保住,不是"当未知 id 丢掉") — 实际={row 17% / 83%}[ 笔记列表 , {row 75% / 19% / 6%}[ {col 42% / 58%}[ 链接 , AI 对话 ] , 笔记正文 , 短剧画布 ] ] | 期望={row 17% / 83%}[ 笔记列表 , {row 75% / 19% / 6%}[ {col 42% / 58%}[ 链接 , AI 对话 ] , 笔记正文 , 短剧画布 ] ]
+[PASS] 「重置布局」回到默认布局(拖乱之后的唯一出口) — {"ids":["notes","doc","drama","links","ai"],"tree":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]"}
+[PASS] 重置之后各片面板依然真实可见、尺寸非零 — [["notes",235,677],["doc",479,677],["drama",293,677],["links",239,281],["ai",239,389]]
+[PASS] 重置也落了盘(存档解得回来、面板一个不少,且仍是那一行的形状) — {row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ] | 界面={row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]
+[PASS] 工作台的默认树仍然是"链接与 AI 叠在右侧"(纯函数层与界面一致)
+[PASS] 默认树经 adoptPanes 收编后,插件面板出现在「笔记正文」右边那一格 — notes,doc,drama,links,ai
+       单标签手势读数:{"grip":{"before":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":false,"dragging":false,"changed":false},"pad":{"before":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":false,"dragging":false,"changed":false},"body":{"before":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":false,"dragging":false,"changed":false},"afterInert":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","chipToEdge":{"before":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 13% / 44% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":true,"dragging":true,"changed":true},"afterEdge":"{row 13% / 44% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","slotCountAfterEdge":5,"chipToBody":{"before":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 57% / 24% / 19%}[ 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":false,"dragging":true,"changed":true},"afterBody":"{row 57% / 24% / 19%}[ 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","afterReset":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hintAtEnd":false,"leftoverClasses":0,"leftoverCaret":0}
+[PASS] ★ 抓手上按下拖动 → 树一动不动、落点提示也不出现(整片拖动已按规格删除) — {"before":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":false,"dragging":false,"changed":false}
+[PASS] ★ 标签条空白上按下拖动 → 树一动不动(同上) — {"before":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":false,"dragging":false,"changed":false}
+[PASS] ★ 面板正文上按下拖动 → 树一动不动(同上) — {"before":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":false,"dragging":false,"changed":false}
+[PASS] ★ 拖一枚胶囊到目标右缘 → 树真的变了,而且拖动中那一枚半透明 — {"before":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 13% / 44% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":true,"dragging":true,"changed":true}
+[PASS] ★ 拖一枚胶囊到目标正文中央 → 树真的变了(并进那一格) — {"before":"{row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 57% / 24% / 19%}[ 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":false,"dragging":true,"changed":true}
+[PASS] 拖动结束后没有留下任何临时类 / 插入线(规格 §6) — classes=0 caret=0
+[PASS] 这一组收尾时回到了默认布局(读数与初始一致) — {row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ] → {row 19% / 38% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]
+[PASS] 加载失败的插件数符合预期(1) — broken=1
+[PASS] 侧边栏渲染出工具按钮 — count=7
+[PASS] 错误卡片数符合预期(1) — 错误卡片数=1
+[PASS] 扫描到 7 个工具 — buttons=7 tools=bilibili,douyin,music,palette,subtitle,accprobe,hello
+[PASS] 工具 id 集合符合预期 — bilibili,douyin,music,palette,subtitle,accprobe,hello
+[PASS] 工具 palette 的面板已挂载(#paletteSchemes) — true
+[PASS] 工具 subtitle 的面板已挂载(#subtitleInput) — true
+[PASS] 工具 music 的面板已挂载(#musicKeyword) — true
+[PASS] 工具 douyin 的面板已挂载(#douyinInput) — true
+[PASS] 工具 bilibili 的面板已挂载(#biliInput) — true
+[PASS] 工具 hello 的面板已挂载(#helloStamp) — true
+[PASS] 单文件插件的 setup 拿到可用的 ctx — "插件 hello v1.0.0 已激活"
+[PASS] B站队列:夹具队列服务从页面里取得到,而且插件读的就是同一个地址(否则下面两条断言测不到东西) — {"base":"http://127.0.0.1:12967","current":"toolbox://shell","status":200,"code":0,"tasks":1,"fixtureBase":"http://127.0.0.1:12967"}
+[PASS] B站队列:面板下方长出队列区,并渲染出夹具任务(标题/UP/时长都在) — {"queueFound":true,"taskFound":true,"taskStatus":"running","taskPhase":"video","taskText":"自检夹具 [高清 1080P]下载中×自检 · 1:01 · 视频 47%","isLive":true,"badgeText":"下载中","badgeTitle":"上游状态:running","fillWidth":"47%","hasCopy":false,"copyLabel":null,"hasUnderstand":false,"understandLabel":null,"progressLayers":1,"polling":"true
+[PASS] B站队列(实测状态 running):中文胶囊 + 原始 token 进 title + is-live 动效,而且标签**绝不是英文** — {"queueFound":true,"taskFound":true,"taskStatus":"running","taskPhase":"video","taskText":"自检夹具 [高清 1080P]下载中×自检 · 1:01 · 视频 47%","isLive":true,"badgeText":"下载中","badgeTitle":"上游状态:running","fillWidth":"47%","hasCopy":false,"copyLabel":null,"hasUnderstand":false,"understandLabel":null,"progressLayers":1,"polling":"true
+[PASS] B站队列(实测进度语义):进度条按 0–1 的比例画(47%),阶段写"视频" —— 旧代码把它当 0–100,条最多只走 1% — {"layers":1,"width":"47%","phase":"video"}
+[PASS] B站队列(图一):绿色填充的条纹**真的在动** —— 两次采样的 transform 数值不同(不是只看 animation-name) — {"reduced":false,"animName":"bili-q-bg-drift","animDuration":"1.6s","animIteration":"infinite","animPlayState":"running","t0":"matrix(1, 0, 0, 1, -83.6732, 0)","t1":"matrix(1, 0, 0, 1, -60.3312, 0)","polls":"1"}
+[PASS] B站队列(图一):轮询**不重建**那条进度条 —— 两个轮询周期后它还是同一个节点(否则动画每 1.5 秒被打回起点) — {"rowSame":true,"fillSame":true,"bandSame":true,"t2":"matrix(1, 0, 0, 1, -48.6657, 0)","pollsNow":"3","transforms":["matrix(1, 0, 0, 1, -83.6732, 0)","matrix(1, 0, 0, 1, -60.3312, 0)","matrix(1, 0, 0, 1, -48.6657, 0)"],"requestsBefore":11,"requestsAfter":13,"pollsBefore":"1"}
+[PASS] B站队列(图一·根因):`@keyframes bili-q-bg-drift` 必须真的进到 CSSOM(注释紧跟其后时曾被整条丢掉) — {"inText":true,"names":["rail-pulse","rail-tick-pop","text-sweep","agent-think-grow","agent-think-wipe","agent-think-fade","caret-blink","agent-orb-breathe","stage-band-drift","faceOrbit","faceSweep","faceThink","faceStream","faceLightsOut","faceTear","faceVanish","bili-q-bg-drift","bili-q-text-sweep"],"inCssom":true,"
+[PASS] B站队列:running 期间**持续轮询**(3 秒里夹具收到多次请求)—— 这就是之前冻结的那一条 — {"before":13,"after":15,"polling":"true","pollReason":"有 1 个进行中的任务,每 1500ms 取一次","stillRunning":"running"}
+[PASS] B站队列:任务变成 done 后界面**自己刷新过去**(轮询抓到新状态 → 勾号 + 撤掉 live/进度条 + 长出复制/理解) — {"taskStatus":"done","isLive":false,"progressLayers":0,"badge":null,"hasCopy":true,"hasUnderstand":true}
+[PASS] B站队列:那一刻才出现复制/理解按钮(未完成的任务不该有"复制文件"这种入口) — {"runningHasCopy":false,"runningHasUnderstand":false}
+[PASS] B站队列:**空闲时彻底停止轮询**(3 秒里夹具服务一个请求都没再收到,界面也说"停止轮询") — {"before":16,"after":16,"polling":"false","pollReason":"没有进行中的任务,停止轮询"}
+[PASS] B站队列:「复制视频」走的是 IPC 通道(自检模式不真写剪贴板,但整条链路证到) — {"clicked":true,"lastCopy":"ok","reason":"","note":"已把文件放进剪贴板:fixture-video.mp4(自检模式:没有真去写剪贴板)"}
+[PASS] 插件面板里的「解析」按钮拿到了共享样式(不是浏览器默认外观) — "linear-gradient(rgb(154, 214, 255), rgb(126, 200, 255))" radius=8px
+[PASS] 下拉框是自绘的(关掉了原生 appearance) — none
+[PASS] 下拉框带自绘箭头 — url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2.2 4.6 6 8.4l3.8-3.8' fill='none' stroke='%239b9791' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+[PASS] 声明了 color-scheme: dark(原生弹出列表才会是深色) — dark
+[PASS] 共享的封面占位图模块可被插件 import — true
+[PASS] 抖音面板里有 Cookie 设置区(默认收起) — {"hasBox":true,"closedByDefault":true,"state":"读取中…","hasSave":true,"hasLogin":true,"hasRelogin":true,"emptySaveMsg":"先粘 Cookie 再保存"}
+[PASS] Cookie 区有「登录并自动记住」与「换账号」两个按钮 — {"hasBox":true,"closedByDefault":true,"state":"读取中…","hasSave":true,"hasLogin":true,"hasRelogin":true,"emptySaveMsg":"先粘 Cookie 再保存"}
+[PASS] Cookie 状态位显示了内容(服务没起时也不该是空的) — "读取中…"
+[PASS] 空 Cookie 不允许保存 — "先粘 Cookie 再保存"
+[PASS] 抖音清单声明了 cookieLogin(登录页/Cookie 域/投递目标) — {"pluginId":"douyin","title":"登录抖音(开物)","loginUrl":"https://www.douyin.com/","cookieDomain":"douyin.com","target":{"service":"douyin-api","path":"/douyin/cookie"}}
+[PASS] cookieLogin 的投递目标确实是它自己声明的服务 — specPlugin=douyin
+[PASS] 抖音清单申请了 cookies 权限 — ["log","services","cookies","browser"]
+[PASS] 取 Cookie 的频道在预加载白名单里(漏了它只有真点按钮才会报错)
+[PASS] 抖音清单声明了 browserFetch(allow 白名单 + capture 片段) — {"allow":["https://www.douyin.com/"],"capture":["/aweme/v1/web/aweme/detail/"]}
+[PASS] 抖音清单申请了 browser 权限 — ["log","services","cookies","browser"]
+[PASS] 浏览器取数据的频道在预加载白名单里
+[PASS] 插件面板里的服务徽标渲染出了状态 — {"found":true,"status":"stopped","label":"未启动","hasButton":true,"hint":"服务随应用启动,没起来就点「启动服务」"}
+[PASS] 徽标上有启动按钮(状态条去掉后这里是唯一的入口) — {"found":true,"status":"stopped","label":"未启动","hasButton":true,"hint":"服务随应用启动,没起来就点「启动服务」"}
+[PASS] 未启动时提示"服务随应用启动" — "服务随应用启动,没起来就点「启动服务」"
+[PASS] 服务已在主进程侧登记 — {"id":"qqmusic","pluginId":"music","label":"QQ音乐服务","port":3300,"status":"stopped","owned":false,"pid":null,"error":null,"since":1790331411523}
+[PASS] 自检模式下服务不被自动拉起(避免自检去 spawn 真实外部服务) — status=stopped owned=false
+[PASS] 三个内置服务都声明了随应用启动 — [{"id":"bilidown-api","autoStart":true},{"id":"douyin-api","autoStart":true},{"id":"qqmusic","autoStart":true}]
+[PASS] 服务都还停着(自检不拉起真实外部服务) — ["stopped","stopped","stopped"]
+[PASS] IPC 桥不在 window 上
+[SKIP] 经目录联接逃出资源根被拒绝 — 本机文件系统不支持目录联接(EISDIR),跳过;该性质由 npm test 的联接用例覆盖
+[PASS] 服务托管器可用
+[PASS] AI 面板已挂载(右栏不再是占位)
+[PASS] 输入区是消息滚动区的**兄弟**,不在它里面(在里面的就会跟着消息滚走) — {"ok":true,"insideMessages":false,"movesWithScroll":false,"gapToPanelBottom":10,"gapMessagesToComposer":0,"msgsH":262,"footerH":82,"hasCtxRow":true,"hasDot":false,"keysHintVisible":false,"inputAriaKeyshortcuts":"Enter","inputAriaLabel":"对 AI 提问(回车发送,Shift+回车换行)。将带上笔记:甲篇","actRow":{"width":197,"rightGap":0,"leftSpace":153,"text":"","buttons":1,"isBall":true,"eyes":2,"size":44,"label":"发送","mode":"send","disabled":true},"ctx":"note","border":"0.8px","radius":"10px","ctxRowHidden":true,"ctxRowInFlow":{"display":"none","h":0,"w":0},"ctxRowGap":{"fromCardTop":9,"rowBottomToInput":null},"inputPlaceholder":"","inputTitle":"将带上笔记:甲篇","ctxText":"将带上笔记:甲篇","footerText":"停止进程"}
+[PASS] 滚动消息时输入栏纹丝不动(实测前后位置差为 0) — moves=false
+[PASS] 输入栏贴在面板底部(只留卡片自己的外边距) — 离底=10px
+[PASS] 消息区铺满输入栏以上的全部空间 — 消息区高=262px 与输入栏间距=0px
+[PASS] 输入区是卡片:上下文行的落点 + 边框圆角 — {"ctx":"note","border":"0.8px","radius":"10px"}
+[PASS] 「回车发送」那句可见文本确实不在了:整张卡片里搜不到这四个字 — {"卡片文本尾部":"停止进程"}
+[PASS] 可达性那条没断:「回车能发送」改走非视觉出口(input 的 aria-keyshortcuts + aria-label) — {"keyshortcuts":"Enter","label":"对 AI 提问(回车发送,Shift+回车换行)。将带上笔记:甲篇"}
+[PASS] 那颗球:行里只有它一个控件、贴着右边缘、左边空出一大截,而且它确实是那只小机器人(两只眼睛) — {"width":197,"rightGap":0,"leftSpace":153,"text":"","buttons":1,"isBall":true,"eyes":2,"size":44,"label":"发送","mode":"send","disabled":true}
+[PASS] 聊天框上面是干净的:那一行默认**整行 hidden、不在布局里**(状态点也按用户要求删了) — {"hasDot":false,"hidden":true,"flow":{"display":"none","h":0,"w":0}}
+[PASS] 那颗球量得到:空闲时是「发送」、data-mode=send,而且"能不能点"与 Agent 状态一致 — {"期望可点":false,"x":1224,"y":686,"w":44,"h":44,"label":"发送","mode":"send","disabled":true,"agentState":"stopped","gaze":"四处看"}
+[PASS] 鼠标靠近那颗球(26px)→ 它盯着鼠标 — {"gaze":"盯着鼠标","mouse":"near","dist":"28","looks":"0","caret":"mirror","costMax":"2.7","skip":""}
+[PASS] 鼠标挪远不动 → 它松开、四处看(1.6s 后不该还盯着旧方向) — {"gaze":"四处看","mouse":"far","dist":"1398","looks":"0","caret":"mirror","costMax":"2.7","skip":""}
+[PASS] 安静 5 秒:它一次"看变化"都没有(说明它没有把自己的更新当成页面变化) — looks 0 → 0 · gaze=四处看 · mouse=far
+[PASS] 在笔记里打字 → 它看向**编辑点**(不是整块的中心,也不是没反应) — {"块数":1,"gaze":"看编辑点(左上角)","mouse":"far","dist":"1070","looks":"0","caret":"mirror","costMax":"2.7","skip":""}
+[PASS] 编辑点:光标换到下一行后朝向跟着变(注视开着的态里,眼睛必须真的动) — matrix(1, 0, 0, 1, 0, 0.6) → matrix(1, 0, 0, 1, 0, 0.6) · face=stopped(该态注视暂停,CSS 姿势接管)
+[PASS] 编辑点是**镜像**量出来的(不是退回整块),而且单次成本低于一帧 — {"gaze":"看编辑点(左上角)","mouse":"far","dist":"1070","looks":"0","caret":"mirror","costMax":"2.7","skip":""}
+[PASS] 打字时没有掉帧(镜像的代价读数:最坏单次 2.7ms,82ms 节流 → 占用 <3%) — frame: 152 fps(77 帧 / 506ms)
+[PASS] 面板上不显示连接状态(状态文字只在视觉隐藏的 live 区里) — {"srSize":"1x1","srClip":"inset(50%)","ariaLive":"polite","visibleHasConnected":false,"killInCard":true,"killInRow":true,"killVisible":false,"killHidden":true,"killH":20,"rowHidden":true,"rowH":0,"rowHWithKill":20,"gapWithoutRow":9,"gapWithRow":35,"ctx":"note","inputTitle":"将带上笔记:甲篇","placeholder":"","ctxText":"将带上笔记:甲篇","dotGone":true,"keyBtnGone":true,"ctxTextGone":true,"notice":0}
+[PASS] live 区仍然是 aria-live(读屏照样能听到状态变化,只是看不见) — polite
+[PASS] 「停止进程」还在**原来那一行**(位置没变),但平时整行与按钮都是隐藏的(不占高度、不留下间距) — {"inCard":true,"inRow":true,"hidden":true,"rowHidden":true,"rowH":0,"gap":9}
+[PASS] 那一行出现时仍然是 20px,而且它把输入框往下推了正好"20px + 6px 间距"(不会挤在一起) — rowH=20 buttonH=20 gap 9→35
+[PASS] 状态点、「密钥」按钮与那行上下文文字都已从输入卡片上删掉(不是藏起来) — {"dotGone":true,"keyBtnGone":true,"ctxTextGone":true}
+[PASS] 上下文没丢:挂在输入框上 —— placeholder 带笔记名、title 是完整那句(没有打开的笔记时两处同一句话) — {"ctx":"note","title":"将带上笔记:甲篇","placeholder":"","ctxText":"将带上笔记:甲篇"}
+[PASS] 机器可读的那份还在(data-ctx / data-ctx-text),断言不靠中文 — {"ctx":"note","ctxText":"将带上笔记:甲篇"}
+[PASS] 正常连接下没有任何"关于连接"的提示卡(连上了就不该占视觉) — notice=0
+[PASS] 「停止进程」在**正在起**的时候出现且可点(卡住的那一刻它就在原位,不用去别处找) — {"state":"starting","hidden":false,"disabled":false,"h":20,"rowHidden":false,"rowH":20,"hintFound":true,"hintHidden":false,"hintText":"正在连接 Agent…","hintH":17,"gap":35,"notice":0}
+[PASS] 连接中那 35 秒**不是一片静止**:那一行写着「正在连接 Agent…」,而且**不写数字、不画进度** — {"text":"正在连接 Agent…","hidden":false,"h":17}
+[PASS] 连上之后(ready 且没在跑)按钮与**整行**一起收起来 —— 聊天框上面一点空位都不留 — {"ready":{"state":"ready","hidden":true,"disabled":true,"h":0,"rowHidden":true,"rowH":0,"hintFound":true,"hintHidden":true,"hintText":"正在连接 Agent…","hintH":0,"gap":9,"notice":0},"startingGap":35}
+[PASS] 已经坏了(crashed)也亮着:进程可能还在,得能收尸 — {"state":"crashed","hidden":false,"disabled":false,"h":20,"rowHidden":false,"rowH":20,"hintFound":true,"hintHidden":true,"hintText":"正在连接 Agent…","hintH":0,"gap":35,"notice":1}
+[PASS] 「正在连接…」只在 connecting 时在:连上之后跟着整行一起收掉(不留一句常驻的状态文案) — {"ready":true,"crashed":true,"restored":true}
+[PASS] 量完还原:面板回到**真实**状态,而且这条路上不会凭空多出一张提示卡 — {"before":"stopped","after":{"state":"stopped","hidden":true,"disabled":true,"h":0,"rowHidden":true,"rowH":0,"hintFound":true,"hintHidden":true,"hintText":"正在连接 Agent…","hintH":0,"gap":9,"notice":0}}
+[PASS] 黏贴截图:合成用的是浏览器**原生** DataTransfer + ClipboardEvent(面板读到的是真实 API 行为) — native=true(false = 退回了手搓的 clipboardData,证据强度弱一档)
+[PASS] 黏贴截图:黏贴一张图后输入区出现一张 chip(mime 与文件名都在,机器可读的那份挂 data-image-chip) — {"native":true,"imagePastePrevented":true,"chips":1,"chipMime":"image/png","chipLabel":"已黏贴的截图:shot.png(image/png)","delLabel":"移除这张图:shot.png","chipText":"shot.png×","hasThumb":true,"extraImages":0,"chipsAfterDelete":0,"textPasteAllowed":true,"chipsAfterTextP
+[PASS] 黏贴截图:chip 上有缩略图,删除按钮带 aria-label(键盘可达);文件名里的标签没落地成元素 — {"thumb":true,"del":"移除这张图:shot.png","extra":0}
+[PASS] 黏贴截图:含图片的粘贴被拦下,点删除后 chip 消失 — {"prevented":true,"after":0}
+[PASS] 黏贴截图:不含图片的粘贴一律放行(粘文字的行为一个字节都不许改) — {"allowed":true,"chips":0}
+[PASS] 黏贴截图:格式不对时拒绝,并把可读的中文原因显示出来(不是静默丢) — {"chips":0,"text":"不支持的图片格式“image/bmp”——只接受 PNG / JPEG / WebP / GIF"}
+[PASS] 视频理解:拖进来一段 mp4 → 只出现**草稿**卡片(文件名/大小/音频说明都在),dragover 被拦下 — {"native":true,"panelDrop":{"overPrevented":true,"dropPrevented":true},"cardVisible":true,"chipMime":"video/mp4","chipText":"vu-synth.mp412 B×注意:这个模型只看画面、听不到声音 —— 对话、旁白与背景音乐都不在理解范围内。","chipLabel":"待发送的视频:vu-synth.mp4(12 B)","audioText":"注意:这个模型只看画面、听不到声音 —— 对话、旁白与背景音乐都不在理解范围内。","chipMediaNodes":0,"t
+[PASS] 视频理解:草稿上只有移除键、没有第二个触发点;有草稿时「发送」可点(Agent 没连上也能发) — {"triggers":0,"remove":true,"sendDisabled":false}
+[PASS] 视频理解:**只拖入、不点发送,主进程一次请求都不发**(草稿阶段界面上没有任何"被守卫挡下"的痕迹,消息流也是空的) — {"noticeText":"","noticeHidden":true,"draftVisible":true,"messages":0,"videoCards":0,"railExists":true,"railTicks":0,"railHidden":true}
+[PASS] 轮次轨:一轮都没有时整条轨隐藏(一轮没有导航价值,常驻一列只会占视觉) — {"exists":true,"hidden":true,"ticks":0}
+[PASS] 视频理解:点「发送」才真的调用 —— 整条链路走到主进程并被守卫挡住(自检不发真实请求) — {"click":{"clicked":true,"disabled":false,"messagesBefore":0},"notice":"自检模式不发真实请求(会打网络)"}
+[PASS] 视频理解:那一刻才出现那条带视频卡的用户消息(提问就是这次发出去的那一句),失败时**不留**有正文的假回答 — {"userVideoCards":1,"userName":"vu-synth.mp4","assistantCount":1,"assistantsWithText":0,"stageRows":1,"failedStages":["prepare"],"stageMarks":["✕"],"stillCancelable":0,"rowHidden":true,"userBubbleText":"视频vu-synth.mp412 B用中文详细描述这段视频:画面里有哪些物体(颜色、位置),发生了什么,物体怎么移动。"}
+[PASS] 视频理解(方案C):失败把断点红在**那一行**上(自检守卫断在「准备请求」),不是一句笼统的"理解失败" — {"rows":1,"failed":["prepare"],"marks":["✕"]}
+[PASS] 视频理解:HTML 改名成 mp4 被拒(渲染层读到字节就用同一份判据拦下),原因说清"字节不是"+只接受哪几种 — {"notice":"这段视频声明是 video/mp4,但字节不是 MP4 / MOV / WebM / MKV 里任何一种容器,已拒绝","chips":0,"cards":1}
+[PASS] 视频理解:移除草稿之后再点发送 —— 不触发视频调用,也不留任何记录;非视频拖放不受影响 — {"remove":{"removeButtonFound":true,"removeLabel":"移除这个视频:to-remove.mp4","draftGoneAfterRemove":true},"afterRemove":{"messages":2,"videoCards":1,"chips":0},"text":{"overPrevented":false,"dropPrevented":false}}
+[PASS] 视频密钥(自检隔离):设置文件落在临时 userData 里,绝不是用户真实的那一份(否则自检会写脏用户配置) — {"userDataDir":"C:\\Users\\18014\\AppData\\Local\\Temp\\kaiwu-selftest-userdata-INdPeu","temp":true,"underTmp":true,"isReal":false,"realSettingsPath":"C:\\Users\\18014\\AppData\\Roaming\\kaiwu\\settings.json"}
+[PASS] 视频密钥:设置页那一项是真的(密码框 + 保存/清除两个按钮),而输入框永远是空的(密钥不回显) — {"inputType":"password","inputValue":"","statusText":"密钥:已配置(环境变量)","warnHidden":false,"warnText":"⚠ 当前用的是环境变量 DASHSCOPE_API_KEY —— 环境变量优先,在这里保存的密钥不会生效。要让它生效,先去掉那个环境变量(或改成正确的那把)再重启开物。","noteText":"","noteAttached":true,"hasSave":true,"hasClear":true,"killRow":true}
+[PASS] 视频密钥:「环境变量优先,在这里保存的密钥不会生效」这句**在设置页上也看得见**(原来只有面板那张卡上写,而那张卡的按钮已经删了) — {"warn":"⚠ 当前用的是环境变量 DASHSCOPE_API_KEY —— 环境变量优先,在这里保存的密钥不会生效。要让它生效,先去掉那个环境变量(或改成正确的那把)再重启开物。","status":"密钥:已配置(环境变量)"}
+[PASS] 视频密钥(实测):设置页里存一次,设置文件里落的是**密文**(safeStorage 可用时),明文那份是空的 — {"typedLen":42,"encryptionAvailable":true,"encLen":100,"plainLen":0,"rawHasPlaintext":false}
+[PASS] 视频密钥(实测):密文解得回来,而且解出来的正是刚才敲进去的那一串(存进去 ≠ 存对了) — {"encryptionAvailable":true,"decryptedLen":42}
+[PASS] 视频密钥:保存成功后输入框**清空**,页面文本与 HTML 里都搜不到那串明文,渲染进程日志里也没有 — {"inputValue":"","inBodyText":false,"inBodyHtml":false,"statusText":"密钥:已配置(环境变量)","noteText":"已保存(密文/明文由系统决定,不进日志)","inLogs":false}
+[PASS] 视频密钥:状态那一行是主进程给的**真读数**(自检里环境变量已设 → 已配置(环境变量)) — {"status":"密钥:已配置(环境变量)"}
+[PASS] 视频密钥:点「清除」之后设置文件里两份都空了,页面上也再搜不到那串明文 — {"cleared":{"encLen":0,"plainLen":0},"after":{"inputType":"password","inputValue":"","statusText":"密钥:已配置(环境变量)","warnHidden":false,"warnText":"⚠ 当前用的是环境变量 DASHSCOPE_API_KEY —— 环境变量优先,在这里保存的密钥不会生效。要让它生效,先去掉那个环境变量(或改成正确的那把)再重启开物。","noteText":"已清除","noteAttached":true,"hasSave":true,"hasClear":true,"killRow":true}}
+[PASS] 视频密钥:反馈写在**当前那个**节点上(renderBody 会把整块重建,写在脱离文档的旧节点上就等于没写) — {"attached":true,"note":"已清除"}
+[PASS] 解析风控冷却:面板一挂载就说清"是登录会话被风控 + 两个动作",而且**输入区锁着** — {"notice":"B 站风控了**当前登录会话**(HTTP 412):已暂停请求,2:00 后自动恢复。有效的做法只有一个:到 Bilidown 界面**重新扫码登录**。打开 Bilidown 界面重新扫码登录已暂停请求,1:35 后恢复","btnDisabled":true,"inputDisabled":true,"links":[{"text":"打开 Bilidown 界面重新扫码登录","href":"http://localhost:8098"}]}
+[PASS] 解析风控冷却:倒计时是 M:SS 且每秒在走(用户看得见还要等多久) — "个:到 Bilidown 界面**重新扫码登录**。打开 Bilidown 界面重新扫码登录已暂停请求,1:35 后恢复"
+[PASS] B站队列:「理解这一段视频」把**本地路径**交给 AI 面板(队列卡片 → DOM 事件 → 面板 → IPC),自检里被守卫挡住不发真实请求 — {"queueBack":true,"click":{"clicked":true,"disabled":false,"label":"理解这一段视频"},"after":{"messages":4,"videoCards":2,"lastName":"fixture-video.mp4","assistantCount":2,"failedStages":["prepare","prepare"],"notice":"自检模式不发真实请求(会打网络)","view":"notes"}}
+[PASS] B站队列:那一刻消息流里多了一条**带视频卡的用户消息**,壳把视图切到了笔记,断点也红在这一轮自己那一段上 — {"before":{"messages":2,"videoCards":1},"after":{"messages":4,"videoCards":2,"lastName":"fixture-video.mp4","assistantCount":2,"failedStages":["prepare","prepare"],"notice":"自检模式不发真实请求(会打网络)","view":"notes"}}
+[PASS] 轮次轨:一格一轮,条数 == 轮数;当前轮**常显**高亮;每格是可聚焦 button 且 aria 写出状态 — {"hidden":false,"ticks":2,"turns":2,"cur":1,"curCount":1,"ariaRail":"会话轮次导航:一格一轮,点一下跳到那一轮。灰=正常,蓝=含工具调用,红=失败,绿=当前轮。","ariaTicks":["第 1 轮,失败","第 2 轮,失败"],"ariaCurrent":1,"genBars":0,"offsets":[10,190],"scrollbarWidth":0,"scrollbarWidthCss":"none","scrollable":true,"scrollHeight":382,"clientHeight":201}
+[PASS] 轮次轨:**没有**轮内假进度条(demo 那根 .gen 细条不许出现) — genBars=0
+[PASS] 消息区(用户追加):原生滚动条真的没了(内容区与容器同宽 + scrollbar-width:none) — {"scrollbarWidth":0,"css":"none"}
+[PASS] 消息区(用户追加):**滚轮落在轨上**能把消息区滚起来(轨占了原滚动条的位置) — {"forward":{"before":0,"after":180.8000030517578,"defaultPrevented":true},"injectedOnRail":0,"injectedOnMessages":0,"railRect":{"mx":1048,"my":398,"rx":1237,"ry":418,"innerW":1266,"innerH":758,"railLeft":1220,"railRight":1254,"scrollable":true}}
+[PASS] 消息区(用户追加):键盘(聚焦 + PageDown)仍然能滚 —— 藏掉的是滚动条,不是滚动能力 — {"forwarded":{"before":0,"after":180.8000030517578,"defaultPrevented":true},"top":180.8000030517578,"focused":true}
+[PASS] 轮次轨:滚动联动 —— 滚到顶高亮第一格、滚到底高亮最后一格(预计算 offset + rAF,回调里不读 layout) — {"atTop":0,"atBottom":1,"top":180.8000030517578,"max":181}
+[PASS] 轮次轨:点某一格 → 真的平滑滚到那一轮(滚回第一轮) — {"deep":180.8000030517578,"after":6.400000095367432,"target":10,"cur":0}
+[PASS] 轮次轨:悬停/聚焦摘要 —— 「第 N 轮 · 中文状态」+ 该轮问题;挂在面板上(不会被滚动区裁掉) — {"byFocus":{"title":"第 2 轮 · 失败","question":"用中文详细描述这段视频:画面里有哪些物体(颜色、位置),发生了什么,物体怎么移动。","inMessages":0},"byHover":{"title":"第 2 轮 · 失败","question":"用中文详细描述这段视频:画面里有哪些物体(颜色、位置),发生了什么,物体怎么移动。","inMessages":0},"tag":"BUTTON","focused":true,"afterBlur":0,"afterLeave":0}
+[PASS] 流式扫光:内层扫光层是块级、裁到字里、并挂着 text-sweep 动画 — 长度=54972
+[PASS] 气泡底没有被裁:`background-clip:text` 只出现在扫光层,不在 .agent-msg-text 上 — 在 shell.css 里找 .agent-msg-text
+[PASS] 末字显影:尾巴自己裁一层半透明罩子(用 mask 是无效的,已实测推翻) — tokens 长度=1767
+[PASS] reduced-motion 下扫光与思考光标都被关掉(动效必须能一键关) — 块内规则=.col-resizer::before | .note-caret | .agent-sweep | .agent-think[data-live="true"] .agent-think-label::after | .agent-rail .tick .mark
+[PASS] reduced-motion(轮次轨):脉冲与入场动效被关掉,而当前轮的高亮规则不受影响 — 块内规则=.col-resizer::before | .note-caret | .agent-sweep | .agent-think[data-live="true"] .agent-think-label::after | .agent-rail .tick .mark
+[PASS] 方案C 状态行:条子是 3px、线性过渡,百分比只由真读数驱动(样式在发出去的那份表里) — sbar=
+    height: 3px; border-radius: 2px; overflow: hidden;
+    margin-top: 3px;
+    background: rgba(255, 255, 255, .08);
+ | i=
+    display: block; height: 100%; width: 0;
+    background: var(--accent);
+    transition: width .12s linear;
+
+[PASS] 方案C(图二):没有分母的段不画轨道 —— 轨道透明 + 一条来回游走的不确定态光带 — indeterminate= background: transparent;  | band=
+    /* 略宽、更亮、更快 —— 用户反馈"看不出在动"。但仍然**明确是"不确定"**:
+       它是一条来回游走的窄光带(两端渐隐、只占 40% 宽),不是从左往右填的进度条。 */
+    width: 40%;
+    background: linear-gradient(90deg, rgba(126, 200, 255, 0), var(--accent), rgba(126, 200, 255, 0));
+    opacity: .8;
+    animation: stage-band-drift 1.1s ease-in-out infinite alternate;
+
+[PASS] 方案C(图二):那条不确定态光带在**真引擎里真的在走**(两次 transform 不同),而且轨道是透明的 — {"a":"matrix(1, 0, 0, 1, 0, 0)","b":"matrix(1, 0, 0, 1, 41.7852, 0)","rail":"rgba(0, 0, 0, 0)","anim":{"name":"stage-band-drift","duration":"1.1s","play":"running"}}
+[PASS] 自检下面板不自动连(Agent 状态停在 stopped,由用户/自检显式点连接) — state=stopped
+[PASS] 凭证卡片:有凭证时不许留下"未就绪"类文案(隐藏 ≠ 状态正确) — hidden=true
+[PASS] 验收5:新丢进去的单文件插件出现在侧边栏
+[PASS] 验收5:它注册的工具有面板可挂载(挂的是它自己的面板) — 标题="验收探针"
+[PASS] 验收6:坏插件渲染出错误卡片 — 错误卡片数=1
+[PASS] 验收6:错误卡片里写明了原因 — "Error: contributes.tools[0].panel: acceptance-broken\\plugin.json: panel 必须是插件目录内的相对路径\n    at loadPlugins (toolbox://shel"
+[PASS] 验收6:坏插件没有影响正常工具 — 缺失=无 侧边栏=bilibili,douyin,music,palette,subtitle,accprobe,hello
+[PASS] 验收M3:点「连接」后 Agent 真的就绪(握手走的是注入的夹具) — state=ready
+[PASS] 验收M3:输入框与发送按钮都在,且按钮带 aria-label
+[PASS] 验收M3:发一条提示,界面上出现回复 — "回复0回复1回复2\n\n**加粗**与`行内码`\n\n<img src=x onerror=\"alert(1)\">"
+[PASS] 验收M3:用户那一句也留在消息流里 — "你好,读一下当前笔记"
+[PASS] 验收M3:发给 agent 的提示里带上了当前笔记的路径(会话绑定当前笔记) — path="甲篇.md" 回显="视频vu-synth.mp412 B用中文详细描述这段视频:画面里有哪些物体(颜色、位置),发生了什么,物体怎么移动。✕准备请求在这里断了视频fixture-video.mp439"
+[PASS] 验收M3:工具调用渲染成一张卡片,而且按 toolCallId 更新成 completed — {"status":"completed","text":"完成read 甲篇.mdread"}
+[PASS] 验收M3:反向的权限请求渲染成一张确认卡片
+[PASS] 验收M3:权限卡片列出了对端给的选项(allow-once / reject-once) — ["allow-once","reject-once"]
+[PASS] 验收M3:点的选项真的回给了 agent(夹具把它回显出来了) — "nce运行命令:git status允许一次拒绝提问实现方式:选 A 还是选 B?A:共用解析零重复B:另写一份维护两份"
+[PASS] 验收M3:卡片标成已决,按钮全部禁用(不许对一个请求回答两次) — {"decided":"allow-once","disabled":true}
+[PASS] 提问:请求渲染成一张**提问卡**(带「提问」标记,不是授权卡)
+[PASS] 提问卡:题面与选项说明都在,而且没有跟授权卡混在一起 — {"tag":"提问","title":"实现方式:选 A 还是选 B?","hasDesc":true,"optionIds":["q0","q1"],"permissions":1}
+[PASS] 提问:点的选项真的回给了 agent(夹具把它回显出来了) — ":q1运行命令:git status允许一次拒绝提问实现方式:选 A 还是选 B?A:共用解析零重复B:另写一份维护两份"
+[PASS] 提问卡:标成已决、按钮全禁用(一个提问只许回答一次) — {"decided":"q1","disabled":true}
+[PASS] 验收M3:提示结束后 Agent 仍就绪(没被这次交互带进 stopped/failed) — state=ready
+[PASS] 验收A2:思考收成**一条**可折叠的细条(两条增量要拼起来,不是两条) — {"live":"false","open":false,"label":"已思考","count":"22 字","blocks":1,"body":"先看它是不是只读跑的……是,所以它写不了盘。"}
+[PASS] 验收A2:正文一到就自动收起,标签变「已思考」并带字数 — {"live":"false","open":false,"label":"已思考","count":"22 字","blocks":1,"body":"先看它是不是只读跑的……是,所以它写不了盘。"}
+[PASS] 翻译:收尾的思考条上有「译」 — {"act":"translate","label":"译"}
+[PASS] 翻译:点了「译」之后真的译好了 — data-translation=done
+[PASS] 翻译:译文显示出来、自动展开,并且能切回原文 — {"lang":"zh","open":true,"text":"【译】先看它是不是只读跑的……","hasSrcChip":true}
+[PASS] 排布:思考条内联在它那段回复**之前**(不再被顶到消息流最上面) — {"kinds":["agent-msg","agent-think","agent-group","agent-msg"],"turns":4,"thinkAt":1,"replyAt":3,"userAt":0,"groupLabel":"1 次工具调用","cardInGroup":true}
+[PASS] 排布:一轮的工具收进一行摘要(「N 次工具调用」),卡片仍在 DOM 里、挂在摘要行下 — {"kinds":["agent-msg","agent-think","agent-group","agent-msg"],"turns":4,"thinkAt":1,"replyAt":3,"userAt":0,"groupLabel":"1 次工具调用","cardInGroup":true}
+[PASS] Markdown:助手回复里的 **加粗** / 行内码渲染成元素,标记符号不留在文字里 — {"strong":1,"code":1,"tags":0,"handlers":0,"text":"回复0回复1回复2加粗与行内码<img src=x onerror=\"alert(1)\">权限结果:allow-once提问结果:q1"}
+[PASS] Markdown:排版之后,模型给的 HTML 标签仍然只是文字(不许落地成元素或属性) — {"strong":1,"code":1,"tags":0,"handlers":0,"text":"回复0回复1回复2加粗与行内码<img src=x onerror=\"alert(1)\">权限结果:allow-once提问结果:q1"}
+[PASS] 验收B4:提示结束后流式标记、渐变擦除、扫光动画都已撤掉 — {"streaming":null,"tails":0,"animation":"none"}
+[PASS] 黏贴截图(验收):黏贴后输入区有一张待发的 chip — chip=1
+[PASS] 黏贴截图(验收):图片真的随提示发到了 agent(夹具回显了那个图片块 —— 输入区为空也发得出去) — "译22 字先看它是不是只读跑的……是,所以它写不了盘。回复0回复1回复2\n\n**加粗**与`行内码`\n\n<img src=x onerror=\"alert(1)\">运行命令:git status允许一次拒绝提问实现方式:选 A 还是选 B?A:共用解析零重复B:另写一份维护两份运行命令:git status允许一次拒绝"
+[PASS] 黏贴截图(验收):线上那块是**整张图**的规范化 base64(字节数 → ceil(N/3)*4 个字符,不是一个空壳) — "译22 字先看它是不是只读跑的……是,所以它写不了盘。回复0回复1回复2\n\n**加粗**与`行内码`\n\n<img src=x onerror=\"alert(1)\">运行命令:git status允许一次拒绝提问实现方式:选 A 还是选 B?A:共用解析零重复B:另写一份维护两份运行命令:git status允许一次拒绝"
+[PASS] 黏贴截图(验收):发出去之后 chip 清掉(不会被重复发第二次) — chip=0
+[PASS] 黏贴截图(验收):发出去的图回显在**用户气泡**里(img.agent-msg-image,src 是渲染层的 blob: URL) — {"userBubbles":6,"images":1,"hasImg":true,"src":"blob:toolbox://shell/13a2897f-e950-42e9-b918-bde6f2e269dd","alt":"clip.png","natural":"400x300","complete":true,"textRows":0,"bubbleText":""}
+[PASS] 黏贴截图(验收):只发图没写字的气泡里没有多余的空文本行,而且 img 带 alt — {"rows":0,"text":"","alt":"clip.png"}
+[PASS] 黏贴截图(验收):气泡里那张图真的**解得开**(naturalWidth=400,不是被提前撤销 URL 的破图) — 400x300
+[PASS] 黏贴截图(验收):切回笔记视图后 AI 面板有真实宽度(几何断言的前提 —— 否则 0<=0 会假通过) — panelWidth=239
+[PASS] 黏贴截图(验收):气泡里的图尺寸**自适应气泡**(400 宽的图被压到气泡内、比例不变)且有圆角 — {"radius":"8px","maxWidth":"100%","imgWidth":181,"imgHeight":136,"naturalW":400,"naturalH":300,"rowWidth":181,"panelWidth":239,"fitsPanel":true}
+[PASS] 用户真实布局(既有横边界又有纵边界)按存档渲染,并收编了插件面板 — 期望={row 28% / 72%}[ {col 53% / 47%}[ 笔记列表 , 链接 ] , {row 32% / 20% / 48%}[ 笔记正文 , 短剧画布 , AI 对话 ] ] | 实际={row 28% / 72%}[ {col 53% / 47%}[ 笔记列表 , 链接 ] , {row 32% / 20% / 48%}[ 笔记正文 , 短剧画布 , AI 对话 ] ]
+[PASS] 收编插件面板之后,用户原有的分栏比例没被改动(顶层左列仍是 28%) — 顶层第一份 = 28
+[PASS] 用户布局·静止态(纵向边界:笔记列表 | 笔记正文):只有两片各自的框,缝里没有亮线 — {"rect":{"x":337,"y":106,"width":41,"height":160},"boundary":{"from":15,"to":23,"paneA":16,"paneB":23},"frames":[[23,23,23],[14,14,14]],"framesBrightness":[23,14],"innerBright":[],"innerRgb":[23,23,23,14,14],"lines":"0:23,23,23 1:23,23,23 2:23,23,23 3:23,23,23 4:23,23,23 5:23,23,23 6:23,23,23 7:23,23,23 8:23,23,23 9:23,23,23 10:23,23,23 11:23,23,23 12:23,23,23 13:23,23,23 14:23,23,23 15:23,23,23 16:23,23,23 17:23,23,23 18:23,23,23 19:23,23,23 20:14,14,14 21:14,14,14 22:14,14,14 23:14,14,14 24:14,14,14 25:14,14,14 26:14,14,14 27:24,24,25 28:55,58,61 29:23,23,23 30:23,23,23 31:23,23,23 32:23,23,23 33:23,23,23 34:23,23,23 35:23,23,23 36:23,23,23 37:23,23,23 38:23,23,23 39:23,23,23 40:23,23,23 41:23,23,23 42:23,23,23 43:23,23,23 44:23,23,23 45:23,23,23 46:23,23,23 47:23,23,23 48:23,23,23 49:23,23,23 50:23,23,23 51:23,23,23"}
+[PASS] 用户布局·悬停态(纵向边界):缝里冒出那条 accent 高亮线(可拖的唯一提示) — {"rect":{"x":337,"y":106,"width":41,"height":160},"boundary":{"from":15,"to":23,"paneA":16,"paneB":23},"frames":[[23,23,23],[14,14,14]],"framesBrightness":[23,14],"innerBright":[],"innerRgb":[23,23,23,14,14],"lines":"0:23,23,23 1:23,23,23 2:23,23,23 3:23,23,23 4:23,23,23 5:23,23,23 6:23,23,23 7:23,23,23 8:23,23,23 9:23,23,23 10:23,23,23 11:23,23,23 12:23,23,23 13:23,23,23 14:23,23,23 15:23,23,23 16:23,23,23 17:23,23,23 18:23,23,23 19:23,23,23 20:14,14,14 21:14,14,14 22:14,14,14 23:255,200,126 24:255,200,126 25:14,14,14 26:14,14,14 27:24,24,25 28:55,58,61 29:23,23,23 30:23,23,23 31:23,23,23 32:23,23,23 33:23,23,23 34:23,23,23 35:23,23,23 36:23,23,23 37:23,23,23 38:23,23,23 39:23,23,23 40:23,23,23 41:23,23,23 42:23,23,23 43:23,23,23 44:23,23,23 45:23,23,23 46:23,23,23 47:23,23,23 48:23,23,23 49:23,23,23 50:23,23,23 51:23,23,23"}
+[PASS] 用户布局·静止态(横向边界:笔记列表 ↔ 链接):只有两片各自的框,缝里没有亮线 — {"rect":{"x":60,"y":385,"width":160,"height":41},"boundary":{"from":15,"to":22,"paneA":16,"paneB":23},"frames":[[23,23,23],[14,14,14]],"framesBrightness":[23,14],"innerBright":[],"innerRgb":[23,23,23,23,14],"lines":"0:23,23,23 1:23,23,23 2:23,23,23 3:23,23,23 4:23,23,23 5:23,23,23 6:23,23,23 7:23,23,23 8:23,23,23 9:23,23,23 10:23,23,23 11:23,23,23 12:23,23,23 13:23,23,23 14:23,23,23 15:23,23,23 16:23,23,23 17:23,23,23 18:23,23,23 19:23,23,23 20:23,23,23 21:14,14,14 22:14,14,14 23:14,14,14 24:14,14,14 25:14,14,14 26:14,14,14 27:24,24,25 28:55,58,61 29:18,19,20 30:18,19,20 31:18,19,20 32:18,19,20 33:18,19,20 34:18,19,20 35:18,19,20 36:18,19,20 37:18,19,20 38:18,19,20 39:18,19,20 40:18,19,20 41:18,19,20 42:18,19,20 43:18,19,20 44:18,19,20 45:18,19,20 46:18,19,20 47:18,19,20 48:18,19,20 49:18,19,20 50:18,19,20 51:18,19,20"}
+[PASS] 用户布局·悬停态(横向边界):缝里冒出那条 accent 高亮线 — {"rect":{"x":60,"y":385,"width":160,"height":41},"boundary":{"from":15,"to":22,"paneA":16,"paneB":23},"frames":[[23,23,23],[14,14,14]],"framesBrightness":[23,14],"innerBright":[],"innerRgb":[23,23,23,23,14],"lines":"0:23,23,23 1:23,23,23 2:23,23,23 3:23,23,23 4:23,23,23 5:23,23,23 6:23,23,23 7:23,23,23 8:23,23,23 9:23,23,23 10:23,23,23 11:23,23,23 12:23,23,23 13:23,23,23 14:23,23,23 15:23,23,23 16:23,23,23 17:23,23,23 18:23,23,23 19:23,23,23 20:23,23,23 21:14,14,14 22:14,14,14 23:14,14,14 24:255,200,126 25:255,200,126 26:14,14,14 27:24,24,25 28:55,58,61 29:18,19,20 30:18,19,20 31:18,19,20 32:18,19,20 33:18,19,20 34:18,19,20 35:18,19,20 36:18,19,20 37:18,19,20 38:18,19,20 39:18,19,20 40:18,19,20 41:18,19,20 42:18,19,20 43:18,19,20 44:18,19,20 45:18,19,20 46:18,19,20 47:18,19,20 48:18,19,20 49:18,19,20 50:18,19,20 51:18,19,20"}
+[PASS] 保留框(方案 A):最外侧那片面板的**外缘**那一行是框色(≈58),不是"没框" — {"rect":{"x":40,"y":40,"width":60,"height":13},"rows":[16,16,16,16,16,15,20,48,40,14,34,52,26,28,28,28,28],"max":{"rgb":[50,52,55],"brightness":52}}
+[PASS] 设置视图:点「设置」标签能切过去(三个视图互斥,标签 aria-selected 跟着走) — {"hidden":false,"notes":true,"tools":true,"tab":"true"}
+[PASS] 设置视图(方案 D):左导航 4 个分区 + 搜索框都在,默认选中第一个分区 — {"nav":["AI 与 Agent","界面","服务","笔记库"],"selected":["AI 与 Agent"],"search":true}
+[PASS] 设置视图:默认列出全部 10 项(8 项已有通道 + 2 笔欠账),顶部有徽标总览 — {"n":10,"overview":"4 个分区 · 10 项 · 已有通道 8 · 需要新做 2"}
+[PASS] 设置视图:密钥状态是**真读数**(来自 video:status,只有叶子字段) — {"credential":"已配置(file)","model":"qwen3-vl-flash(便宜、快)"}
+[PASS] 设置视图:布局树文本与工作台底部那条读数条**同源**(都是同一个 formatTree) — 设置页={row 28% / 72%}[ {col 53% / 47%}[ 笔记列表 , 链接 ] , {row 32% / 20% / 48%}[ 笔记正文 , 短剧画布 , AI 对话 ] ] | 工作台={row 28% / 72%}[ {col 53% / 47%}[ 笔记列表 , 链接 ] , {row 32% / 20% / 48%}[ 笔记正文 , 短剧画布 , AI 对话 ] ]
+[PASS] 设置视图:索引状态是真读数,库路径是**当前**那一份,而且「更换」这个唯一入口就在同一行 — {"index":"已载入 4 篇","vault":"C:\\Users\\18014\\AppData\\Local\\Temp\\kaiwu-selftest-vault-8R2c9g"}
+[PASS] 设置里点「更换」= 真的打开换库向导(撤掉顶栏之后它是唯一入口) — {"ok":true,"hidden":false}
+[PASS] 设置视图:两笔欠账(DSH_HOME / 服务根目录)都写明"改了要重启才生效" — ["⚠ 改完要重启开物才生效(服务/子进程启动时就读了它)","⚠ 改完要重启开物才生效(服务/子进程启动时就读了它)"]
+[PASS] 设置视图·搜索:输入「密钥」只留命中的项,分区标题带命中数 — {"rows":["videoKey"],"titles":["AI 与 Agent(1)"]}
+[PASS] 设置视图·搜索:跨分区命中(路径 → 多个分区),每节标题都带命中数 — {"rows":["dshHome","serviceRoot","vaultPath"],"titles":["AI 与 Agent(1)","服务(1)","笔记库(1)"]}
+[PASS] 设置视图·搜索:没有命中时说"没有匹配的设置项"(不是空白页) — {"empty":"没有匹配的设置项:zzz-不存在的词"}
+[PASS] 设置视图·搜索:清空查询后恢复全部 10 项 — {"rows":10}
+[PASS] 设置视图·路径:相对路径当场拒(不写存档),并说清为什么 — {"note":"要写绝对路径(例如 D:\\kaiwu\\data)—— 相对路径会随进程的工作目录飘","state":"bad"}
+[PASS] 设置视图·路径:合法的绝对路径写进设置,并明说"重启才生效" — {"stored":"D:\\kaiwu-selftest-root","note":{"note":"已保存 —— 改完要重启开物才生效","state":"ok"}}
+[PASS] 设置页有「停止 Agent 进程」这一项(常驻入口,与输入卡片上那个按钮同一件事) — {"rowFound":true,"title":"停止 Agent 进程已有通道","hint":"Agent 卡住 / 起不来时的退路(与 AI 面板输入卡片上那个按钮同一件事);停掉之后回对话面板点「重试」再连","stateText":"Agent:已连接(pid 38824)","disabled":false,"btnFound":true}
+[PASS] 设置页那一项显示的是 agent:status 的**真读数**,而且按钮可用性跟着同一条判据(没得停就是灰的) — {"state":"Agent:已连接(pid 38824)","disabled":false}
+[PASS] 设置页那一项写清了"停掉之后回哪儿再连"(否则用户会以为只能重启开物) — {"hint":"Agent 卡住 / 起不来时的退路(与 AI 面板输入卡片上那个按钮同一件事);停掉之后回对话面板点「重试」再连"}
+[PASS] 设置页里按下「停止进程」:说清停成了没、现在什么状态、下一步按哪儿 —— 而且面板那一侧真的留了再连的出口 — {"clicked":true,"after":{"note":"已停止(现在是:未连接)—— 回对话面板点「重试」再连","state":"Agent:未连接","panelState":"stopped","noticeExists":true,"noticeText":"Agent 进程已经停掉 —— 点「重试」再连上。重试","retryInNotice":true}}
+[PASS] 设置视图·重载:改过的路径重载之后能读回来(存档真的落了盘) — {"booted":true,"value":"D:\\kaiwu-selftest-root","reloadAgentEventDelivery":{"before":"stopped","afterSynth":"starting"}}
+[PASS] 设置视图·动效:打开「强制关」→ 根属性 data-motion=off,一直在走的光带**停下**(两次 transform 相同) — {"before":{"a":"matrix(1, 0, 0, 1, 0, 0)","b":"matrix(1, 0, 0, 1, 216.463, 0)","moved":true,"anim":"stage-band-drift"},"after":{"attr":"off","anim":"none","transition":"0s"},"frozen":{"a":"none","b":"none","moved":false,"anim":"none"}}
+[PASS] 设置视图·动效:星空(canvas + rAF,不吃 CSS)也真的停了 —— 两次采样的画布内容逐字节相同 — {"before":{"same":false,"bytes":121022},"after":{"same":true,"bytes":126842}}
+[PASS] 设置视图·动效:开关落了盘(ui.motion=off) — "off"
+[PASS] 设置视图:切回「笔记」后工作台照旧(外壳面板都在、布局树读数还在) — {"ids":["notes","links","doc","drama","ai"],"tree":"{row 28% / 72%}[ {col 53% / 47%}[ 笔记列表 , 链接 ] , {row 32% / 20% / 48%}[ 笔记正文 , 短剧画布 , AI 对话 ] ]"}
+[PASS] 设置视图·动效:关掉开关后根属性摘掉(恢复跟随系统),不把"强制关"留给后面的用例 — {"attr":null,"stored":""}
+[PASS] ★ 重载窗口之后布局还是拖后的样子(存档 → 启动 → 渲染这条真路径) — 拖后={row 19% / 39% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {row 70% / 30%}[ AI 对话 , 链接 ] ] | 重载后={row 19% / 39% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {row 70% / 30%}[ AI 对话 , 链接 ] ] | 新槽位=slot:1
+[PASS] 一颗球两态(真窗口):空闲点它是发送,执行中它变成「取消当前提示」,再点一下就回到发送 — {"agentState":"ready","ok":true,"before":{"mode":"send","label":"发送","disabled":false},"busy":{"mode":"cancel","label":"取消当前提示","disabled":false},"after":{"mode":"send","label":"发送","disabled":false,"state":"ready"}}
+[PASS] 非失败态:data-tear=0(9 层常驻是纯空耗),而且只有一个面板实例 — {"face":"waiting","tear":"0","scale":"0","err":"","panels":1,"hosts":0,"slices":0,"state":"ready"}
+[PASS] 崩溃态:脸=failed 且 data-tear=9(撕裂层真的建起来了,不是绕过去) — {"face":"failed","tear":"9","scale":"0","err":"","panels":1,"hosts":1,"slices":9,"state":"crashed"}
+[PASS] 离开失败态:data-tear 回到 0,撕裂层整体回收 — {"face":"waiting","tear":"0","scale":"0","err":"","panels":1,"hosts":0,"slices":0,"state":"ready"}
+[PASS] ★① 点列表里一篇笔记 → **只有「笔记正文」那一格的标签被替换**(列表一个字不动、面板数不变) — {"clicked":"验收目录/未命名.md","moved":["doc"],"docTabsAfter":[{"view":"doc","doc":"验收目录/未命名.md"}],"listTabsAfter":[{"view":"notes"}],"ids":["notes","doc","drama","links","ai"]}
+[PASS] ★① 替换之后有一条**可撤销提示**,而且是单行(nowrap + 省略号 + 按钮 flex:none) — {"text":"已用「未命名」替换「笔记正文」","nowrap":"nowrap","ellipsis":"ellipsis","lineHeight":18.4,"txtH":18.399999618530273,"barNowrap":"nowrap","barOverflow":"hidden","btnFlex":"0/0","btnLabel":"撤销"}
+[PASS] ★① 提示上的「撤销」把原来那个标签放回去了(替换是可逆的) — {"before":[{"view":"doc"}],"after":[{"view":"doc"}]}
+[PASS] ★② 准备:doc 那一格宽到出**胶囊**形态,而且里面有两个标签(点开一个 + ＋ 并列一个) — {"capsule":{"mode":"capsule","chips":2,"w":481},"twoTabs":{"paneId":"doc","tabs":[{"view":"doc","doc":"验收目录/未命名.md"},{"view":"links"}],"active":1,"mode":"capsule"}}
+[PASS] ★② 关闭入口之一:标签上的 **×** 关掉了它 — {"how":"x","before":2,"tabs":[{"view":"doc","doc":"验收目录/未命名.md"}],"label":"链接"}
+[PASS] ★② 关闭入口之二:**中键**点标签也关掉它 — {"how":"middle","before":2,"tabs":[{"view":"doc","doc":"验收目录/未命名.md"}]}
+[PASS] ★② 关闭入口之三:**右键菜单**里的「关闭其他」只剩当前那一个 — {"before":2,"tabs":[{"view":"ai"}]}
+[PASS] ★⑥ Ctrl+W 关掉**焦点所在面板**的当前标签(合成前把焦点给了 doc 那一片) — {"before":2,"tabs":[{"view":"ai"}]}
+[PASS] ★② 关闭入口之五:Ctrl+Tab 切到**下一个**标签(循环) — {"ok":true,"before":1,"after":0,"tabs":2}
+[PASS] ★③ 关掉某一格的**最后一枚**标签 → 那一格整格消失,腾出的空间**整块给左边的邻居**(其余格不动、比例和仍是 100) — {"ok":true,"idsBefore":["notes","doc","drama","links","ai"],"idsAfter":["notes","doc","links","ai"],"goneBefore":295,"goneStillThere":false,"tabsRead":null,"neighbor":"doc","neighborBefore":481,"neighborAfter":780,"othersGrew":[],"topSum":100,"tree":"{row 19% / 62% / 19%}[ 笔记列表 , 笔记正文 , {col 42% / 58%}[ 链接 , AI 对话 ] ]"}
+[PASS] ★④ Ctrl+Shift+T 从这一格的「最近关闭」里恢复了一个标签(恢复后从栈里拿掉) — {"ok":true,"recentsBefore":[{"view":"links"},{"view":"ai"},{"view":"doc","doc":"验收目录/未命名.md"}],"tabsBefore":[{"view":"doc","doc":"验收目录/未命名.md"}],"tabs":[{"view":"doc","doc":"验收目录/未命名.md"},{"view":"links"}],"recentsAfter":[{"view":"ai"},{"view":"doc","doc":"验收目录/未命名.md"}],"top":{"view":"links"},"topWasOpen":false,"focusedInPane":null}
+[PASS] ★⑤ 真窗口:标签条空白上按下 → 树一动不动(整片拖动已按规格删除) — {"before":"{row 19% / 62% / 19%}[ 笔记列表 , 链接 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 19% / 62% / 19%}[ 笔记列表 , 链接 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":false,"changed":false}
+[PASS] ★⑤ 真窗口:抓手上按下 → 树一动不动(同上,不是"藏起来而是删掉") — {"before":"{row 19% / 62% / 19%}[ 笔记列表 , 链接 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 19% / 62% / 19%}[ 笔记列表 , 链接 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":false,"changed":false}
+[PASS] ★⑤ 真窗口:拖**真的胶囊**会把那一枚标签停靠过去(唯一还灵的起点) — {"before":"{row 19% / 39% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","after":"{row 13% / 44% / 24% / 19%}[ 笔记列表 , 笔记正文 , 短剧画布 , {col 42% / 58%}[ 链接 , AI 对话 ] ]","hint":true,"changed":true}
+[PASS] ★ 两段式:每片的形态都由**它自己 padding 之后的可用宽度**决定(≥220 胶囊 / <220 下拉) — [["notes","capsule",221,["笔记列表"]],["doc","capsule",469,["笔记正文"]],["drama","capsule",283,["短剧画布"]],["links","capsule",225,["链接"]],["ai","capsule",225,["AI 对话"]]]
+[PASS] ★ 零图标:标签条 / 菜单 / 提示条里 svg 计数为 0,控件只有 × / ＋ / ∨ 三个文字字符 — {"strip":0,"chars":["×","＋"],"paneSvg":4,"pageSvg":7,"owners":["notes-nav","pane-plugin","agent-panel"]}
+[PASS] ★ 缩写:标签文字是缩写过的,而悬停 title 仍是**全名** — [["notes",["笔记列表"],["笔记列表"]],["doc",["笔记正文"],["笔记正文"]],["drama",["短剧画布"],["短剧画布"]],["links",["链接"],["链接"]],["ai",["AI 对话"],["AI 对话"]]]
+[PASS] ★ 标签条不影响面板集合:四片 + 插件那一片都还在,而且没有"为了打开一个视图多出一列" — ["notes","doc","drama","links","ai"]
+自检通过:362 项全绿(另有 1 项因环境跳过,见上面的 [SKIP])
+

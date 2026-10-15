@@ -1,0 +1,16 @@
+{
+  "id": "palette",
+  "name": "调色板 & 渐变",
+  "version": "1.0.0",
+  "description": "和谐配色、CSS 渐变生成、从图片提取主色",
+  "author": "wangfei",
+  "entry": "index.js",
+  "order": 10,
+  "permissions": ["log"],
+  "contributes": {
+    "tools": [
+      { "id": "palette", "title": "调色板 & 渐变", "icon": "palette",
+        "panel": "panel.html", "style": "style.css", "workspacePane": true }
+    ]
+  }
+}

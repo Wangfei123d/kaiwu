@@ -1,0 +1,17 @@
+{
+  "name": "kaiwu",
+  "productName": "开物",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "开物 —— 可插件扩展的桌面工具箱",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "node electron/launch.js",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "selftest": "node electron/run-selftest.js",
+    "selftest:acceptance": "node electron/run-selftest.js --acceptance"
+  },
+  "engines": { "node": ">=22.12.0" },
+  "devDependencies": { "electron": "44.4.1" }
+}

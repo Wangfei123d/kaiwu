@@ -1,0 +1,30 @@
+﻿
++     1ms  开始启动(日志:C:\Users\18014\AppData\Local\Temp\kaiwu-s8-iso\stage-log.txt)
++     2ms  userData = C:\Users\18014\AppData\Local\Temp\kaiwu-s8-iso
++     2ms  selftest = false
+node : 
+At line:4 char:1
++ node electron/launch.js --remote-debugging-port=9445 "--user-data-dir ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+DevTools listening on ws://127.0.0.1:9445/devtools/browser/e77a37d0-a0d8-486f-b7c4-7647780e9565
++   313ms  [渲染] boot:进入
++   318ms  [渲染] boot:星空已启动
++   319ms  [渲染] boot:笔记视图已建
++   406ms  [渲染] boot:查笔记库状态 → {"configured":true,"ok":true,"path":"E:\\仓库","reason":null}
++   409ms  [渲染] [向导] hide(apply:库可用) → hidden=true 计算样式=none(确实隐藏)
++   413ms  [渲染] boot:apply 返回 false(true=要显示向导)
+[palette] 调色板 & 渐变已就绪
+[subtitle] 字幕格式互转已就绪
+[drama] 短剧工作台:画布面板已登记
++   497ms  [渲染] boot:外壳已显示,准备进入笔记库
++   498ms  [渲染] enterVault:开始 status.ok=true
++   526ms  [渲染] enterVault:索引已载入
++   526ms  [渲染] enterVault:已切到笔记视图
++   553ms  [渲染] boot:AI 面板已挂载 state=ready
++   615ms  [渲染] boot:工作台已挂载 {row 40% / 16% / 45%}[ 笔记列表 , 短剧画布 , {col 42% / 58%}[ {row 70% / 30%}[ 链接 , AI 对话 ] , 笔记正文 ] ]
++   616ms  [渲染] boot:进入笔记库完成
++   616ms  [渲染] boot:插件加载完成 activated=7 broken=0
+[drama] 短剧画布就绪 · 根=E:\仓库\短剧

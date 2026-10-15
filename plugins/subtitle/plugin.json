@@ -1,0 +1,22 @@
+{
+  "id": "subtitle",
+  "name": "字幕格式互转",
+  "version": "1.0.0",
+  "description": "在 SRT / VTT / ASS 之间互相转换，源格式自动识别，支持拖入字幕文件",
+  "author": "wangfei",
+  "entry": "index.js",
+  "order": 20,
+  "permissions": ["log"],
+  "contributes": {
+    "tools": [
+      {
+        "id": "subtitle",
+        "title": "字幕格式互转",
+        "icon": "subtitle",
+        "panel": "panel.html",
+        "style": "style.css",
+        "workspacePane": true
+      }
+    ]
+  }
+}

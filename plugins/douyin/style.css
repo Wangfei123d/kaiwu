@@ -1,0 +1,143 @@
+/* 抖音解析插件私有样式。运行时会给每条选择器自动加上
+   [data-plugin="douyin"] 前缀,所以这里写平铺选择器即可。
+   通用控件(.btn / .tool-search / select / .svc 服务徽标)已在 base.css。 */
+
+/* 结果区不需要上边距:搜索行(.tool-search)自己带了 16px 下边距。 */
+
+.douyin-card {
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.douyin-title {
+    margin: 0 0 4px;
+    font-size: 15px; font-weight: 600; color: #fff;
+    line-height: 1.5;
+}
+
+.douyin-author {
+    margin: 0 0 12px;
+    font-size: 13px; color: var(--dim);
+}
+
+.douyin-card video {
+    width: 100%; max-height: 460px;
+    border-radius: var(--radius-sm);
+    background: #000;
+}
+
+/* 图集:自适应网格 */
+.douyin-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: 8px;
+}
+
+.douyin-images img {
+    width: 100%; aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    background: #2a2928;
+}
+
+/* 取不到的图替换成的占位图:撑满同一格,内边距让图标小一点居中 */
+.douyin-images .douyin-img-fallback {
+    width: 100%; aspect-ratio: 3 / 4;
+    padding: 30%;
+    box-sizing: border-box;
+    color: var(--faint);
+    background: #2a2928;
+    border-radius: var(--radius-sm);
+}
+
+/* 既没有图也没有播放地址时的占位图 */
+.douyin-cover-fallback {
+    display: block;
+    width: 100%; max-width: 220px;
+    aspect-ratio: 16 / 9;
+    padding: 34px 0;
+    box-sizing: content-box;
+    color: var(--faint);
+    background: #2a2928;
+    border-radius: var(--radius-sm);
+}
+
+.douyin-open {
+    display: inline-block;
+    margin-top: 12px;
+    font-size: 13px; color: var(--accent);
+    text-decoration: none;
+}
+.douyin-open:hover { text-decoration: underline; }
+
+/* ---- Cookie 设置 ---- */
+/* 平时收起,不占地方;解析被风控拦下时由 JS 自动展开。 */
+.dy-cookie { margin-top: 18px; }
+
+.dy-cookie > summary {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px;
+    font-size: 13px; color: var(--dim);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    list-style: none;                     /* 去掉默认三角,自己画一个 */
+    transition: color .2s, border-color .2s;
+}
+.dy-cookie > summary::-webkit-details-marker { display: none; }
+.dy-cookie > summary:hover { color: var(--text); border-color: var(--border-hi); }
+.dy-cookie > summary::before {
+    content: "▸";
+    font-size: 11px; color: var(--faint);
+    transition: transform .2s;
+}
+.dy-cookie[open] > summary::before { transform: rotate(90deg); }
+
+.dy-cookie-state {
+    margin-left: auto;
+    font-size: 12px; color: var(--faint);
+}
+.dy-cookie-state[data-state="ok"]      { color: var(--ok); }
+.dy-cookie-state[data-state="weak"]    { color: #fbbf24; }
+.dy-cookie-state[data-state="missing"] { color: var(--error); }
+
+.dy-cookie-body {
+    padding: 12px 12px 4px;
+    border: 1px solid var(--border);
+    border-top: 0;                        /* 和 summary 拼成一张卡片 */
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    background: rgba(0, 0, 0, .18);
+}
+.dy-cookie-body textarea {
+    width: 100%;
+    margin-top: 10px;
+    font-family: var(--mono); font-size: 12px; line-height: 1.6;
+    resize: vertical;
+}
+.dy-cookie-body code {
+    padding: 1px 4px; font-family: var(--mono); font-size: 12px;
+    color: var(--accent); background: rgba(126, 200, 255, .10);
+    border-radius: 3px;
+}
+
+/* 按钮行与提示:换行时不要撑破卡片 */
+.dy-cookie-body .field-row { flex-wrap: wrap; }
+.dy-cookie-body .hint { line-height: 1.7; }
+
+/* 手动粘贴:收在第二层折叠里 —— 主路是「登录一次自动记住」,这条是兜底 */
+.dy-manual { margin-top: 14px; }
+.dy-manual > summary {
+    font-size: 12px; color: var(--faint);
+    cursor: pointer; list-style: none;
+}
+.dy-manual > summary::-webkit-details-marker { display: none; }
+.dy-manual > summary::before { content: "▸ "; }
+.dy-manual[open] > summary::before { content: "▾ "; }
+.dy-manual > summary:hover { color: var(--dim); }
+.dy-manual > p { margin-top: 8px; }
+
+/* 服务状态徽标的样式在 base.css(.svc 系列)—— 那是共享组件,
+   不在这里重复,免得三个插件各自漂移。 */

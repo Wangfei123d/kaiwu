@@ -1,0 +1,168 @@
+# Task 2 delta review package
+Baseline: exact file snapshots captured before Task 2; no commits created per user instruction.
+
+## electron\main.js
+warning: in the working copy of 'E:\project\kaiwu\.superpowers\sdd\snapshots\task-2\electron\main.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'E:\project\kaiwu\electron\main.js', LF will be replaced by CRLF the next time Git touches it
+diff --git "a/E:\\project\\kaiwu\\.superpowers\\sdd\\snapshots\\task-2\\electron\\main.js" "b/E:\\project\\kaiwu\\electron\\main.js"
+index 3b96265..6ee92fb 100644
+--- "a/E:\\project\\kaiwu\\.superpowers\\sdd\\snapshots\\task-2\\electron\\main.js"
++++ "b/E:\\project\\kaiwu\\electron\\main.js"
+@@ -238,44 +238,46 @@ app.whenReady().then(async () => {
+     // 自检的临时笔记库(以及它旁边那个**短剧根**)在这里就建出来。
+     // ⚠️ 必须早于 registerDramaIpc:短剧那边要用 dramaRoot 当固定根
+     // (自检的项目故意放在库外,免得 graph.json / inputs/*.txt 被笔记索引收进清单)。
+     const selftestVault = isSelftest ? createSelftestVault() : null;
+ 
+     // ---- 应用菜单 ----
+     // 不设的话窗口顶部露出来的是 Electron 的原生英文菜单(File/Edit/View/Window)——
+     // 模板在 app-menu.js 里,那部分是可单测的纯数据。
+     // 开发者项(重新加载/开发者工具)只在 `--dev` 下出现。
+     const isDev = process.argv.includes('--dev');
++    let win = null;
+ 
+     /**
+      * 按渲染层报来的视图表重建应用菜单(「窗口」里那一段 = 程序目前所有的面板)。
+      *
+      * 为什么是**重建**而不是"用 getMenuItemById 把那几条的勾改掉":
+      * 下面第一次建菜单时渲染层还没起来,「窗口」菜单里**一条面板项都还不存在** ——
+      * 想只改勾就得先凭空补出那些菜单项、再维护一份 id → MenuItem 的映射,
+      * 等于把"菜单长什么样"拆到两处写。整份模板重建只有一个调用点、一份真值(app-menu.js),
+      * 代价是几毫秒。
+      *
+-     * ⚠️ 这里引用的 `win` 声明在**下面几行**(`const win = createWindow()`)。这不是 TDZ 缺陷:
+-     *    这个闭包只在用户真的点了某条**未开着**的面板菜单时才跑,而那时窗口早就建好了;
+-     *    而第一次建菜单时视图表是空的(app-menu.js 对空表不产出任何菜单项),
+-     *    连一个会回调的项都没有 —— 所以"在 win 初始化之前拿到它"这条路径根本不存在。
++     * 菜单先于窗口安装,首选项在初始菜单里就能被点击。
++     * 回调捕获已初始化的 win,窗口尚未创建或已经销毁时直接返回。
+      */
+     const rebuildMenu = (views, tools) => {
+         Menu.setApplicationMenu(Menu.buildFromTemplate(buildMenuTemplate({
+             isDev,
+             views,
+             tools,
+             onAddView: (id) => {
+                 // 窗口可能在菜单被点的同时正在销毁(用户先关窗、菜单还挂着),
+                 // 往销毁的 webContents 上 send 会抛 —— 这一条只是防呆,不改变语义。
+-                if (!win.isDestroyed()) win.webContents.send('menu:add-view', id);
++                if (win !== null && !win.isDestroyed()) win.webContents.send('menu:add-view', id);
++            },
++            onOpenPreferences: () => {
++                if (win !== null && !win.isDestroyed()) win.webContents.send('menu:open-preferences');
+             },
+         })));
+     };
+ 
+     // 第一次(空视图表)**必须先建**:macOS 的第一项菜单在窗口出现之前就得是对的,
+     // 而此刻渲染层还没加载、拿不到任何视图 —— 所以这里只摆一个骨架,
+     // 真正的面板表等下面那条 IPC 报上来之后再重建。
+     rebuildMenu([], []);
+ 
+     // 渲染层的**当前视图表**上报(见 app/main.js 的 reportPanels):布局每次变化报一次,
+@@ -293,21 +295,21 @@ app.whenReady().then(async () => {
+         stage(`窗口菜单面板表:普通 ${views.length} 项,工具 ${tools.length} 项 · 开着 ${[...views, ...tools].filter((v) => v.open).map((v) => v.id).join(' / ') || '(无)'} · 看得见 ${[...views, ...tools].filter((v) => v.active).map((v) => v.id).join(' / ') || '(无)'}`);
+         rebuildMenu(views, tools);
+     });
+ 
+     registerAppProtocol({
+         shell: path.join(APP_ROOT, 'app'),
+         plugin: path.join(APP_ROOT, 'plugins'),
+         user: path.join(app.getPath('userData'), 'plugins'),
+     });
+ 
+-    const win = createWindow();
++    win = createWindow();
+ 
+     // ---- 服务托管 ----
+     const deps = createRealDeps({ log: console });
+     const supervisor = createServiceSupervisor({ ...deps, log: console });
+     supervisorRef = supervisor;
+     const settings = createSettingsStore({
+         filePath: path.join(app.getPath('userData'), 'settings.json'),
+     });
+ 
+     supervisor.onChange((state) => {
+
+## electron\preload.cjs
+diff --git "a/E:\\project\\kaiwu\\.superpowers\\sdd\\snapshots\\task-2\\electron\\preload.cjs" "b/E:\\project\\kaiwu\\electron\\preload.cjs"
+index 18fd06d..f1eaa50 100644
+--- "a/E:\\project\\kaiwu\\.superpowers\\sdd\\snapshots\\task-2\\electron\\preload.cjs"
++++ "b/E:\\project\\kaiwu\\electron\\preload.cjs"
+@@ -226,20 +226,24 @@ const bridge = {
+      * ⚠️ 与 onAgentEvent 同一个形状:回调收到的是**纯数据**(一个视图 id 字符串),
+      * Electron 的 event 对象一个字节都不进页面(它带着 sender 等活对象)。
+      * 返回取消订阅的函数。
+      */
+     onAddPanel(callback) {
+         if (typeof callback !== 'function') {
+             throw new Error('onAddPanel 需要一个函数');
+         }
+         return bridge.on('menu:add-view', callback);
+     },
++    onOpenPreferences(callback) {
++        if (typeof callback !== 'function') throw new Error('onOpenPreferences 需要一个函数');
++        return bridge.on('menu:open-preferences', () => callback());
++    },
+ };
+ 
+ // 交接给渲染进程的**唯一**方式,也是这个文件存在的理由。
+ //
+ // 为什么不用 exposeInMainWorld(设计文档 §5.2 原本的写法):
+ // 它建的属性是 writable: false + configurable: false。ES 模块体始终是严格模式,
+ // 于是 `delete window.__kaiwuBridge` 会抛 TypeError,`= undefined` 也会抛 ——
+ // 两者都做不到(已实测)。结果是桥在 window 上永久可见,任何页内代码都够得着,
+ // 与"IPC 桥不挂在 window 上"这条要求正好相反。
+ //
+
+## tests\preload-preferences.test.js
+warning: in the working copy of 'E:\project\kaiwu\tests\preload-preferences.test.js', LF will be replaced by CRLF the next time Git touches it
+diff --git "a/E:\\project\\kaiwu\\.superpowers\\sdd\\snapshots\\task-2\\tests\\preload-preferences.test.js" "b/E:\\project\\kaiwu\\tests\\preload-preferences.test.js"
+index e69de29..2d5deb3 100644
+--- "a/E:\\project\\kaiwu\\.superpowers\\sdd\\snapshots\\task-2\\tests\\preload-preferences.test.js"
++++ "b/E:\\project\\kaiwu\\tests\\preload-preferences.test.js"
+@@ -0,0 +1,44 @@
++import assert from 'node:assert/strict';
++import { readFileSync } from 'node:fs';
++import { test } from 'node:test';
++import vm from 'node:vm';
++
++const preloadSource = readFileSync(new URL('../electron/preload.cjs', import.meta.url), 'utf8');
++
++test('首选项事件只传零参数并能取消订阅', () => {
++    const listeners = new Map();
++    const removed = [];
++    const ipcRenderer = {
++        on: (channel, listener) => listeners.set(channel, listener),
++        removeListener: (channel, listener) => {
++            removed.push([channel, listener]);
++            if (listeners.get(channel) === listener) listeners.delete(channel);
++        },
++        invoke() {}, send() {},
++    };
++    const pageWindow = { addEventListener() {} };
++    const sandbox = {
++        require: (name) => {
++            assert.equal(name, 'electron');
++            return { contextBridge: { executeInMainWorld: ({ func, args }) => func(...args) }, ipcRenderer };
++        },
++        window: pageWindow,
++        console,
++    };
++    vm.runInNewContext(preloadSource, sandbox, { filename: 'preload.cjs' });
++    const bridge = pageWindow.__kaiwuBridgeTemp;
++    assert.equal(typeof bridge.onOpenPreferences, 'function');
++    for (const callback of [null, undefined, false, 0, 'callback', {}]) {
++        assert.throws(() => bridge.onOpenPreferences(callback), /需要一个函数/);
++    }
++    let received;
++    const dispose = bridge.onOpenPreferences((...args) => { received = args; });
++    assert.equal(typeof dispose, 'function');
++    const listener = listeners.get('menu:open-preferences');
++    assert.equal(typeof listener, 'function');
++    listener({ sender: 'must-not-cross-the-bridge' });
++    assert.deepEqual(received, []);
++    dispose();
++    assert.deepEqual(removed, [['menu:open-preferences', listener]]);
++    assert.equal(listeners.has('menu:open-preferences'), false);
++});

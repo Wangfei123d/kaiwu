@@ -1,0 +1,14 @@
+﻿import { split, pane, moveTabToEdge, formatTree, listPaneIds } from "./app/lib/panel-tree.js";
+const t = split("row", [51, 26], [pane("slot:1", [{ view: "notes" }], 0), pane("links")]);
+const out = moveTabToEdge(t, "slot:1", 0, "links", "right");
+console.log("tree  " + formatTree(out));
+console.log("sizes " + JSON.stringify(out.sizes) + " ids " + listPaneIds(out));
+const only = pane("only", [{ view: "doc", doc: "A.md" }, { view: "links" }], 1);
+const o2 = moveTabToEdge(only, "only", 1, "only", "right");
+console.log("only  " + formatTree(o2) + " " + JSON.stringify(o2.sizes));
+console.log("only ids " + listPaneIds(o2) + " dir " + o2.dir);
+const base = split("row", [60, 40], [pane("slot:1", [{ view: "notes" }], 0), pane("links")]);
+const l = moveTabToEdge(base, "slot:1", 0, "links", "left");
+console.log("left  " + formatTree(l) + " " + listPaneIds(l));
+const r = moveTabToEdge(base, "slot:1", 0, "links", "right");
+console.log("right " + formatTree(r) + " " + listPaneIds(r));

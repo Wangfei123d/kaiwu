@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>开物 · 节点点击与编辑方案 A</title>
+<style>
+:root{color-scheme:dark;--bg:#0d0e10;--panel:#141619;--panel2:#191c20;--border:#2b3036;--muted:#8c949e;--text:#e7eaee;--blue:#7ec7ff;--blue-dim:#7ec7ff24;--purple:#c18aff;--green:#8dd8ad;--orange:#e2b77f}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{background:var(--bg);color:var(--text);font:13px/1.5 Inter,"Microsoft YaHei UI",system-ui,sans-serif;overflow:hidden}
+button,input,textarea{font:inherit;color:inherit}button{background:#20242a;border:1px solid #343a42;border-radius:7px;padding:7px 10px;cursor:pointer}button:hover{background:#292f36;border-color:#4a5562}button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.app{height:100%;display:flex;flex-direction:column;min-width:760px}.topbar{height:54px;display:flex;align-items:center;gap:14px;padding:0 18px;background:#121416;border-bottom:1px solid #272b30;flex:none}.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:14px;letter-spacing:.04em}.brand-mark{width:24px;height:24px;border-radius:7px;background:linear-gradient(145deg,#7ec7ff,#7687ff);color:#101215;display:grid;place-items:center;font-weight:900}.crumb{color:#69717b}.top-spacer{flex:1}.scheme-tag{border:1px solid #51416b;background:#241b31;color:#d8baff;padding:4px 9px;border-radius:999px;font-size:11px}
+.workspace{display:grid;grid-template-columns:190px minmax(520px,1fr) 218px;min-height:0;flex:1}.sidebar{background:#111315;border-right:1px solid #25292e;padding:14px 11px;min-width:0}.side-title{font-size:11px;color:#7f8791;text-transform:uppercase;letter-spacing:.12em;padding:4px 8px 10px}.board-row{height:34px;display:flex;align-items:center;gap:8px;padding:0 9px;border-radius:6px;color:#b7bec7}.board-row.active{background:#20252b;color:#f1f4f7}.folder-dot{width:7px;height:7px;border-radius:50%;background:var(--blue)}.side-foot{margin-top:18px;padding:12px 8px;border-top:1px solid #25292e;color:#737b85;font-size:11px;line-height:1.6}
+.main{min-width:0;min-height:0;display:flex;flex-direction:column}.toolbar{min-height:54px;display:flex;align-items:center;gap:12px;padding:8px 16px;background:#131619;border-bottom:1px solid #262b30;flex:none}.toolbar strong{font-size:14px}.toolbar .sub{color:#78818b;font-size:11px}.toolbar-spacer{flex:1}.step-pill{display:flex;align-items:center;gap:7px;border:1px solid #2d3b48;background:#17212a;color:#a9c9df;border-radius:7px;padding:5px 9px;font-size:11px}.step-number{display:grid;place-items:center;width:17px;height:17px;border-radius:50%;background:#314c61;color:#d9f0ff;font-size:10px;font-weight:700}
+.canvas-shell{position:relative;flex:1;min-height:0;overflow:auto;background-color:#101113;background-image:radial-gradient(#303438 .8px,transparent .8px);background-size:24px 24px}.canvas-stage{position:relative;width:100%;min-width:850px;height:100%;min-height:650px;overflow:hidden}.connections{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}.connections path{fill:none;stroke:#545b64;stroke-width:2}.connections circle{fill:#171a1e;stroke:#75818e;stroke-width:1.5}
+.node{position:absolute;border:1px solid #4c535c;border-radius:9px;background:#17191c;box-shadow:0 8px 24px #0003;display:flex;flex-direction:column;overflow:visible;transition:border-color .15s,box-shadow .15s,outline-color .15s;cursor:default;touch-action:none;user-select:none}.node:hover{border-color:#747e89}.node.selected{border-color:var(--blue);outline:1px solid #8ad0ff8c;outline-offset:2px;box-shadow:0 0 0 4px #76c8ff12,0 10px 28px #0005}.node.selected:after{content:"";position:absolute;inset:-6px;border:1px solid #7ec7ff55;border-radius:12px;pointer-events:none}.node.editing{border-color:var(--green);outline:1px solid #8dd8ad68;cursor:text}.node-head{height:34px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid #2a2e33;color:#bdc4cc;font-size:11px;cursor:grab;white-space:nowrap;overflow:hidden}.node-head:active{cursor:grabbing}.node-type{font-size:9px;color:#7f8994;border:1px solid #3a4149;border-radius:4px;padding:1px 4px;flex:none}.node-path{overflow:hidden;text-overflow:ellipsis}.node-body{padding:12px 14px;overflow:auto;min-height:0;flex:1;color:#d4d8dd;cursor:default;user-select:text;scrollbar-width:thin;scrollbar-color:#454c55 transparent}.node-body p{margin:0 0 9px}.node-body h2,.node-body h3{margin:0 0 8px;line-height:1.35}.node-body h2{font-size:17px}.node-body h3{font-size:15px}.node-body ul{margin:0;padding-left:19px;color:#c7ccd2}.node-body li{margin:4px 0}.node-body hr{border:0;border-top:1px solid #30353a;margin:11px 0}.node-body code{font-family:ui-monospace,Consolas,monospace;color:#b8dfff;background:#20262b;border-radius:4px;padding:1px 4px}.text-card{left:48px;top:60px;width:270px;height:190px}.md-card{left:367px;top:66px;width:305px;height:208px}.txt-card{left:78px;top:354px;width:300px;height:191px}.group-card{left:456px;top:350px;width:335px;height:215px;border-style:dashed;border-color:#76599a;background:#1d1725b5}.group-card .node-head{background:#2b2037;border-color:#443455}.group-card.selected{border-color:var(--purple);outline-color:#c18aff7a;box-shadow:0 0 0 4px #c18aff12,0 10px 28px #0005}.group-card .node-body{color:#bcb4c8}
+.hint{position:absolute;left:50%;bottom:13px;transform:translateX(-50%);display:flex;align-items:center;gap:9px;background:#171a1de8;border:1px solid #30363d;border-radius:8px;padding:7px 11px;color:#9ca5af;font-size:11px;white-space:nowrap;pointer-events:none;box-shadow:0 6px 20px #0004}.hint strong{color:#c9e8fc;font-weight:600}.key{font-size:10px;color:#cbd5df;background:#252a30;border:1px solid #3b4149;border-radius:4px;padding:1px 5px}
+.inspector{background:#121416;border-left:1px solid #25292e;padding:15px 13px;min-width:0}.inspector-title{font-size:11px;color:#828a94;letter-spacing:.08em;margin:1px 0 12px}.state-card{border:1px solid #2b3036;background:#181b1f;border-radius:8px;padding:11px;margin-bottom:11px}.state-label{color:#8f98a2;font-size:10px;margin-bottom:6px}.state-value{font-weight:650;color:#c4e8ff}.state-value.edit{color:#a9e7bf}.state-desc{color:#939ca6;font-size:11px;line-height:1.6}.flow{display:flex;flex-direction:column;gap:7px;margin-top:12px}.flow-step{display:flex;align-items:flex-start;gap:8px;color:#a3abb4;font-size:11px;line-height:1.5}.flow-step i{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-style:normal;background:#22272d;color:#9ba4ae;font-size:10px;flex:none}.flow-step.active i{background:#234056;color:#bfe7ff}.flow-step.done i{background:#203a2c;color:#a2e7bc}.flow-step.active{color:#d7eaf6}.inspector-note{padding:10px;border-left:2px solid #4f7693;color:#8e99a4;font-size:10px;line-height:1.6;background:#171b1f;margin-top:14px}.statusbar{height:29px;background:#121416;border-top:1px solid #25292e;padding:0 14px;display:flex;align-items:center;gap:9px;color:#78818b;font-size:10px;flex:none}.status-dot{width:6px;height:6px;border-radius:50%;background:#606a75}.statusbar[data-mode="selected"] .status-dot{background:var(--blue);box-shadow:0 0 8px #7ec7ff99}.statusbar[data-mode="editing"] .status-dot{background:var(--green);box-shadow:0 0 8px #8dd8ad99}.status-spacer{flex:1}.drag-label{color:#6f7882}
+.modal-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:#050607bb;padding:20px}.modal{width:min(440px,100%);border:1px solid #46515c;background:#191c20;border-radius:11px;box-shadow:0 25px 90px #000a;overflow:hidden}.modal-head{padding:13px 16px;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:9px}.modal-head strong{font-size:13px}.modal-head span{margin-left:auto;color:#87919b;font-size:10px}.modal-content{padding:15px 16px}.modal-content textarea,.modal-content input{width:100%;background:#101214;border:1px solid #3a424b;border-radius:6px;padding:10px;outline:none;resize:vertical;min-height:115px;line-height:1.55}.modal-content input{min-height:0}.modal-content textarea:focus,.modal-content input:focus{border-color:#83c4ef}.modal-foot{display:flex;align-items:center;gap:8px;justify-content:flex-end;padding:11px 16px;border-top:1px solid #30363d}.modal-foot .plain{margin-right:auto;color:#7f8993;font-size:10px}.primary{background:#263e50;border-color:#47728e;color:#d7f0ff}.primary:hover{background:#31536a}.toast{position:fixed;z-index:30;bottom:42px;left:50%;transform:translateX(-50%);padding:7px 11px;background:#202830;border:1px solid #405160;border-radius:7px;color:#c8e9fc;font-size:11px;box-shadow:0 6px 24px #0006;opacity:0;transition:opacity .18s;pointer-events:none}.toast.show{opacity:1}
+@media(max-width:1050px){.workspace{grid-template-columns:155px minmax(520px,1fr)}.inspector{display:none}.sidebar{padding-inline:8px}.canvas-stage{min-width:800px}}
+@media(max-height:720px){.canvas-stage{min-height:570px}.hint{bottom:7px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">K</span><span>开物</span></div>
+    <span class="crumb">/</span><span style="color:#a6aeb8">笔记画布</span>
+    <span class="top-spacer"></span><span class="scheme-tag">交互方案 A · 两阶段点击</span>
+  </header>
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="side-title">画布</div>
+      <div class="board-row active"><span class="folder-dot"></span>单击选择 · 再次编辑</div>
+      <div class="board-row">◦ 灵感收集</div>
+      <div class="side-foot">预览操作<br>第一次点击：只选中<br>再次点击：进入对应编辑</div>
+    </aside>
+    <main class="main">
+      <div class="toolbar">
+        <div><strong>节点点击与编辑</strong><div class="sub">正文区域直接交互 · 不打开统一编辑面板</div></div>
+        <span class="toolbar-spacer"></span>
+        <div class="step-pill"><span class="step-number">1</span><span id="stepText">单击节点选中</span><span style="opacity:.45">→</span><span class="step-number">2</span><span>再次点击编辑</span></div>
+        <button id="resetButton" type="button">重置演示</button>
+      </div>
+      <section class="canvas-shell" aria-label="交互预览画布">
+        <div class="canvas-stage" id="stage">
+          <svg class="connections" aria-hidden="true"><path d="M318 147 C340 147 345 157 367 157"></path><circle cx="318" cy="147" r="4"></circle><circle cx="367" cy="157" r="4"></circle><path d="M228 250 C228 304 228 305 228 354"></path><circle cx="228" cy="250" r="4"></circle><circle cx="228" cy="354" r="4"></circle><path d="M522 274 C522 316 550 314 550 350"></path><circle cx="522" cy="274" r="4"></circle><circle cx="550" cy="350" r="4"></circle></svg>
+          <article class="node text-card" data-node="text" data-kind="text" aria-label="文本节点">
+            <div class="node-body edit-surface">
+              <h3>过渡：</h3>
+              <p>过渡时需要拉高局部高光区域</p>
+              <ul><li>提高高光</li><li>提高白色参数</li></ul>
+              <hr>
+              <p>反之亦然</p>
+            </div>
+          </article>
+          <article class="node md-card" data-node="markdown" data-kind="markdown" aria-label="Markdown 文件节点">
+            <div class="node-head"><span class="node-type">.md</span><span class="node-path">拍摄笔记 / 镜头过渡.md</span></div>
+            <div class="node-body edit-surface">
+              <h3>过渡参数</h3>
+              <p>让高光从主体边缘柔和地进入背景。</p>
+              <ul><li>局部曝光：<code>+0.3 EV</code></li><li>羽化：<code>28 px</code></li></ul>
+            </div>
+          </article>
+          <article class="node txt-card" data-node="plain" data-kind="txt" aria-label="纯文本文件节点">
+            <div class="node-head"><span class="node-type">.txt</span><span class="node-path">素材 / 现场备注.txt</span></div>
+            <div class="node-body edit-surface" data-plain-preview>现场备注：<br>夕阳在画面右侧，反光板向左补光。<br><br>备用镜头：逆光侧脸。</div>
+          </article>
+          <article class="node group-card" data-node="group" data-kind="group" aria-label="分组节点">
+            <div class="node-head"><span class="node-type">分组</span><span class="node-path group-name">过渡镜头</span></div>
+            <div class="node-body edit-surface"><p>此区域收纳同一段落的镜头节点。</p><p style="color:#90859b;font-size:11px">再次点击分组，可修改名称。</p></div>
+          </article>
+          <div class="hint" id="canvasHint"><strong>试试：</strong><span>先点一个节点选中，再点同一节点正文进入编辑</span><span class="key">Esc</span><span>退出编辑</span></div>
+        </div>
+      </section>
+      <footer class="statusbar" id="statusbar" data-mode="idle"><span class="status-dot"></span><span id="statusText">就绪 · 单击任意可编辑节点</span><span class="status-spacer"></span><span class="drag-label">拖动节点仍可移动</span><span>·</span><span>节点内容仅为交互示例</span></footer>
+    </main>
+    <aside class="inspector">
+      <div class="inspector-title">交互状态</div>
+      <div class="state-card"><div class="state-label">当前节点</div><div class="state-value" id="selectedValue">未选择</div></div>
+      <div class="state-card"><div class="state-label">当前动作</div><div class="state-desc" id="actionValue">第一次点击仅切换选中态，不聚焦文本、不进入编辑。</div></div>
+      <div class="flow">
+        <div class="flow-step active" id="flow1"><i>1</i><span>单击节点<br>显示选中描边</span></div>
+        <div class="flow-step" id="flow2"><i>2</i><span>再次点击同一节点<br>打开对应编辑方式</span></div>
+        <div class="flow-step" id="flow3"><i>3</i><span>完成编辑<br>保留节点选择</span></div>
+      </div>
+      <div class="inspector-note"><strong style="color:#bac9d5">类型规则</strong><br>文本 / .md：节点内 Markdown 编辑<br>.txt：纯文本编辑器<br>分组：名称编辑</div>
+    </aside>
+  </div>
+</div>
+<div id="modalRoot"></div><div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const nodes = [...stage.querySelectorAll('.node[data-node]')];
+  const statusbar = document.getElementById('statusbar');
+  const statusText = document.getElementById('statusText');
+  const selectedValue = document.getElementById('selectedValue');
+  const actionValue = document.getElementById('actionValue');
+  const stepText = document.getElementById('stepText');
+  const modalRoot = document.getElementById('modalRoot');
+  let selected = null, editing = null, drag = null, suppressClick = null, toastTimer = null;
+  const names = {text:'文本节点',markdown:'Markdown 文件节点',txt:'TXT 文件节点',group:'分组节点'};
+
+  function notify(message) {
+    const toast = document.getElementById('toast'); toast.textContent = message; toast.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+  }
+  function setSelected(node) {
+    if (editing && editing !== node) exitInlineEdit();
+    selected = node;
+    for (const item of nodes) item.classList.toggle('selected', item === selected);
+    if (!selected) {
+      selectedValue.textContent = '未选择'; selectedValue.className = 'state-value';
+      actionValue.textContent = '第一次点击仅切换选中态，不聚焦文本、不进入编辑。';
+      statusbar.dataset.mode = 'idle'; statusText.textContent = '就绪 · 单击任意可编辑节点'; stepText.textContent = '单击节点选中';
+      document.getElementById('flow1').className = 'flow-step active';
+      document.getElementById('flow2').className = 'flow-step'; document.getElementById('flow3').className = 'flow-step';
+      return;
+    }
+    const kind = selected.dataset.kind;
+    selectedValue.textContent = names[kind]; selectedValue.className = 'state-value';
+    actionValue.textContent = '已选中 · 再次点击同一节点进入对应编辑器。';
+    statusbar.dataset.mode = 'selected'; statusText.textContent = `${names[kind]}已选中 · 再次点击该节点开始编辑`;
+    stepText.textContent = '已选中 · 再点进入编辑';
+    document.getElementById('flow1').className = 'flow-step done';
+    document.getElementById('flow2').className = 'flow-step active'; document.getElementById('flow3').className = 'flow-step';
+  }
+  function setEditing(node, label) {
+    editing = node; node.classList.add('editing');
+    selectedValue.textContent = `${names[node.dataset.kind]} · 编辑中`; selectedValue.className = 'state-value edit';
+    actionValue.textContent = label;
+    statusbar.dataset.mode = 'editing'; statusText.textContent = `${names[node.dataset.kind]}编辑中 · Esc 退出`;
+    stepText.textContent = '编辑中';
+    document.getElementById('flow1').className = 'flow-step done';
+    document.getElementById('flow2').className = 'flow-step done'; document.getElementById('flow3').className = 'flow-step active';
+  }
+  function focusAtPoint(surface, event) {
+    surface.setAttribute('contenteditable', 'true');
+    surface.classList.add('is-editing');
+    surface.focus({preventScroll:true});
+    const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+    const selection = document.getSelection();
+    if (range && surface.contains(range.startContainer) && selection) { selection.removeAllRanges(); selection.addRange(range); }
+    else if (selection) { const caret = document.createRange(); caret.selectNodeContents(surface); caret.collapse(false); selection.removeAllRanges(); selection.addRange(caret); }
+  }
+  function exitInlineEdit() {
+    if (!editing) return;
+    const node = editing, kind = node.dataset.kind;
+    node.classList.remove('editing');
+    const surface = node.querySelector('.edit-surface');
+    if (surface && (kind === 'text' || kind === 'markdown')) { surface.setAttribute('contenteditable','false'); surface.classList.remove('is-editing'); }
+    editing = null;
+    if (selected === node) {
+      selectedValue.textContent = names[kind]; selectedValue.className = 'state-value';
+      actionValue.textContent = '编辑结束 · 节点仍保持选中，再次点击可继续编辑。';
+      statusbar.dataset.mode = 'selected'; statusText.textContent = '编辑已结束 · 节点仍选中'; stepText.textContent = '已选中 · 再点继续编辑';
+      document.getElementById('flow3').className = 'flow-step done';
+    }
+  }
+  function openModal(node, event) {
+    const kind = node.dataset.kind, isGroup = kind === 'group', isTxt = kind === 'txt';
+    const current = isGroup ? node.querySelector('.group-name').textContent : node.querySelector('[data-plain-preview]').innerText.replace(/\n/g,'\n');
+    const overlay = document.createElement('div'); overlay.className = 'modal-backdrop'; overlay.innerHTML = `
+      <form class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-head"><strong id="modalTitle">${isGroup?'编辑分组名称':'编辑纯文本'}</strong><span>${isGroup?'分组':'TXT · 不做 Markdown 渲染'}</span></div>
+        <div class="modal-content">${isGroup?'<input name="value" aria-label="分组名称">':'<textarea name="value" aria-label="纯文本内容"></textarea>'}</div>
+        <div class="modal-foot"><span class="plain">${isGroup?'应用后更新分组标题':'保持纯文本 · 不解析 Markdown 标记'}</span><button type="button" data-cancel>取消</button><button class="primary" type="submit">应用</button></div>
+      </form>`;
+    modalRoot.append(overlay);
+    const form = overlay.querySelector('form'), field = form.elements.value; field.value = current; setEditing(node,isGroup?'再次点击已选中的分组，进入名称编辑。':`再次点击已选中的 TXT 节点，打开纯文本编辑器。`); field.focus(); if(!isGroup)field.setSelectionRange(field.value.length,field.value.length);
+    const close = () => { overlay.remove(); editing=null; node.classList.remove('editing'); setSelected(node); };
+    form.addEventListener('submit', e => { e.preventDefault(); if(isGroup)node.querySelector('.group-name').textContent=field.value.trim()||'未命名分组'; else node.querySelector('[data-plain-preview]').textContent=field.value; close(); notify(isGroup?'分组名称已应用':'TXT 纯文本已应用'); });
+    form.querySelector('[data-cancel]').addEventListener('click', () => { close(); notify('已取消，内容未修改'); });
+    overlay.addEventListener('pointerdown', e => { if(e.target===overlay){e.preventDefault();} });
+  }
+  function enterEdit(node, event) {
+    const kind = node.dataset.kind;
+    if (kind === 'text' || kind === 'markdown') {
+      const surface = node.querySelector('.edit-surface');
+      setEditing(node,kind === 'text' ? '第二次点击后在节点原位进入 Markdown 编辑。' : '第二次点击后在引用节点原位编辑 Markdown。');
+      focusAtPoint(surface,event);
+      notify(kind === 'text' ? '已进入节点内 Markdown 编辑' : '已进入 .md 节点内编辑');
+      return;
+    }
+    openModal(node,event);
+  }
+  function clickNode(event) {
+    const node = event.target.closest('.node[data-node]');
+    if (!node || event.target.closest('[data-control]')) { if(editing && !event.target.closest('.modal'))exitInlineEdit(); return; }
+    if (suppressClick === node) { suppressClick=null; return; }
+    if (editing === node) return;
+    if (editing && editing !== node) exitInlineEdit();
+    if (selected === node) enterEdit(node,event);
+    else { setSelected(node); }
+  }
+  stage.addEventListener('click',clickNode);
+  stage.addEventListener('pointerdown',event => {
+    const node = event.target.closest('.node[data-node]');
+    if (!node || event.target.closest('[data-control]') || (editing===node && event.target.closest('.edit-surface'))) return;
+    drag = {node, id:event.pointerId, x:event.clientX, y:event.clientY, left:node.offsetLeft, top:node.offsetTop, moved:false};
+    try { node.setPointerCapture(event.pointerId); } catch {}
+  });
+  stage.addEventListener('pointermove',event => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const dx=event.clientX-drag.x,dy=event.clientY-drag.y;
+    if(!drag.moved&&Math.hypot(dx,dy)<5)return;
+    drag.moved=true;event.preventDefault();
+    const bounds=stage.getBoundingClientRect(),maxX=bounds.width-drag.node.offsetWidth-8,maxY=bounds.height-drag.node.offsetHeight-8;
+    drag.node.style.left=`${Math.max(8,Math.min(maxX,drag.left+dx))}px`;drag.node.style.top=`${Math.max(8,Math.min(maxY,drag.top+dy))}px`;
+  });
+  function finishDrag(event) {
+    if(!drag||event.pointerId!==drag.id)return;
+    const done=drag;drag=null;
+    try { done.node.releasePointerCapture(event.pointerId); } catch {}
+    if(done.moved){setSelected(done.node);suppressClick=done.node;setTimeout(()=>{if(suppressClick===done.node)suppressClick=null;},0);notify('节点已移动 · 仍保持选中');}
+  }
+  stage.addEventListener('pointerup',finishDrag);stage.addEventListener('pointercancel',finishDrag);
+  document.addEventListener('keydown',event => {
+    if(event.key==='Escape'){
+      if(modalRoot.firstElementChild){modalRoot.firstElementChild.remove();const node=editing;editing=null;if(node)node.classList.remove('editing');if(selected)setSelected(selected);}
+      else if(editing){exitInlineEdit();notify('已退出编辑，节点仍选中');}
+    }
+  });
+  document.getElementById('resetButton').addEventListener('click',()=>location.reload());
+  setSelected(null);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<div class="tool-block">
+    <h3>抖音视频解析</h3>
+    <p class="tool-block-desc">
+        粘贴分享文案或视频链接,解析无水印视频 / 图集。
+    </p>
+    <p class="hint">
+        整段分享文案直接粘进来就行,不用自己挑链接出来。
+    </p>
+
+    <!-- 服务状态条:取代旧站那句"用之前要先双击 start-douyin-api.bat"。
+         内容由 createServiceBadge 生成,这里只留容器。 -->
+    <div id="douyinService" class="mt-sm"></div>
+
+    <div class="tool-search mt-md">
+        <input type="text" id="douyinInput" placeholder="粘贴抖音分享文案或视频链接">
+        <button class="tool-search-btn" id="douyinBtn" type="button">解析</button>
+    </div>
+
+    <!-- 解析结果(JS 动态生成:标题 / 作者 / 预览 / 图集) -->
+    <div class="douyin-result" id="douyinResult"></div>
+
+    <!-- Cookie 设置。
+         抖音的详情接口被风控挡着:不带真实浏览器 Cookie 会拿到
+         403 "Blocked by ArgusSecurityPlugin Uifid Not Found" —— 而那段标识是
+         页面 JS 在客户端算出来的,纯 HTTP 拿不到。所以这里给两条路:
+           * 主路:开物用自带 Chromium 开一个持久分区的登录窗,扫码一次就够,
+             之后 Cookie 一直存在那个分区里(换账号才需要重新登录);
+           * 备路:手动粘贴(有些用户不方便在开物里登录时用)。
+         默认收起,解析失败且原因是风控时自动展开。 -->
+    <details class="dy-cookie" id="douyinCookieBox">
+        <summary>
+            Cookie 设置
+            <span class="dy-cookie-state" id="douyinCookieState">读取中…</span>
+        </summary>
+        <div class="dy-cookie-body">
+            <div class="field-row">
+                <button class="btn btn-primary btn-sm" id="douyinCookieLogin" type="button">
+                    登录抖音并自动记住
+                </button>
+                <button class="btn btn-sm" id="douyinCookieRelogin" type="button">
+                    换账号 / 重新登录
+                </button>
+            </div>
+            <p class="hint">
+                点左边的按钮会弹出抖音登录窗(**用开物自带的浏览器,和你的日常浏览器
+                互不影响**),扫码登录一次就自动取到 Cookie 并存好,重启应用也还在。<br>
+                为什么必须登录:抖音对没登录的请求一律回风控拦截
+                (<code>403 ArgusSecurityPlugin Uifid Not Found</code>)。
+            </p>
+
+            <details class="dy-manual">
+                <summary>或者手动粘贴 Cookie</summary>
+                <p class="hint">
+                    浏览器里登录 <code>douyin.com</code> → 按 <code>F12</code> →
+                    <code>Network</code> → 随便点一个请求 → 复制
+                    <code>Request Headers</code> 里的 <code>Cookie:</code> 那一整行。
+                </p>
+                <textarea id="douyinCookieInput" rows="3" spellcheck="false"
+                          placeholder="ttwid=…; sessionid=…; uifid=…; msToken=…"></textarea>
+                <div class="field-row mt-sm">
+                    <button class="btn btn-sm" id="douyinCookieSave" type="button">
+                        保存 Cookie
+                    </button>
+                    <span class="hint" id="douyinCookieMsg"></span>
+                </div>
+            </details>
+        </div>
+    </details>
+</div>

@@ -1,0 +1,10 @@
+{
+  "id": "note-canvas",
+  "name": "笔记画布",
+  "version": "0.1.0",
+  "description": "把笔记、图片和想法放到可连接的独立画布中",
+  "entry": "index.js",
+  "order": 75,
+  "permissions": ["canvas", "vault", "shell", "log"],
+  "contributes": { "panes": [{ "id": "note-canvas", "title": "笔记画布", "fullTitle": "笔记画布" }] }
+}

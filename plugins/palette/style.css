@@ -1,0 +1,108 @@
+/* ============================================================
+   调色板 & 渐变 —— 插件私有样式
+   ------------------------------------------------------------
+   只放这个工具专属的类。base.css 是公开设计系统：`.btn` / `.field` /
+   `.drop-zone` / `.code-out` / `.tool-block` / `.mt-*` / `.w-*` 都由它提供，
+   这里一份都不要重复。
+
+   运行时会给本文件每条选择器自动加上 [data-plugin="palette"] 前缀，
+   所以这里写普通选择器就行，不要自己加前缀。
+
+   注意作用域实现的两条限制（实测 scopeCss 得出）：
+   1. 注释会和紧随其后的选择器一起被前缀，所以注释里不能出现半角逗号 ——
+      它会被当成选择器分隔符切开。中文逗号不受影响。同理注释里不要出现花括号。
+   2. @media 块会被前缀破坏而整块失效（`[data-plugin="x"] @media …` 不是合法选择器），
+      所以这里不写媒体查询。色块网格用的是 auto-fit，窄屏本来就会自动换列 ——
+      旧站那条小屏规则只是把最小列宽从 92px 调到 72px，影响很小。
+   ============================================================ */
+
+/* ================= 色板 ================= */
+/* 一组配色方案：标题 + 色块行 */
+.scheme-group { margin-bottom: 18px; }
+
+.scheme-title {
+    font-size: 13px;
+    color: var(--dim);
+    margin-bottom: 8px;
+}
+
+/* 色块网格：自动换列，窄屏也不会挤成一条 */
+.swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    gap: 8px;
+}
+
+/* 单个色块：整块就是按钮，点了复制色值 */
+.swatch {
+    height: 72px;
+    padding: 0 0 8px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    /* 文字颜色由 JS 根据底色亮度写入 --swatch-ink：
+       深色底配白字、浅色底配黑字，任何颜色上都看得清 */
+    color: var(--swatch-ink, #fff);
+    transition: transform .2s, box-shadow .2s;
+}
+
+.swatch:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, .4);
+}
+
+/* ================= 渐变生成器 ================= */
+/* 预览区：直接显示真实渐变效果 */
+.gradient-preview {
+    height: 150px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    margin-bottom: 18px;
+}
+
+/* 一个色标行：取色器 + 位置滑块 + 位置数值 + 删除按钮 */
+.stop-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.stop-row input[type="range"] { flex: 1; }
+
+.stop-pos {
+    width: 52px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--dim);
+    text-align: right;
+    flex: none;
+}
+
+/* 删除色标按钮：一个圆形 ✕ */
+.stop-remove {
+    width: 28px; height: 28px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--faint);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: color .25s, border-color .25s;
+}
+
+.stop-remove:hover { color: var(--error); border-color: var(--error); }
+
+.stop-remove:disabled { opacity: .35; cursor: not-allowed; }
+
+.stop-remove:disabled:hover { color: var(--faint); border-color: var(--border); }

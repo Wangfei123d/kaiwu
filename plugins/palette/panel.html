@@ -1,0 +1,82 @@
+<!-- ① 和谐配色 -->
+<div class="tool-block">
+    <h3>和谐配色生成</h3>
+    <p class="tool-block-desc">
+        选一个主色，自动算出五套配色方案。点任意色块即可复制色值。
+    </p>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="paletteBase">主色</label>
+            <input type="color" id="paletteBase" value="#7ec8ff">
+        </div>
+        <div class="field">
+            <label for="paletteBaseHex">色值（也可以直接输入）</label>
+            <input type="text" id="paletteBaseHex" class="w-sm"
+                   value="#7ec8ff" spellcheck="false" maxlength="7">
+        </div>
+    </div>
+
+    <!-- 五套配色方案由 JS 渲染进来 -->
+    <div id="paletteSchemes" class="mt-lg"></div>
+</div>
+
+<!-- ② 渐变生成器 -->
+<div class="tool-block">
+    <h3>CSS 渐变生成器</h3>
+    <p class="tool-block-desc">
+        调好渐变后，复制下面那行 CSS 直接粘到你的样式表里就能用。
+    </p>
+
+    <!-- 预览区：JS 直接把渐变设成它的 background -->
+    <div class="gradient-preview" id="gradientPreview"></div>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="gradientType">类型</label>
+            <select id="gradientType">
+                <option value="linear">线性渐变</option>
+                <option value="radial">径向渐变</option>
+            </select>
+        </div>
+        <!-- 径向渐变没有角度，所以这一块要能整体隐藏 -->
+        <div class="field" id="gradientAngleField">
+            <label for="gradientAngle">
+                角度 <span id="gradientAngleValue">135°</span>
+            </label>
+            <input type="range" id="gradientAngle"
+                   min="0" max="360" value="135" class="w-md">
+        </div>
+    </div>
+
+    <!-- 色标列表由 JS 渲染 -->
+    <div id="gradientStops" class="mt-md"></div>
+
+    <div class="field-row mt-sm">
+        <button class="btn btn-sm" id="gradientAddStop">＋ 添加色标</button>
+    </div>
+
+    <div class="mt-lg">
+        <textarea class="code-out" id="gradientCode" rows="2" readonly></textarea>
+        <div class="field-row mt-sm">
+            <button class="btn btn-sm" id="gradientCopy">复制 CSS</button>
+        </div>
+    </div>
+</div>
+
+<!-- ③ 从图片提取主色 -->
+<div class="tool-block">
+    <h3>从图片提取主色</h3>
+    <p class="tool-block-desc">
+        拖一张图片进来，提取它的 6 个主要颜色。图片只在浏览器里读取，不会上传。
+    </p>
+
+    <div class="drop-zone" id="extractDrop">
+        <div class="drop-icon">↓</div>
+        <span>把图片拖到这里，或点击选择</span>
+        <span class="drop-zone-hint">支持 JPG / PNG / WebP</span>
+    </div>
+    <input type="file" id="extractInput" accept="image/*" hidden>
+
+    <div id="extractResult" class="mt-md"></div>
+</div>

@@ -1,0 +1,30 @@
+{
+  "id": "drama",
+  "name": "短剧工作台",
+  "version": "0.1.0",
+  "description": "节点画布式的短剧流水线:剧本 → 分镜 → 画面 → 改图(角色一致性) → 配音 → 合成 → 发布",
+  "author": "wangfei",
+  "entry": "index.js",
+  "order": 70,
+  "permissions": [
+    "log",
+    "settings",
+    "dialog",
+    "vault",
+    "drama"
+  ],
+  "contributes": {
+    "panes": [
+      {
+        "id": "drama",
+        "title": "短剧画布",
+        "fullTitle": "短剧工作台 · 节点画布"
+      },
+      {
+        "id": "drama-projects",
+        "title": "短剧项目",
+        "fullTitle": "短剧工作台 · 项目"
+      }
+    ]
+  }
+}

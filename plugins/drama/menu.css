@@ -1,0 +1,68 @@
+/* ============================================================
+   画布右键菜单的样式 —— **故意不加作用域**
+   ------------------------------------------------------------
+   为什么单独一个文件、而且必须原样注入(不能过 scopeCss):
+
+   菜单挂在 `document.body` 上,这是必须的 —— 它要是挂在画布里,会被
+   `.drama-canvas { overflow: hidden }` 裁掉,而且会被 `.drama-world` 上的
+   `scale()` 一起缩小(缩到 25% 时菜单变成看不清的小字)。
+
+   而 style.css 会被 `scopeCss(css, 'drama')` 给每条选择器加上
+   `[data-plugin="drama"]` 前缀。那个前缀对 body 上的元素**一条都不匹配** ——
+   于是菜单拿到了零条样式:没有 position:fixed、没有宽高底色,变成一块裸 div
+   掉在页面最底下。实测现象是"右键之后什么都没有"(虚线落点框倒是看得见,
+   因为它在宿主内、作用域对它有效)。
+
+   ⚠️ 这个缺陷最阴的地方是:纯 DOM 断言(标签、数量、坐标)全都照样绿 ——
+   所以自检里专门补了"菜单真的在屏幕上、而且在最上层"那一条(见 selftest 的
+   `elementFromPoint`)。
+
+   动效只在 transform / opacity / box-shadow 上,不触发布局;
+   系统开了"减少动态效果"时全部关掉。
+   ============================================================ */
+
+.drama-menu { position: fixed; z-index: 60; width: 248px; padding: 5px; background: #1a1919;
+    border: 1px solid var(--border-hi); border-radius: 8px; box-shadow: 0 16px 40px rgba(0, 0, 0, .6);
+    animation: menuIn .13s cubic-bezier(.2, .9, .3, 1) both; }
+@keyframes menuIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+/* ⚠️ 正在淡出的那 90ms 里不许再吃点击:它的位置就在鼠标那儿,而菜单项点完往往会
+   让下面冒出新的东西(比如「编辑」之后卡片里长出 ＋)—— 挡一下就会吞掉那一下点击。
+   实测:自检里量 ＋ 的可点性时,命中的是上一张菜单的 label(SPAN.drama-menu-label)。 */
+.drama-menu.closing { animation: menuOut .09s ease-in both; pointer-events: none; }
+@keyframes menuOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(.98); } }
+/* 逐条浮现:上→下 + 左→右一起(错峰 delay 由 buildMenu 按子元素顺序给) */
+.drama-menu > * { animation: menuItemIn .15s ease-out both; }
+@keyframes menuItemIn { from { opacity: 0; transform: translateX(-7px); } to { opacity: 1; transform: none; } }
+
+.drama-menu-cap { padding: 4px 8px 5px; font: 10.5px/1.4 var(--mono); color: var(--faint);
+    border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.drama-menu-group { padding: 6px 8px 3px; font-size: 10.5px; color: var(--faint); letter-spacing: .3px; }
+.drama-menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+.drama-menu button { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+    font: inherit; font-size: 12.5px; color: var(--muted); background: none; border: 0;
+    border-radius: 5px; padding: 5px 8px; cursor: pointer; }
+.drama-menu button:hover { background: rgba(126, 200, 255, .10); color: var(--accent); }
+.drama-menu button:disabled { color: var(--faint); cursor: not-allowed; }
+.drama-menu button:disabled:hover { background: none; color: var(--faint); }
+.drama-menu button.danger { color: var(--error); }
+.drama-menu button.danger:hover { background: rgba(224, 138, 138, .12); color: var(--error); }
+.drama-menu-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 类型色点。⚠️ 底色必须写在这里:`.dot` / `.k-*` 那几条在 style.css 里,是**作用域**规则,
+   对 body 上的菜单一条都不匹配 —— 菜单里的点会退化成 0 尺寸(与这次"菜单没样式"同源)。 */
+.drama-menu-dot { width: 6px; height: 6px; border-radius: 2px; flex: none;
+    transition: transform .12s ease, filter .12s ease; }
+.drama-menu-dot.k-text { background: #8fb8d8; }
+.drama-menu-dot.k-img { background: #7ec8ff; }
+.drama-menu-dot.k-vid { background: #c9a0d8; }
+.drama-menu-dot.k-aud { background: #d8b36a; }
+.drama-menu button:hover .drama-menu-dot { transform: scale(1.5); filter: brightness(1.25); }
+.drama-menu-hint { font: 10px/1.4 var(--mono); color: var(--faint); transition: color .12s ease; }
+.drama-menu button:hover .drama-menu-hint { color: var(--accent); }
+.drama-menu-badge { font: 9.5px/1.4 var(--mono); color: var(--ask); flex: none;
+    border: 1px solid rgba(216, 179, 106, .45); border-radius: 4px; padding: 0 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .drama-menu, .drama-menu.closing, .drama-menu > *, .drama-menu-hint, .drama-menu-dot {
+        animation: none !important; transition: none !important;
+    }
+}

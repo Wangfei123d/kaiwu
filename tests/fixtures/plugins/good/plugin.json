@@ -1,0 +1,11 @@
+{
+  "id": "good",
+  "name": "示例插件",
+  "version": "1.0.0",
+  "entry": "index.js",
+  "order": 5,
+  "permissions": ["log"],
+  "contributes": {
+    "tools": [{ "id": "good", "title": "示例", "icon": "sparkle", "panel": "panel.html" }]
+  }
+}

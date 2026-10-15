@@ -1,0 +1,29 @@
+{
+  "id": "music",
+  "name": "音乐试听",
+  "version": "1.0.0",
+  "description": "搜索、试听、下载。数据来自本地 QQMusicapi 服务",
+  "author": "wangfei",
+  "entry": "index.js",
+  "order": 40,
+  "permissions": ["log", "services", "settings"],
+  "contributes": {
+    "tools": [
+      { "id": "music", "title": "音乐试听", "icon": "music",
+        "panel": "panel.html", "style": "style.css", "workspacePane": true }
+    ],
+    "services": [
+      {
+        "id": "qqmusic",
+        "label": "QQ音乐服务",
+        "cwd": "QQMusicapi",
+        "command": "node",
+        "args": ["src/server.js"],
+        "port": 3300,
+        "healthPath": "/",
+        "autoStart": true,
+        "stopOnExit": true
+      }
+    ]
+  }
+}

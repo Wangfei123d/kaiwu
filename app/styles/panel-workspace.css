@@ -1,0 +1,346 @@
+/* 平铺可停靠面板(工作台)的样式。
+   —— 本文件**只加新类**,既有类一个都不改。
+
+   ⚠️ 这个仓库踩过的坑:上一次为了藏旧容器的"空壳"写了 `.note-main{display:none}`,
+   结果被**搬进**新容器的那同一批节点也命中了它 —— 面板一片空白,而所有结构断言
+   都是绿的。所以这里:
+     ① 任何 display:none 都不落在面板自己身上。只有 .pw-desk / .pw-bar 两个**新容器**
+        在 JS 挂上 .pw-host 之前是隐藏的 —— 它们与面板是兄弟关系,不是祖先,
+        面板永远不会因为它们而消失;
+     ② 需要压过既有样式时一律用**直接子元素**限定(见 .pw-host > .pw-desk);
+     ③ 需要压过"内容把面板撑破"时,min-width:0 / min-height:0 一个都不漏
+        (.pw-node / .pw-leaf / .pw-pane / .pw-body)。 */
+
+/* ---- 工作台的骨架。JS 挂上 .pw-host 之前:这里全隐藏,布局照旧走 shell.css 的 grid(兜底) ---- */
+.pw-desk,
+.pw-bar { display: none; }
+
+/* ⚠️ `min-height: 0` 是**必须**的,不是保险。
+   `.pane-notes` 是 `.shell`(display:grid; height:100vh)的 **grid item**,
+   而 grid / flex item 的 min-height 默认是 `auto`,含义是「不小于内容高度」——
+   于是它无视父级的 100vh,被内容顶高。实测:1264×755 的窗口里它长到 **1752px**,
+   文档 scrollHeight 1798px,而 body 是 overflow:hidden ——
+   落在窗口之外的 1043px 既看不到也滚不到。最直接的后果是
+   **短剧画布只剩一条工具条**(8 个节点全在窗外)、**AI 对话的输入框被推到窗外**。
+
+   为什么只改这一条就够:高度链
+   .shell(100vh) → .pane-notes → .pw-desk → .pw-stack → .pw-pane → .pw-body
+   上**只有第一跳断了** —— 其余每一层都已经写了 min-height:0(或 overflow:hidden)。 */
+.pane-notes.pw-host {
+    display: flex; flex-direction: column;
+    min-height: 0;
+}
+
+.pane-notes.pw-host > .pw-desk {
+    display: flex; flex-direction: column;
+    flex: 1 1 auto; min-height: 0; min-width: 0;
+    position: relative;                       /* 落点提示的定位基准 */
+}
+
+.pane-notes.pw-host > .pw-bar {
+    display: flex; flex: none; align-items: center; gap: 10px;
+    min-height: 24px; padding: 2px 10px;
+    border-top: 1px solid rgba(126, 200, 255, .10);
+    background: rgba(18, 16, 15, .72);
+}
+
+/* ---- 树 → DOM:比例走 flex-grow(窗口缩放也成立) ---- */
+.pw-stack { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; }
+
+.pw-node { display: flex; min-width: 0; min-height: 0; }
+.pw-node.pw-row { flex-direction: row; }
+.pw-node.pw-col { flex-direction: column; }
+
+.pw-leaf { display: flex; min-width: 0; min-height: 0; }
+
+.pw-pane {
+    flex: 1 1 0%; min-width: 0; min-height: 0;
+    display: flex; flex-direction: column; overflow: hidden;
+    /* 面板本体的圆角卡片。之前这里什么都没有 —— 可见的方框来自**搬进来的那个面板**
+       自己的样式,所以角是硬的(用户反馈"面板边缘有点尖锐")。
+       12px 比全局 --radius(10px) 略大一点:面板块头大,用卡片级的 10px 看上去仍偏方。
+       ⚠️ overflow:hidden 是圆角的一部分:子面板的直角靠它被裁圆,所以不要再给子项加圆角。
+       ⚠️ **不要加 margin**:曾经为了留白加过 3px,结果每侧 3px、三栏共 12px,
+       把"两侧贴边"推成 3px(自检按 2px 容差判贴边)、每栏宽度各掉 6px —— 一次弄红 4 条
+       几何断言(而且是在别的活里,查起来很绕)。面板之间的空隙由**分隔条**(7px,静止时
+       只露出深底、不画线)提供,视觉一样,几何上一根手指都不动。
+       ⚠️ **每片面板保留自己的 1px 框**(方案 A 的核心):`box-shadow` 而不是 `border` ——
+       `border:1px` 会在两侧各吃掉 1px 布局,默认栏宽就从 236 变成 234(实测踩过),
+       box-shadow 不占布局,而且同样跟着 border-radius 走圆角。
+       框与框之间**不再画线**(分隔条静止时透明),那 7px 的缝露出深底(`--bg`)——
+       于是边界处看到的是"两张各自有框的卡片",而不是一条画出来的分割线。 */
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+/* 抓手(⠿):⚠️ 面板标题栏**已取消**,而"拖动整片容器"的手势在**第六轮按规格删掉了**
+   (规格 §1.2:禁止用标题栏 / 抓手 / 标签条空白 / 任何"整组面板"来移动布局)。
+   抓手与条上空白因此**只显示、不响应指针**:
+     · 它们是这一行的视觉语言与尺寸角标的悬停底座,删掉会让标签紧贴 ＋;
+     · 但 `cursor` 不再是 `grab`(那会明确承诺一个不存在的手势),
+       JS 侧也不再给 tabindex / aria-label(看着能拖、其实不能的可聚焦控件比不显示更糟)。*/
+.pw-grip {
+    flex: none; font-family: var(--mono); font-size: 9px; color: var(--faint);
+    cursor: default; user-select: none; pointer-events: none;
+}
+/* 条上空白:夹在标签与 ＋ 之间的喘息位。⚠️ 必须**撑开高度**(align-self:stretch),
+   否则它是一条 0 高的缝;`pointer-events:none` 让指针事件穿到标签条本身。 */
+.pw-grabpad {
+    flex: 1 1 auto; min-width: 24px; align-self: stretch;
+    pointer-events: none;
+}
+/* 面板尺寸角标(`820×949`)。**按需出现**,不常驻:
+   常驻一个 7 位数字会把窄面板的标签挤成省略号,而它只在"刚改过尺寸 / 想确认尺寸"
+   时才有用。出现时机:悬停标签条、抓手拿到键盘焦点、正在拖这一片、正在拖分隔条
+   (`.pw-desk.pw-resizing` 由 JS 在拖动/聚焦分隔条时挂上)。
+   ⚠️ 绝对定位 + 停在 ＋ 的**左边**:＋ 现在就在条的最右端(标题栏没了,它顶上来了)。 */
+.pw-size {
+    position: absolute; right: 30px; top: 50%; transform: translateY(-50%);
+    flex: none; font-family: var(--mono); font-size: 10px; color: var(--faint);
+    opacity: 0; transition: opacity .14s ease;
+    pointer-events: none;                       /* 它只是读数,别抢标签条的指针事件 */
+}
+.pw-tabs:hover .pw-size,
+.pw-tabs:focus-within .pw-size,
+.pw-desk.pw-resizing .pw-size { opacity: 1; }
+
+/* 面板内容区:单格 grid,搬进来的面板自动铺满两个方向(Grid 的 stretch 正是
+   原来 grid 单元格的行为)。子项一句 min-width/min-height:0 是硬要求。 */
+.pw-body { flex: 1 1 auto; min-width: 0; min-height: 0; display: grid; overflow: hidden; }
+.pw-body > * { min-width: 0; min-height: 0; }
+
+/* 插件贡献的 pane:宿主由外壳就地造好再交给插件渲染。grid 的 stretch 会让它铺满
+   那一格,但仍显式写死两个方向 —— 插件的根节点若是 flex 容器,高度塌下去就很难查。 */
+.pane-plugin {
+    width: 100%; height: 100%; min-width: 0; min-height: 0;
+    display: flex; flex-direction: column;
+}
+
+/* ---- 边界处那层底色:面板与缝**取不同的值**,缝才是缝 ----
+   用户选定的方案 A(设计稿 docs/kaiwu-pane-frame-demo.html 变体 A)是:
+     · **每片面板保留自己的 1px 框**(`.pw-pane` 的 box-shadow);
+     · **框与框之间不画任何线**,那条 7px 的缝露出工作台底下的深色(`--bg`)——
+       它才是"两张独立卡片"的分离感来源,而不是一条画出来的线;
+     · 悬停/拖动时缝中间冒出 `--accent` 高亮(那是"这里能拖"的唯一提示)。
+   所以这里要点:
+     ① 面板那层 `--surface` 要真的铺上(子面板用 `var(--pw-fill, …)`,工作台把它设成
+        transparent,露出 `.pw-pane` 的 `--surface`)—— 面板 23 与缝 14 的差值就是"缝"。
+        (子面板写 `var(--pw-fill, <旧字面值>)`:没挂工作台时用回旧值,外观不变。)
+     ② 分隔条底色 = `--bg`(深底),**不是** `--surface` —— 上一轮曾把它改成与面板同色,
+        那是为了"零线连成一片";方案 A 反过来要"露出深底",这是刻意的。 */
+.pw-pane { --pw-fill: transparent; }
+
+/* ---- 分隔条:命中区 7px(好抓),**静止态一条线都不画** ----
+   ⚠️ `z-index:1` 不是可有可无的:它决定**远侧那片面板的框会不会漏进缝里**。
+   面板的框是 `box-shadow: 0 0 0 1px`(画在盒子**外面** 1px),而 DOM 顺序是
+   `[面板A][分隔条][面板B]` —— 后来者画在上面。于是:
+     · 近侧那片(A)的外框被**后画的分隔条盖住** → 缝里看不见;
+     · 远侧那片(B)的外框**盖住了分隔条最后 1px** → 缝的远端冒出一条 `--border` 亮线。
+   实测证据(自检截图的逐列中位数,桌面 1x):
+     静止态「链接 ↔ AI 对话」缝里是 `…23 | 14×6 | 55,58,61 | 17…`,
+     而 `[55,58,61]`(BGRA)→ RGB `#3d3a37` 正是 `--border`;
+   同一张图上近侧是 `23`(面板底,框确实被盖住了)—— 一条边界亮一边、不亮另一边,
+   与方案 A 承诺的"框与框之间不画任何线,7px 缝整条露出深底"不符。
+   把分隔条抬到定位层(z-index:1,与 z-index:auto 的定位后代同层之上)之后,
+   两片的外框都落在分隔条的 7px 里、都被盖住 → 边界整条是 `--bg`。
+   ⚠️ 别改成 `outline`/`border` 那种"框画在盒子里面"的做法:那样框会落在
+   `nearEdge-1` / `farEdge` 两列上,自检的"缝里一列亮线都没有"就永远不可能成立。 */
+.pw-gutter { flex: none; position: relative; z-index: 1; background: transparent; touch-action: none; }
+.pw-gutter.pw-row {
+    width: 7px; cursor: col-resize;
+    background-color: var(--bg);
+}
+.pw-gutter.pw-col {
+    height: 7px; cursor: row-resize;
+    background-color: var(--bg);
+}
+.pw-gutter::after {
+    content: ""; position: absolute; inset: 0; margin: auto;
+    /* 静止态:透明(不画线)。悬停/聚焦/拖动时下面那组规则把它点亮成 accent */
+    background: transparent; border-radius: 2px;
+    transition: background .12s ease, width .12s ease, height .12s ease;
+}
+.pw-gutter.pw-row::after { width: 1px; height: 100%; }
+.pw-gutter.pw-col::after { width: 100%; height: 1px; }
+.pw-gutter:hover::after,
+.pw-gutter:focus-visible::after,
+.pw-gutter[data-dragging]::after { background: var(--accent); }
+.pw-gutter.pw-row:hover::after,
+.pw-gutter.pw-row:focus-visible::after,
+.pw-gutter.pw-row[data-dragging]::after { width: 2px; }
+.pw-gutter.pw-col:hover::after,
+.pw-gutter.pw-col:focus-visible::after,
+.pw-gutter.pw-col[data-dragging]::after { height: 2px; }
+.pw-gutter:focus-visible { outline: none; }
+
+/* ---- 落点提示:一个浮层,按指针落在目标面板的哪个区来变形 ---- */
+.pw-hint {
+    position: absolute; display: none; pointer-events: none; z-index: 50;
+    border: 2px solid var(--accent); background: rgba(126, 200, 255, .18);
+    border-radius: var(--radius-sm); transition: all .06s linear;
+}
+.pw-hint.pw-on { display: block; }
+.pw-hint.pw-band { left: 0; right: 0; border-radius: 0; border-left: 0; border-right: 0; }
+
+/* ---- 底部那条:重置入口 + 实时布局树(用户明确要的"证据") ---- */
+.pw-tree-label { flex: none; font-size: 11px; color: var(--faint); }
+.pw-tree {
+    flex: 1 1 auto; min-width: 0;
+    font-family: var(--mono); font-size: 11px; color: var(--dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ===========================================================================
+   标签条(第五轮:一个面板里可以放多个视图)
+   —— 设计稿 kaiwu-panel-tabs-route-demo.html(最新的一版)+ open-demo 的关闭入口,
+      但**颜色与圆角一律用本项目的令牌**(demo 是独立页面,有它自己那套紫色 token;
+      在这里另起一套会让新旧界面渐渐分叉)。
+   —— 没有一条 transition / animation:设计稿四份文件里动效计数都是 0,刻意不做。
+
+   ⚠️ 三条硬规则(设计稿里明确标过的):
+     ① **一个图标都不许有**:整页 svg 计数保持 0,只有 × / ＋ / ∨ 三个**文字字符**;
+     ② **每一个带文字的标签都要 nowrap**,窄栏靠"缩写 / 下拉"控制宽度,**绝不靠换行**
+        (中文缺 nowrap 会被挤成一字一行,那是被明确点名的 bug);
+     ③ 提示/确认/最近关闭那一条**一律单行**:文字省略号、按钮 flex:none。
+   =========================================================================== */
+
+/* 菜单与底部提示条要相对**这一片面板**定位。只加 position 一条,别的属性一个都不动
+   —— 加上它之后 .pw-pane 的布局行为与从前逐像素一致(它本来就是块级 flex 容器)。 */
+.pw-pane { position: relative; }
+
+/* ---- 标签条本体:⚠️ 它现在就是面板**顶上的唯一一行**(标题栏已取消) ----
+   所以它同时承担两件事:标签列表 + "拖动整片容器"的抓手(抓手 ⠿ 与条上空白)。
+   ⚠️ `overflow-x:auto` 会把这一条变成**两轴滚动容器**(另一根轴写 visible 会被算成
+   auto),于是任何伸出内容盒的东西都会被裁 —— 原来的活动下划线用 `bottom:-1px`
+   正好探出去 1px,真机上就被削成半行(逐像素证据见 docs/kaiwu-pane-stack-recon.md)。
+   这里两手一起上:`padding-bottom:4px` 让内容盒离滚动口下沿留出余量 + 下划线改
+   `bottom:0` 待在胶囊**自己里面**。横滚这条退路保留(标签多到装不下时靠它)。 */
+.pw-tabs {
+    flex: none; display: flex; align-items: center; gap: 3px;
+    position: relative;                 /* 尺寸角标(绝对定位)的定位祖先 */
+    padding: 2px 6px 4px;
+    border-bottom: 1px solid rgba(126, 200, 255, .10);
+    background: rgba(18, 16, 15, .72);
+    min-width: 0;
+    overflow-x: auto; scrollbar-width: none;
+    font-size: 11.5px;
+}
+.pw-tabs::-webkit-scrollbar { display: none; }
+
+/* ---- 拖**一枚标签**到别的面板上(规格 §4.2 / §6)----
+   落点预览三样,与行为模型 demo(docs/kaiwu-single-tab-dock-demo.html)一致:
+     ① 落在**标签条**上:整条点亮 + 一条**竖向插入线**标出会插到第几个;
+     ② 落在**正文中央**:整个面板描边(`.pw-pane-drop`,表示"并进这个栈末尾");
+     ③ 落在**四边带**:目标那一半高亮(用 .pw-hint 那个浮层,见 JS 的 previewTabDrop)。
+   ⚠️ 竖线是条里的一个子节点,由 JS **按需创建**:标签条每次重画都会 replaceChildren,
+   指望它一直在是不成立的(创建逻辑见 panel-workspace.js 的 previewTabDrop)。 */
+.pw-tabs.pw-tabs-drop { background: rgba(126, 200, 255, .10); }
+.pw-pane.pw-pane-drop { box-shadow: 0 0 0 1px var(--accent); }
+.pw-tab-caret {
+    position: absolute; top: 3px; bottom: 2px; width: 2px;
+    background: var(--accent); border-radius: 2px;
+    display: none; pointer-events: none;
+}
+/* 拖起来的那一枚:淡下去,让"它正在被搬走"看得见 */
+.pw-tab.pw-tab-dragging { opacity: .45; }
+/* 窄布局下拉里的"当前标签"也是可拖起点(规格 §4.1),给它一个 grab 光标作提示 */
+.pw-tabs[data-mode="dropdown"] .pw-tabs-cur { cursor: grab; }
+
+/* 胶囊标签。⚠️ 用 flex 而不是"整块省略号":× 是**子元素**,整块 overflow:hidden 时   长名字会把 × 一起裁掉、点都点不到(设计稿的隐患之一)。这里让**文字**截断、× 不缩。 */
+.pw-tab {
+    flex: none; display: flex; align-items: center; position: relative;
+    max-width: 104px; min-width: 0;
+    background: rgba(255, 255, 255, .05);
+    border: 1px solid var(--border); border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    padding: 4px 8px; font: inherit; font-size: 11.5px;
+    color: var(--dim); cursor: pointer;
+    white-space: nowrap; user-select: none;
+}
+.pw-tab-label {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.pw-tab-x { flex: none; margin-left: 5px; color: var(--faint); }
+.pw-tab-x:hover { color: var(--text); }
+.pw-tab:hover { color: var(--muted); }
+.pw-tab.pw-tab-on { background: var(--surface); color: var(--text); }
+.pw-tab.pw-tab-on::after {
+    /* ⚠️ `bottom:0` 而不是 `bottom:-1px`:条是两轴滚动容器,伸出去的那 1px 会被裁掉
+       (真机上表现成"下划线只有半行")。待在胶囊里面就一定进得了滚动口。 */
+    content: ""; position: absolute; left: 7px; right: 7px; bottom: 0; height: 2px;
+    background: var(--accent); border-radius: 2px;
+}
+/* 脏标记是一个**文字字符** *(不是圆点图标):设计稿 route-demo 就是这么标的 */
+.pw-tab.pw-tab-dirty .pw-tab-label::before { content: "*"; color: #ffc46b; margin-right: 3px; }
+
+.pw-tabs-add,
+.pw-tabs-more {
+    flex: none; border: 0; background: transparent; color: var(--dim);
+    font: inherit; font-size: 11.5px; cursor: pointer; padding: 4px 5px;
+    white-space: nowrap;
+}
+.pw-tabs-add:hover, .pw-tabs-more:hover { color: var(--text); }
+.pw-tabs-more { background: rgba(255, 255, 255, .05); border: 1px solid var(--border); border-radius: 999px; }
+
+/* ---- 窄栏(<220px):整条换成「当前视图名 ∨」下拉 ---- */
+.pw-tabs[data-mode="dropdown"] { cursor: pointer; padding: 3px 8px; }
+.pw-tabs-cur { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; color: var(--text); }
+.pw-tabs-caret { flex: none; margin-left: auto; color: var(--faint); }
+
+/* ---- 视图菜单 / 右键菜单(同一个浮层,两种内容) ---- */
+.pw-menu {
+    position: absolute; z-index: 30; top: 26px; left: 6px; right: 6px;
+    display: flex; flex-direction: column; gap: 2px;
+    background: var(--glass); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 4px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .5);
+    font-size: 11.5px;
+}
+.pw-menu-ctx { left: auto; right: 6px; min-width: 132px; max-width: 60%; }
+.pw-menu-item {
+    display: block; width: 100%; text-align: left;
+    background: transparent; border: 0; color: var(--text);
+    font: inherit; font-size: 11.5px; padding: 5px 7px; border-radius: 6px;
+    cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pw-menu-item:hover { background: rgba(255, 255, 255, .08); }
+.pw-menu-item.pw-menu-here { color: var(--faint); }
+
+/* ---- 底部那一条:最近关闭 / 可撤销提示 / 脏确认(⚠️ 一律单行) ---- */
+.pw-strip1 {
+    position: absolute; left: 6px; right: 6px; bottom: 6px; z-index: 20;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap; overflow: hidden;
+    padding: 5px 8px; border-radius: var(--radius-sm);
+    font-size: 11.5px;
+}
+/* 文字自己截断,按钮**不缩**(窄栏里换行/挤扁都会被当成 bug) */
+.pw-strip1-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-strip1 button {
+    flex: none; border: 0; border-radius: 6px; font: inherit; font-size: 11px;
+    padding: 2px 8px; cursor: pointer; white-space: nowrap;
+}
+.pw-strip1-toast { background: rgba(35, 40, 58, .96); border: 1px solid #3d4570; color: #dfe4ff; }
+.pw-strip1-toast button { background: #3a3f60; color: #fff; }
+.pw-strip1-toast button:hover { background: #4d5480; }
+.pw-strip1-recent { background: rgba(35, 42, 38, .96); border: 1px solid #3d5a48; color: #d9ffe9; }
+.pw-strip1-recent button { background: #2f4a3a; color: #eafff2; }
+.pw-strip1-recent button:hover { background: #3d5a48; }
+.pw-strip1-ask { background: rgba(51, 42, 42, .96); border: 1px solid #6b4a4a; color: #ffd9d9; }
+.pw-strip1-ask button { background: #4a3a3a; color: #ffe9e9; }
+.pw-strip1-ask button:hover { background: #6b4a4a; }
+
+/* ---- 空面板的占位(只在两种兜底里出现:坏存档、以及"整棵树只剩这一格"不许摘掉;
+       正常操作下最后一枚被关掉/搬走会让整格消失,见 panel-workspace.js 的 collapseIfEmpty) ---- */
+.pw-empty {
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px; font-size: 12px; color: var(--faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pw-hint { transition: none; }
+    /* 尺寸角标的淡入淡出也关掉(它只是"看得见/看不见",没有运动信息) */
+    .pw-size { transition: none; }
+}

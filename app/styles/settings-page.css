@@ -1,0 +1,132 @@
+/* 「设置」视图(设计稿 docs/kaiwu-settings-page-demo.html 方案 D:左导航 + 搜索 + 表单)。
+   —— 本文件**只加新类**,既有类一个都不改;配色/圆角全部取自 tokens.css,
+   和设计稿里那套值一一对应(设计稿就是照 tokens 抄的)。
+
+   ⚠️ 这个文件里还有一条**全局**规则(文件末尾的 data-motion)——
+   它不是"设置页的样式",而是设置页那个开关的执行者,详见那段注释。 */
+
+/* ---- 整屏视图:.pane-notes 的兄弟 ---- */
+.pane-settings {
+    grid-area: body;
+    display: flex; flex-direction: column;
+    min-height: 0; min-width: 0;
+    padding: 14px 16px 4px;
+    overflow: hidden;
+}
+.settings-head {
+    flex: none;
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px;
+}
+.settings-search {
+    flex: 0 1 420px; min-width: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font: inherit; font-size: 12.5px;
+}
+.settings-search:focus { border-color: var(--accent); outline: none; }
+.settings-overview { color: var(--faint); font-size: 12px; }
+
+/* ---- D 布局:左导航(170px)+ 右表单 ---- */
+.settings-split {
+    flex: 1 1 auto; min-height: 0; min-width: 0;
+    display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 18px;
+}
+.settings-nav { display: flex; flex-direction: column; gap: 2px; align-content: start; }
+.settings-nav-btn {
+    text-align: left;
+    background: none; border: 0;
+    color: var(--dim); font: inherit; font-size: 13px;
+    padding: 6px 10px; border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+.settings-nav-btn:hover { background: var(--surface); color: var(--text); }
+.settings-nav-btn[aria-selected="true"] { background: rgba(126, 200, 255, .12); color: var(--accent); }
+
+.settings-body { min-width: 0; min-height: 0; overflow-y: auto; padding-right: 4px; }
+.settings-section { margin-bottom: 18px; }
+.settings-section-title { font-size: 14px; margin: 0 0 6px; color: var(--text); font-weight: 600; }
+.settings-section-desc { color: var(--faint); font-size: 12px; margin: -2px 0 8px; }
+.settings-card {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); overflow: hidden;
+}
+.settings-item {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 11px 14px; border-bottom: 1px solid rgba(255, 255, 255, .05);
+}
+.settings-item:last-child { border-bottom: 0; }
+.settings-label { flex: 1 1 auto; min-width: 0; }
+.settings-title { font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.settings-hint { color: var(--faint); font-size: 12px; margin-top: 2px; }
+.settings-restart { color: var(--ask); font-size: 11.5px; margin-top: 3px; min-height: 1px; }
+.settings-ctrl { flex: none; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.settings-input, .settings-select {
+    background: var(--surface-2); border: 1px solid var(--border);
+    color: var(--text); border-radius: var(--radius-sm);
+    padding: 5px 9px; font: inherit; font-size: 12.5px;
+    min-width: 200px;
+}
+.settings-input:focus, .settings-select:focus { border-color: var(--accent); outline: none; }
+.settings-note { font-size: 11.5px; color: var(--faint); }
+.settings-note[data-state="ok"] { color: var(--ok); }
+.settings-note[data-state="bad"] { color: var(--error); }
+/* 「环境变量优先,在这里保存的密钥不会生效」这类警告 —— 从 AI 面板那张卡搬来的。
+   用 ask 色(不是报错的红):它是"你这么做没效果",不是"出错了"。 */
+.settings-warn { font-size: 11.5px; color: var(--ask); max-width: 420px; }
+.settings-mono {
+    font-family: var(--mono); font-size: 11.5px; color: var(--dim);
+    max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.settings-stat { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dim); }
+.settings-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--error); flex: none; }
+.settings-dot[data-state="ok"] { background: var(--ok); }
+.settings-badge {
+    font-size: 11px; padding: 1px 7px; border-radius: 20px;
+    border: 1px solid var(--border); color: var(--dim); white-space: nowrap;
+}
+.settings-badge.has { border-color: rgba(111, 208, 140, .55); color: var(--ok); }
+.settings-badge.new { border-color: rgba(216, 179, 106, .55); color: var(--ask); }
+.settings-empty { color: var(--faint); font-size: 13px; padding: 10px 2px; }
+
+/* 开关:纯 CSS(设计稿里的 .sw) */
+.settings-switch { position: relative; display: inline-block; width: 38px; height: 20px; flex: none; }
+.settings-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.settings-switch i {
+    position: absolute; inset: 0; border-radius: 20px;
+    background: rgba(255, 255, 255, .10); transition: background .15s;
+}
+.settings-switch i::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--dim); transition: transform .15s, background .15s;
+}
+.settings-switch input:checked + i { background: rgba(126, 200, 255, .28); }
+.settings-switch input:checked + i::after { transform: translateX(18px); background: var(--accent); }
+
+/* ------------------------------------------------------------------
+   「减少动态效果(强制关)」的执行者。
+
+   ⚠️ 这是一条**刻意的全局覆盖**:设置页的开关一打开,就把整棵树的
+   `animation` / `transition` 全部关掉,不做任何精细豁免。
+   为什么选这条(而不是逐条列出扫光/流光/光带/脉冲):
+     设计稿与父任务都要求"别做一半 —— 扫光/队列流光/不确定态光带/光标脉冲/星空
+     都得真的停下来";逐条列举的写法**一定会漏**(这个项目已经有过"新加了一处动画
+     忘了加进豁免名单"的教训),而漏掉的表现是"用户以为关掉了、其实还在动"。
+   代价说清楚:**没有精细豁免** —— 连"淡入淡出"这种通常无害的过渡也一起没了,
+   将来若确实需要豁免某一处,做法是给它单独开一个不受这条规则约束的类,
+   而不是把这条规则改松(见 shell.css 里 prefers-reduced-motion 那几段:
+   系统偏好那条路仍然是**精细**的,两者刻意不同)。
+   星空是 canvas + requestAnimationFrame,不吃 CSS —— 它由 shell/starfield.js
+   监听 `kaiwu:motion` 事件自己停(见那个文件里的 onMotionChange)。
+   ------------------------------------------------------------------ */
+html[data-motion="off"] *,
+html[data-motion="off"] *::before,
+html[data-motion="off"] *::after {
+    animation: none !important;
+    transition: none !important;
+}
+html[data-motion="off"] { scroll-behavior: auto !important; }

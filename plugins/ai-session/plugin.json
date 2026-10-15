@@ -1,0 +1,22 @@
+{
+  "id": "ai-session",
+  "name": "AI 会话",
+  "version": "0.1.0",
+  "description": "AI 会话台账:列历次对话、回看当时聊了什么、点一条接着聊(上下文由对端恢复)",
+  "author": "wangfei",
+  "entry": "index.js",
+  "order": 75,
+  "permissions": [
+    "log",
+    "sessions"
+  ],
+  "contributes": {
+    "panes": [
+      {
+        "id": "ai-session",
+        "title": "AI 会话",
+        "fullTitle": "AI 会话台账(历次对话 · 接着聊)"
+      }
+    ]
+  }
+}

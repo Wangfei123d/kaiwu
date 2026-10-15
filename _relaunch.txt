@@ -1,0 +1,29 @@
+﻿
++     1ms  开始启动(日志:C:\Users\18014\AppData\Roaming\kaiwu\stage-log.txt)
++     2ms  userData = C:\Users\18014\AppData\Roaming\kaiwu
++     2ms  selftest = false
++   498ms  [渲染] boot:进入
++   539ms  [渲染] boot:星空已启动
++   541ms  [渲染] boot:笔记视图已建
++   551ms  [渲染] boot:查笔记库状态 → {"configured":true,"ok":true,"path":"E:\\仓库","reason":null}
++   552ms  [渲染] [向导] hide(apply:库可用) → hidden=true 计算样式=none(确实隐藏)
++   553ms  [渲染] boot:apply 返回 false(true=要显示向导)
+[palette] 调色板 & 渐变已就绪
+[subtitle] 字幕格式互转已就绪
+[drama] 短剧工作台:画布面板已登记
++   651ms  [渲染] boot:外壳已显示,准备进入笔记库
++   651ms  [渲染] enterVault:开始 status.ok=true
++   689ms  [渲染] enterVault:索引已载入
++   691ms  [渲染] enterVault:已切到笔记视图
+node : [agent] [kaiwu] dsh 入口 = D:/DSHDesktop/DSH Desktop/resources/app/node_modules/@deepseek-ai/dsh/lib/bin.js
+At line:1 char:150
++ ... ew($false); cd E:\project\kaiwu; node electron/launch.js 2>&1 | Out-F ...
++                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([agent] [kaiwu].../dsh/lib/bin.js:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
++   829ms  [渲染] boot:工作台已挂载 {row 18% / 35% / 22% / 25%}[ {col 70% / 30%}[ 笔记列表 , 链接 ] , 笔记正文 , AI 对话 , 短剧画布 ]
++   829ms  [渲染] boot:进入笔记库完成
++   830ms  [渲染] boot:插件加载完成 activated=7 broken=0
+[drama] 短剧画布就绪 · 根=E:\仓库\短剧
++  6179ms  [渲染] boot:AI 面板已挂载 state=ready

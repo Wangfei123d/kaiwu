@@ -1,0 +1,235 @@
+/* B站解析下载插件私有样式。运行时自动加 [data-plugin="bilibili"] 前缀。
+   通用控件(.btn / .tool-search / select / .svc 服务徽标)已在 base.css,
+   这里不重复。 */
+
+/* 结果区不需要上边距:搜索行(.tool-search)自己带了 16px 下边距。 */
+
+.bili-card {
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.bili-head { display: flex; gap: 14px; }
+
+/* 封面格子:有图放图,没图放矢量占位图 —— 两种情况下都是这个尺寸,
+   所以样式写在格子上,不写在 <img> 上。 */
+.bili-cover {
+    width: 160px; flex: none;
+    aspect-ratio: 16 / 9;
+    display: grid; place-items: center;
+    overflow: hidden;                   /* 图按 16:9 裁切,不留黑边 */
+    border-radius: var(--radius-sm);
+    background: #2a2928;
+    border: 1px solid var(--border);
+}
+
+.bili-cover img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* 占位图标:跟着 --faint 走,不要用纯黑或纯白 */
+.bili-cover svg { width: 36px; height: 36px; color: var(--faint); }
+
+.bili-meta { flex: 1; min-width: 0; }   /* min-width:0 让长标题能换行 */
+
+.bili-title {
+    margin: 0 0 6px;
+    font-size: 15px; font-weight: 600; color: #fff;
+    line-height: 1.5;
+}
+
+.bili-author {
+    margin: 0 0 8px;
+    font-size: 13px; color: var(--dim);
+}
+
+.bili-open {
+    font-size: 13px; color: var(--accent);
+    text-decoration: none;
+}
+.bili-open:hover { text-decoration: underline; }
+
+.bili-actions {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(126, 200, 255, .08);
+}
+
+/* 下拉框只保留"本项目特有的那部分"(宽度、字号)。
+   颜色/描边/箭头/圆角全部由 base.css 的 select 统一给 ——
+   早先这里用 `background: var(--surface-2)` 整个覆盖了一遍,
+   那是简写,会把 base.css 里自绘箭头的 background-image 一起清掉。 */
+.bili-page, .bili-quality {
+    max-width: 320px;
+    padding: 8px 34px 8px 12px;
+    font-size: 13px;
+}
+
+/* 下载按钮推到卡片右下角,和左边的"选分P / 选清晰度"分开 */
+.bili-dl {
+    margin-left: auto;
+    padding: 8px 18px;
+    font-size: 14px;
+}
+
+.bili-notice {
+    margin: 10px 0 0;
+    font-size: 13px; line-height: 1.6;
+}
+.bili-notice.ok    { color: var(--ok); }
+.bili-notice.error { color: var(--error); }
+
+/* =========================================================================
+   下载队列(方案 A)。视觉参数**逐条对齐** docs/kaiwu-bilibili-queue-demo.html,
+   只有类名加了 bili-q- 前缀(便于自检选中,也避免与上面的解析结果区混淆)。
+
+   四条来自设计稿的硬约束,别改:
+   ① 整个区块就是进度条:填充层**锚在左边缘**、随进度向右生长;
+   ② 条纹周期**必须等于位移距离 88px**。repeating-linear-gradient 的一个周期由
+      **最后一个色标**决定 —— 写成 62px 而位移 88px,每轮回到起点时会跳 26px,
+      表现为"隔一段时间卡一下"(设计稿里记着这个坑);
+   ③ 位移方向**左→右**(translateX(-88px) → 0),与聊天框扫光、与阅读方向一致;
+   ④ 下载中标题的扫光**底层必须是实色**:prefers-reduced-motion 关掉动画后,
+      只有渐变层的话文字会变成一片透明看不见(shell.css 那边实测踩过)。
+   ========================================================================= */
+
+.bili-q {
+    margin-top: 16px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+
+.bili-q-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.bili-q-title { font-size: 13px; font-weight: 600; }
+.bili-q-sum { font-size: 12px; color: var(--dim); margin-left: auto; }
+.bili-q-open, .bili-q-retry { flex: none; }
+
+.bili-q-note { margin: 0 0 9px; font-size: 12px; line-height: 1.6; color: var(--dim); }
+.bili-q-note.error { color: var(--error); }
+.bili-q-note.ok { color: var(--ok); }
+
+.bili-q-task {
+    display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 11px;
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 9px;
+    background: var(--surface); margin-bottom: 8px;
+    position: relative; overflow: hidden;
+}
+
+/* 进度层:绝对定位铺满整块,内容层(z-index:1)压在它上面 */
+.bili-q-prog { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+
+/* 铺满整块的极淡流光:未完成的那段也不是静止的。周期 88px = 位移 88px */
+.bili-q-prog::before {
+    content: ""; position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg,
+        rgba(150, 240, 185, 0) 0px, rgba(150, 240, 185, .07) 44px, rgba(150, 240, 185, 0) 88px);
+    animation: bili-q-bg-drift 2.4s linear infinite;
+}
+
+/* 已完成段:锚左、向右生长;右边缘用 mask 做渐变收尾(一刀切会留下明显的分界线,
+   mask 会同时作用到内部条纹上,边缘处的条纹也跟着淡出)。 */
+.bili-q-prog i {
+    position: absolute; top: 0; bottom: 0; left: 0; display: block; overflow: hidden;
+    background: linear-gradient(90deg, rgba(111, 208, 140, .12), rgba(111, 208, 140, .30));
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 56px), transparent 100%);
+            mask-image: linear-gradient(90deg, #000 calc(100% - 56px), transparent 100%);
+    transition: width .7s cubic-bezier(.4, 0, .2, 1);
+}
+
+/* 合并阶段换**更深一档的绿**(同一色系,靠深浅区分阶段)。
+   ⚠️ 判据是 **data-phase**:实测上游全程只给 `running`(下载/合并不再各有状态值),
+   所以"现在在哪一段"只能从进度字段推出来(见 index.js 的 progressOf)。
+   老的 `data-status="merge"` 选择器留着:旧版本上游与存量任务可能真的给过 merge。 */
+.bili-q-task[data-phase="merge"] .bili-q-prog i,
+.bili-q-task[data-status="merge"] .bili-q-prog i {
+    background: linear-gradient(90deg, rgba(72, 158, 106, .12), rgba(72, 158, 106, .30));
+}
+
+/* 已完成段里的流光:比整块那层亮,周期与位移同样是 88px(无缝),
+   宽度 200% 是为了位移时左边不留空 */
+.bili-q-prog i b {
+    position: absolute; top: 0; bottom: 0; left: 0; width: 200%;
+    background: repeating-linear-gradient(90deg,
+        rgba(150, 240, 185, 0) 0px, rgba(150, 240, 185, .28) 44px, rgba(150, 240, 185, 0) 88px);
+    animation: bili-q-bg-drift 1.6s linear infinite;
+}
+
+/* ⚠️ 关键帧名字带 bili-q- 前缀是**必需的**:插件样式与 shell.css 注入同一个文档,
+   重名会互相覆盖 —— 叫 text-sweep / bg-drift 就会把聊天框那套动画改掉。
+   参数与聊天框一致(1.4s、左→右、位移 88px)。 */
+@keyframes bili-q-bg-drift { from { transform: translateX(-88px) } to { transform: translateX(0) } }
+
+.bili-q-cover {
+    width: 78px; height: 52px; border-radius: 6px;
+    object-fit: cover; background: #000; border: 1px solid var(--border);
+    position: relative; z-index: 1;
+}
+.bili-q-body { position: relative; z-index: 1; min-width: 0; }
+.bili-q-line { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.bili-q-name {
+    flex: 1 1 auto; min-width: 0;
+    font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bili-q-meta { font-size: 11.5px; color: var(--faint); margin-top: 2px; font-family: var(--mono); }
+.bili-q-why { color: var(--error); font-family: inherit; }
+
+/* 下载中的标题:与聊天框**同一套**扫光(1.4s、左→右)。
+   display:block 是必需的 —— 百分比 background-position 要有确定的参照宽度,
+   行内元素折行后光带落点会乱跳。 */
+.bili-q-task.is-live .bili-q-name {
+    display: block;
+    background-image:
+        linear-gradient(100deg, transparent 44%, rgba(255, 255, 255, .9) 50%, transparent 56%),
+        linear-gradient(90deg, var(--dim), var(--dim));
+    background-size: 220% 100%, 100% 100%;
+    background-repeat: no-repeat;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    animation: bili-q-text-sweep 1.4s linear infinite;
+}
+@keyframes bili-q-text-sweep { from { background-position: 170% 0, 0 0 } to { background-position: -70% 0, 0 0 } }
+
+.bili-q-acts { margin-left: auto; display: flex; gap: 4px; flex: none; }
+.bili-q-icon {
+    display: flex; align-items: center; justify-content: center;
+    padding: 3px 6px; line-height: 1;
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--muted); cursor: pointer; font: inherit;
+}
+.bili-q-icon:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.bili-q-icon:disabled { opacity: .45; cursor: default; }
+.bili-q-icon.done-flash { color: var(--ok); border-color: var(--ok); }
+/* 「理解」是文字按钮:与「复制」不同,它是一次要花钱的远端调用,值得把话说清 */
+.bili-q-understand {
+    font-size: 11.5px; padding: 1px 8px; border-radius: 20px; color: var(--muted);
+    white-space: nowrap;
+}
+.bili-q-understand:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.bili-q-del { font-size: 15px; padding: 0 6px; }
+.bili-q-del:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
+.bili-q-ok { display: flex; align-items: center; color: var(--ok); flex: none; }
+.ic { width: 15px; height: 15px; display: block; flex: none; }
+
+/* 状态胶囊(已完成用勾号图标,所以这里没有 done 那一档) */
+.bili-q-st { font-size: 11.5px; padding: 1px 7px; border-radius: 20px; border: 1px solid var(--border); flex: none; }
+/* ⚠️ running 是**实测**里上游唯一给的活跃状态(见 app/lib/bilibili-queue.js 的注释):
+   少了这一条,那次修好之前界面显示的是一枚没有任何样式的英文 `running` 胶囊。 */
+.bili-q-st.running { color: var(--ok); border-color: rgba(111, 208, 140, .45); }
+.bili-q-st.download { color: var(--ok); border-color: rgba(111, 208, 140, .45); }
+.bili-q-st.merge { color: #489e6a; border-color: rgba(72, 158, 106, .5); }
+.bili-q-st.waiting { color: var(--dim); }
+.bili-q-st.error { color: var(--error); border-color: rgba(224, 138, 138, .45); }
+.bili-q-st.pause { color: var(--ask); border-color: rgba(216, 179, 106, .45); }
+/* 认不出来的状态:安静的中性样式(标签文字仍然是「处理中」,不是英文) */
+.bili-q-st.unknown { color: var(--dim); }
+
+/* 动效必须能一键关掉(与 shell.css 同一条规矩) */
+@media (prefers-reduced-motion: reduce) {
+    .bili-q-prog::before, .bili-q-prog i b { animation: none; }
+    .bili-q-task.is-live .bili-q-name { animation: none; }
+}
