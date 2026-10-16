@@ -22,12 +22,13 @@ test('原生菜单仍可按已登记视图打开工作台面板,菜单状态按�
     assert.match(main, /openWorkspacePanel/);
 });
 
-test('打开工具面板会回到笔记工作台并聚焦新建视图', () => {
+test('打开工具面板在常驻笔记工作台中聚焦新建视图', () => {
     const start = main.indexOf('function openWorkspacePanel(viewId) {');
     const end = main.indexOf('bridge.onAddPanel(openWorkspacePanel)', start);
     assert.ok(start >= 0 && end > start, '存在唯一的窗口菜单面板处理器');
     const opener = main.slice(start, end);
-    assert.match(opener, /onOpenPanel\?\.\(viewId\)/);
+    assert.doesNotMatch(opener, /onOpenPanel/);
     assert.match(opener, /workspace\.applyTree\(next\)[\s\S]*workspace\.focusView\(viewId\)/);
-    assert.match(main, /onOpenPanel:\s*\(viewId\)[\s\S]*switchView\('notes'\)/);
+    assert.match(main, /paneNotes/);
+    assert.doesNotMatch(main, /switchView\(/);
 });

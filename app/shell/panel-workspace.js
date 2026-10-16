@@ -418,10 +418,10 @@ export function createPanelWorkspace({
         const { node, pane, strip } = ref;
         const tabs = Array.isArray(node.tabs) ? node.tabs : [];
         const usable = usableWidthOf(strip, pane);
-        // ⚠️ 量不到宽度(usable = 0)不等于"这一格很窄":工作台藏在笔记视图里,切到设置视图
-        //    (或刚挂载、还没布局)时每一格的 clientWidth 都是 0。这时如果照 0 去判形态,
-        //    整条会降到「当前视图名 ∨」—— 而隐藏期间**不会**有人再重画第二次,于是用户切
-        //    回来看到的是一条**没有标签的空条**,连 × / 中键 / 右键菜单三个关闭入口都不存在。
+        // ⚠️ 量不到宽度(usable = 0)不等于"这一格很窄":工作台刚挂载、外壳仍隐藏
+        //    (例如首启向导覆盖期间)或尚未完成布局时,每一格的 clientWidth 都是 0。
+        //    这时如果照 0 去判形态,整条会降到「当前视图名 ∨」—— 而隐藏期间**不会**有人
+        //    再重画第二次,于是显示后用户看到的是一条**没有标签的空条**,三个关闭入口也消失。
         //    (自检实测:整段标签条断言在 tabs[-1] 上抛掉,而根因只是"重画发生在隐藏期间"。)
         //    所以量不到就**沿用上一次的形态** —— 它是在可见时算出来的,比 0 可信。
         const mode = usable > 0 ? stripMode(usable) : (strip.dataset.mode ?? stripMode(0));

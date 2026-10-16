@@ -246,6 +246,54 @@ app.whenReady().then(async () => {
     // 开发者项(重新加载/开发者工具)只在 `--dev` 下出现。
     const isDev = process.argv.includes('--dev');
     let win = null;
+    let preferencesWindow = null;
+
+    function openPreferencesWindow() {
+        if (preferencesWindow !== null && !preferencesWindow.isDestroyed()) {
+            if (preferencesWindow.isMinimized()) preferencesWindow.restore();
+            preferencesWindow.show();
+            preferencesWindow.focus();
+            return preferencesWindow;
+        }
+
+        preferencesWindow = new BrowserWindow({
+            parent: win,
+            modal: false,
+            width: 1100,
+            height: 760,
+            minWidth: 820,
+            minHeight: 560,
+            title: '首选项 — 开物',
+            backgroundColor: '#12100f',
+            show: false,
+            webPreferences: {
+                preload: path.join(DIR, 'preload.cjs'),
+                contextIsolation: true,
+                nodeIntegration: false,
+                sandbox: true,
+                webSecurity: true,
+            },
+        });
+        const created = preferencesWindow;
+        created.once('ready-to-show', () => {
+            if (created.isDestroyed()) return;
+            if (isSelftest) { created.showInactive(); created.moveTop(); }
+            else created.show();
+        });
+        created.webContents.setWindowOpenHandler(({ url }) => {
+            if (/^https?:$/.test(new URL(url).protocol)) shell.openExternal(url);
+            return { action: 'deny' };
+        });
+        created.webContents.on('will-navigate', (event, url) => {
+            if (!url.startsWith('toolbox://')) event.preventDefault();
+        });
+        created.on('closed', () => {
+            if (preferencesWindow === created) preferencesWindow = null;
+        });
+        void created.loadURL(`${PROTOCOL}://shell/preferences.html`)
+            .catch((err) => console.error('[preferences] 加载窗口失败', err));
+        return created;
+    }
 
     /**
      * 按渲染层报来的视图表重建应用菜单(「窗口」里那一段 = 程序目前所有的面板)。
@@ -270,7 +318,7 @@ app.whenReady().then(async () => {
                 if (win !== null && !win.isDestroyed()) win.webContents.send('menu:add-view', id);
             },
             onOpenPreferences: () => {
-                if (win !== null && !win.isDestroyed()) win.webContents.send('menu:open-preferences');
+                if (win !== null && !win.isDestroyed()) openPreferencesWindow();
             },
         })));
     };
@@ -310,6 +358,38 @@ app.whenReady().then(async () => {
     supervisorRef = supervisor;
     const settings = createSettingsStore({
         filePath: path.join(app.getPath('userData'), 'settings.json'),
+    });
+
+    const isPreferencesSender = (event) => preferencesWindow !== null
+        && !preferencesWindow.isDestroyed()
+        && event.sender === preferencesWindow.webContents;
+    ipcMain.on('preferences:reset-layout', (event) => {
+        if (isPreferencesSender(event) && win !== null && !win.isDestroyed()) {
+            win.webContents.send('preferences:main-reset-layout');
+        }
+    });
+    ipcMain.on('preferences:change-vault', (event) => {
+        if (isPreferencesSender(event) && win !== null && !win.isDestroyed()) {
+            win.webContents.send('preferences:main-change-vault');
+        }
+    });
+    ipcMain.on('preferences:motion-change', (event, payload = {}) => {
+        if (isPreferencesSender(event) && typeof payload.off === 'boolean'
+            && win !== null && !win.isDestroyed()) {
+            win.webContents.send('preferences:main-motion-change', { off: payload.off });
+        }
+    });
+    ipcMain.on('preferences:layout-text-request', (event) => {
+        if (isPreferencesSender(event) && win !== null && !win.isDestroyed()) {
+            win.webContents.send('preferences:main-layout-text-request');
+        }
+    });
+    ipcMain.on('preferences:layout-text', (event, payload = {}) => {
+        if (win !== null && !win.isDestroyed() && event.sender === win.webContents
+            && typeof payload.text === 'string'
+            && preferencesWindow !== null && !preferencesWindow.isDestroyed()) {
+            preferencesWindow.webContents.send('preferences:layout-text', { text: payload.text });
+        }
     });
 
     supervisor.onChange((state) => {
@@ -829,7 +909,7 @@ app.whenReady().then(async () => {
     if (isSelftest) {
         const { runSelftest } = await import('./selftest.js');
         await runSelftest({
-            app, win, supervisor, settings,
+            app, win, supervisor, settings, openPreferencesWindow,
             vault: selftestVault,
             // 交给自检断言清单里的 cookieLogin 配置(登录页/域名/投递目标)
             plugins: scannedPlugins,

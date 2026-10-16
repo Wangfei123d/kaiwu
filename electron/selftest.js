@@ -106,7 +106,7 @@ function makeTempVault() {
 }
 
 export async function runSelftest({
-    app, win, supervisor, settings, vault, plugins, cleanupUserData,
+    app, win, supervisor, settings, vault, plugins, cleanupUserData, openPreferencesWindow,
     // 自检专用的**假**密钥(main.js 里那个具名常量)。用它真的存一次,
     // 断言落盘的是密文 —— 只在这一个地方用到,所以由调用方递进来,不在这里抄字面量。
     videoKeyForSelftest = '',
@@ -116,6 +116,7 @@ export async function runSelftest({
 }) {
     const r = createReporter();
     const acceptance = process.argv.includes('--acceptance');
+    let preferencesWindow = null;
 
     // 把渲染进程的 console 镜像到结果文件里。
     // 没有这个,页面里的报错在 Windows 上完全看不见(electron.exe 是 GUI 子系统
@@ -225,7 +226,7 @@ export async function runSelftest({
         // 工具只按需从窗口菜单打开;启动时不可自动进入布局或执行插件 setup。
         const panes = await win.webContents.executeJavaScript(`({
             notes: !document.getElementById('paneNotes').hidden,
-            settings: document.getElementById('paneSettings').hidden,
+            settings: document.getElementById('paneSettings') === null,
         })`);
         r.ok('启动后停在笔记视图,工具不会自动打开或切换主视图',
             panes.notes === true && panes.settings === true, JSON.stringify(panes));
@@ -1373,7 +1374,7 @@ export async function runSelftest({
         // 走**完整链路**:点按钮 → 内联输入 → 回车 → preload → 主进程 mkdir →
         // 索引带上 folders → 树里出现这一行。单测用的是替身,这里是真的。
         await win.webContents.executeJavaScript(
-            'document.getElementById("viewNotes").click()');
+            '!document.getElementById("paneNotes").hidden');
         await win.webContents.executeJavaScript(
             'document.getElementById("noteNewFolder").click()');
         r.ok('侧栏有「新建文件夹」入口,点了出现内联输入行',
@@ -2325,6 +2326,19 @@ export async function runSelftest({
             }
             return last;
         };
+        const openPreferences = async () => {
+            preferencesWindow = openPreferencesWindow();
+            for (let i = 0; i < 60; i++) {
+                const ready = await preferencesWindow.webContents.executeJavaScript(`(() => {
+                    const pane = document.getElementById('paneSettings');
+                    return document.readyState === 'complete' && pane !== null
+                        && document.querySelectorAll('#settingsBody .settings-item').length > 0;
+                })()`).catch(() => false);
+                if (ready) return true;
+                await new Promise((res) => setTimeout(res, 100));
+            }
+            return false;
+        };
 
         const dramaPane = await waitForJs(`(() => {
             const host = document.querySelector('.pw-pane[data-pane-id="drama"] .pane-plugin');
@@ -2892,16 +2906,16 @@ export async function runSelftest({
             badges2.length === 3 && badges2.every((t) => t.includes('缓存')),
             JSON.stringify(badges2));
 
-        // 面板随整屏设置视图隐藏再切回:画布必须能从 graph.json 重建。
-        await win.webContents.executeJavaScript(`document.getElementById('viewSettings').click()`);
+        // 首选项使用独立窗口:主工作台中的画布在打开首选项时仍保持挂载。
+        await openPreferences();
         await new Promise((res) => { setTimeout(res, 200); });
-        await win.webContents.executeJavaScript(`document.getElementById('viewNotes').click()`);
+        await win.webContents.executeJavaScript(`!document.getElementById('paneNotes').hidden`);
         const rebuilt = await waitForJs(`(() => {
             const host = document.querySelector('.pw-pane[data-pane-id="drama"] .pane-plugin');
             const n = host ? host.querySelectorAll('.drama-node').length : 0;
             return n === 3 ? n : null;
         })()`, 60);
-        r.ok('短剧画布:切到设置再切回来,画布从 graph.json 重建出来(不是空白)',
+        r.ok('短剧画布:打开独立首选项窗口时仍保持挂载(不是空白)',
             rebuilt === 3, String(rebuilt));
 
         // ---- 项目面板自己那一套:建 / 改名 / 两步删除 / 切回去 ----
@@ -3513,14 +3527,15 @@ export async function runSelftest({
             widthsByKey.nav === 252, `nav=${widthsByKey.nav}(236 + 16)`);
         await dragBy('navResizer', -80);            // 还原,别影响后面的断言
 
-        // 主视图切换:笔记 ↔ 设置
-        await win.webContents.executeJavaScript(
-            `document.getElementById('viewSettings').click()`);
-        r.ok('能切到设置视图', await win.webContents.executeJavaScript(
-            '!document.getElementById("paneSettings").hidden'));
-        await win.webContents.executeJavaScript(
-            `document.getElementById('viewNotes').click()`);
-        r.ok('能从设置切回笔记视图', await win.webContents.executeJavaScript(
+        // 首选项独立于笔记主窗口。
+        await openPreferences();
+        r.ok('首选项打开时笔记主窗口仍可见', await win.webContents.executeJavaScript(
+            '!document.getElementById("paneNotes").hidden'));
+        r.ok('主窗口没有笔记切换按钮', await win.webContents.executeJavaScript(
+            'document.querySelectorAll(".view-tab").length === 0'));
+        r.ok('首选项内容在单独窗口显示', await preferencesWindow.webContents.executeJavaScript(
+            'document.getElementById("paneSettings") !== null'));
+        r.ok('能从首选项窗口继续使用笔记主窗口', await win.webContents.executeJavaScript(
             '!document.getElementById("paneNotes").hidden'));
 
         // ---- ② 尺寸角标(`820×949`):按需出现 ----
@@ -4091,7 +4106,7 @@ export async function runSelftest({
             const found = await waitForElement(win, paneSelector);
             const activeView = await win.webContents.executeJavaScript(`(() => ({
                 notes: !document.getElementById('paneNotes').hidden,
-                settings: document.getElementById('paneSettings').hidden,
+                settings: document.getElementById('paneSettings') === null,
             }))()`);
             r.ok(`工具 ${toolId} 在工作台独立 pane 中挂载(${selector})`,
                 found === true && activeView.notes === true && activeView.settings === true,
@@ -4584,7 +4599,7 @@ export async function runSelftest({
         // 于是往上翻历史时输入栏跟着滚走。所以这里量两件事:
         //   ① 输入栏是消息区的**兄弟**(不是孩子)—— 这是"不会被滚走"的结构保证;
         //   ② 它确实待在面板底部,而消息区从状态区一直铺到输入栏上方。
-        await win.webContents.executeJavaScript('document.getElementById("viewNotes").click()');
+        await win.webContents.executeJavaScript('!document.getElementById("paneNotes").hidden');
         await new Promise(res => setTimeout(res, 120));
         const composer = await win.webContents.executeJavaScript(`(() => {
             const panel = document.getElementById('agentPanel');
@@ -5585,14 +5600,14 @@ export async function runSelftest({
         // 上面那条隔离断言就是**当场证这件事**,而不是嘴上说"应该是隔离的"。
         //
         // 面板那一侧还剩什么:卡片本身只在"缺密钥失败"时自动出现(自检里那条路被守护
-        // 挡住,不发真实请求),所以卡片内部的行为留在单测里;这里量的是设置页这条真路。
+        // 挡住,不发真实请求),所以卡片内部的行为留在单测里;这里量的是首选项这条真路。
         const openSettingsView = async () => {
-            await win.webContents.executeJavaScript(`document.getElementById('viewSettings').click()`);
-            await waitForElement(win, '#settingsVideoKey');
+            await openPreferences();
+            await waitForElement(preferencesWindow, '#settingsVideoKey');
             await new Promise((res) => { setTimeout(res, 200); });     // 设置页要读几个通道(异步)
         };
         await openSettingsView();
-        const settingsKeyProbe = async () => await win.webContents.executeJavaScript(`(() => {
+        const settingsKeyProbe = async () => await preferencesWindow.webContents.executeJavaScript(`(() => {
             const input = document.getElementById('settingsVideoKey');
             const warn = document.getElementById('settingsVideoKeyWarn');
             const status = document.getElementById('settingsVideoKeyStatus');
@@ -5622,7 +5637,7 @@ export async function runSelftest({
             JSON.stringify({ warn: keyBefore.warnText, status: keyBefore.statusText }));
 
         // 真的敲一串进去、真的点保存(不是"直接调某个函数")
-        const keyTyped = await win.webContents.executeJavaScript(`(() => {
+        const keyTyped = await preferencesWindow.webContents.executeJavaScript(`(() => {
             const input = document.getElementById('settingsVideoKey');
             input.value = ${JSON.stringify(videoKeyForSelftest)};
             const typedLen = input.value.length;
@@ -5645,8 +5660,8 @@ export async function runSelftest({
         // ⚠️ 等那句反馈出现再往下走:保存的处理里有一串 await(写盘 → 重读 5 个通道),
         // 不等它落定就去点「清除」,两条链会交叉 —— 后写的反馈会把前一条盖掉。
         // 用户本来也是看到反馈才做下一个动作的,这里照同一个节奏。
-        await waitForMatch(win, '#settingsVideoKeyNote', /已保存/, 60);
-        const keyAfterSave = await win.webContents.executeJavaScript(`(() => {
+        await waitForMatch(preferencesWindow, '#settingsVideoKeyNote', /已保存/, 60);
+        const keyAfterSave = await preferencesWindow.webContents.executeJavaScript(`(() => {
             const secret = ${JSON.stringify(videoKeyForSelftest)};
             return {
                 inputValue: (document.getElementById('settingsVideoKey') || {}).value ?? null,
@@ -5691,7 +5706,7 @@ export async function runSelftest({
             JSON.stringify({ status: keyAfterSave.statusText }));
 
         // 点「清除」:设置文件里两份都该空掉(环境变量那份不受影响,那不该由应用来改)
-        await win.webContents.executeJavaScript(
+        await preferencesWindow.webContents.executeJavaScript(
             `document.getElementById('settingsVideoKeyClear').click()`);
         let clearedKeys = { enc: 'set', plain: 'set', raw: '' };
         for (let i = 0; i < 40; i += 1) {
@@ -5706,12 +5721,12 @@ export async function runSelftest({
             await new Promise(resolve => setTimeout(resolve, 100));
         }
         // 同上:等「已清除」那句反馈落定,再读页面(否则可能读到上一条"已保存")
-        await waitForMatch(win, '#settingsVideoKeyNote', /已清除/, 60);
+        await waitForMatch(preferencesWindow, '#settingsVideoKeyNote', /已清除/, 60);
         const keyAfterClear = await settingsKeyProbe();
         r.ok('视频密钥:点「清除」之后设置文件里两份都空了,页面上也再搜不到那串明文',
             clearedKeys.enc === '' && clearedKeys.plain === ''
             && keyAfterClear.inputValue === ''
-            && (await win.webContents.executeJavaScript(
+            && (await preferencesWindow.webContents.executeJavaScript(
                 `document.body.textContent.includes(${JSON.stringify(videoKeyForSelftest)})`)) === false
             && /已清除/.test(String(keyAfterClear.noteText ?? '')),
             JSON.stringify({ cleared: { encLen: clearedKeys.enc.length, plainLen: clearedKeys.plain.length }, after: keyAfterClear }));
@@ -5720,7 +5735,7 @@ export async function runSelftest({
             JSON.stringify({ attached: keyAfterClear.noteAttached, note: keyAfterClear.noteText }));
 
         // 回到笔记视图:后面还有一堆断言(以及验收 M3)是在工作台上量的
-        await win.webContents.executeJavaScript(`document.getElementById('viewNotes').click()`);
+        await win.webContents.executeJavaScript(`!document.getElementById('paneNotes').hidden`);
         await new Promise((res) => { setTimeout(res, 200); });
 
         // ---- 从 B站队列请 AI 面板理解一段**本地视频**(按路径那条入口) ----
@@ -6203,10 +6218,7 @@ export async function runSelftest({
                 const stops = () => stopSpans().map((s) => s.textContent);
                 const desc = () => wrap.querySelector('.agent-cfg-desc')?.textContent ?? '';
                 // ⓪ 切回笔记主视图确保工作台可见;工具面板已不再切换整页视图。
-                const viewTabOn = () => [...document.querySelectorAll('.view-tab')]
-                    .find((b) => b.getAttribute('aria-selected') === 'true') ?? null;
-                const prevViewId = viewTabOn()?.id ?? null;
-                document.getElementById('viewNotes')?.click();
+                const prevViewId = null;
                 const hostPane = panel.closest('.pw-pane');
                 const tabOn = hostPane?.querySelector?.('.pw-tab-on') ?? null;
                 const aiTab = [...(hostPane?.querySelectorAll?.('.pw-tab') ?? [])]
@@ -6224,7 +6236,7 @@ export async function runSelftest({
                     desc: desc(),
                     waitedMs: waited,
                     messages: document.querySelectorAll('#agentMessages .agent-msg').length,
-                    viewId: viewTabOn()?.id ?? null,
+                    viewId: null,
                     tabLabels: [...(hostPane?.querySelectorAll?.('.pw-tab') ?? [])]
                         .map((t) => (t.textContent ?? '').trim()),
                     chatVisible: (hostPane?.querySelector?.('.pw-body .agent-panel') ?? null) !== null,
@@ -6278,7 +6290,7 @@ export async function runSelftest({
                 chip.click();                                  // 收起浮层
                 // 还原视图/标签(顺序:先标签后视图) —— 让这一段对后面"零影响"
                 if (aiTab !== null && tabOn !== null) tabOn.click();
-                if (prevViewId !== null && prevViewId !== 'viewNotes') document.getElementById(prevViewId)?.click();
+                if (prevViewId !== null) document.getElementById(prevViewId)?.click();
                 return { ok: true, before, opened, dragged, restored };
             })()`).catch((err) => ({ ok: false, why: '注入失败: ' + err.message }));
             r.ok('★ 启动后**不发任何消息**:胶囊一进来就有对端给的档位(自动建会话,不再是"还没建会话")',
@@ -6833,12 +6845,10 @@ export async function runSelftest({
             // 样式契约:图挂在气泡里要**尺寸自适应**(max-width:100%,不撑破面板)、有圆角。
             // 只断言"节点存在"是不够的 —— 类名打错时样式不会生效,而节点照样在。
             //
-            // ⚠️ 但几何断言**必须**在笔记视图里做:上面的验收5 点过探针插件,应用此刻停在
-            // 设置视图,而 AI 面板属于笔记工作台 —— 那时 #agentPanel 的宽度是 0,
-            // 于是 `宽度 <= 宽度`(0 <= 0)与"没超出面板"两条都**恒真**,断言会假通过。
-            // 所以先切回笔记视图,并等面板真的有宽度(下面那条断言就是"前提本身")。
+            // ⚠️ 几何断言要在主窗口的笔记工作台里做;首选项窗口是独立窗口,不会隐藏它。
+            // 仍需等 AI 面板真的有宽度,否则 `宽度 <= 宽度`(0 <= 0)会让断言假通过。
             await win.webContents.executeJavaScript(
-                `document.getElementById('viewNotes').click()`);
+                `!document.getElementById('paneNotes').hidden`);
             const panelLaidOut = await win.webContents.executeJavaScript(`(() => new Promise((resolve) => {
                 let i = 0;
                 const tick = () => {
@@ -7035,7 +7045,7 @@ export async function runSelftest({
         //
         // 这一节量的是**真窗口**:切视图、左导航 + 搜索、搜索真的过滤、以及那几项读数
         // 是不是真的从既有通道读来的(密钥状态 / 布局树文本 / 索引篇数)。
-        const settingsProbe = () => win.webContents.executeJavaScript(`(() => {
+        const settingsProbe = () => preferencesWindow.webContents.executeJavaScript(`(() => {
             const byId = (id) => document.getElementById(id);
             const txt = (id) => { const e = byId(id); return e ? e.textContent : null; };
             const pane = byId('paneSettings');
@@ -7044,8 +7054,8 @@ export async function runSelftest({
             return {
                 paneExists: pane !== null,
                 hidden: pane ? pane.hidden : null,
-                notesHidden: byId('paneNotes') ? byId('paneNotes').hidden : null,
-                tabSelected: byId('viewSettings') ? byId('viewSettings').getAttribute('aria-selected') : null,
+                notesHidden: null,
+                viewTabCount: document.querySelectorAll('.view-tab').length,
                 navNames: nav.map((b) => b.textContent),
                 navSelected: nav.filter((b) => b.getAttribute('aria-selected') === 'true').map((b) => b.textContent),
                 searchPresent: byId('settingsSearch') !== null,
@@ -7074,13 +7084,22 @@ export async function runSelftest({
             return false;
         };
 
-        await win.webContents.executeJavaScript(`document.getElementById('viewSettings').click()`);
+        const openedPreferences = await openPreferences();
         await new Promise((res) => { setTimeout(res, 400); });        // 设置页要读几个通道(异步)
         const s0 = await settingsProbe();
-        r.ok('设置视图:点「设置」标签能切过去(三个视图互斥,标签 aria-selected 跟着走)',
-            s0.paneExists === true && s0.hidden === false && s0.notesHidden === true
-            && s0.tabSelected === 'true',
-            JSON.stringify({ hidden: s0.hidden, notes: s0.notesHidden, tab: s0.tabSelected }));
+        const primaryState = await win.webContents.executeJavaScript(`({
+            notesVisible: !document.getElementById('paneNotes').hidden,
+            noteButtonCount: [...document.querySelectorAll('.view-tab')].length,
+            embeddedPreferences: document.getElementById('paneSettings') !== null,
+        })`);
+        r.ok('首选项打开独立窗口,主窗口保持笔记且已移除笔记按钮',
+            openedPreferences === true && s0.paneExists === true && s0.hidden === false
+            && s0.viewTabCount === 0 && primaryState.notesVisible === true
+            && primaryState.noteButtonCount === 0 && primaryState.embeddedPreferences === false,
+            JSON.stringify({ openedPreferences, hidden: s0.hidden, viewTabs: s0.viewTabCount, primaryState }));
+        const firstPreferencesWindow = preferencesWindow;
+        await openPreferences();
+        r.ok('再次选择首选项聚焦已有窗口,不创建副本', preferencesWindow === firstPreferencesWindow);
         r.ok('设置视图(方案 D):左导航 4 个分区 + 搜索框都在,默认选中第一个分区',
             Array.isArray(s0.navNames) && s0.navNames.join(',') === 'AI 与 Agent,界面,服务,笔记库'
             && s0.searchPresent === true && s0.navSelected.join(',') === 'AI 与 Agent',
@@ -7098,21 +7117,22 @@ export async function runSelftest({
         r.ok('设置视图:索引状态是真读数,库路径是**当前**那一份,而且「更换」这个唯一入口就在同一行',
             /已载入 \d+ 篇/.test(String(s0.indexStatus))
             && String(s0.vaultPath).includes('kaiwu-selftest-vault')
-            && (await win.webContents.executeJavaScript(
+            && (await preferencesWindow.webContents.executeJavaScript(
                 `(() => { const b = document.getElementById('settingsVaultChange');
                    return b !== null && b.offsetParent !== null; })()`)),
             JSON.stringify({ index: s0.indexStatus, vault: s0.vaultPath }));
         // ⚠️ 换库的**唯一入口**就在设置里:点它必须真的打开换库向导(不是只有个按钮摆着)。
-        const openedBySettings = await win.webContents.executeJavaScript(`(() => {
+        const clickedVaultChange = await preferencesWindow.webContents.executeJavaScript(`(() => {
             const b = document.getElementById('settingsVaultChange');
-            if (b === null) return { ok: false, why: '按钮不在' };
+            if (b === null) return false;
             b.click();
-            const o = document.getElementById('onboarding');
-            return { ok: o !== null && o.hidden === false, hidden: o ? o.hidden : null };
+            return true;
         })()`);
         await gazeSleep(300);
+        const onboardingOpen = await win.webContents.executeJavaScript(
+            '!document.getElementById("onboarding").hidden');
         r.ok('设置里点「更换」= 真的打开换库向导(撤掉顶栏之后它是唯一入口)',
-            openedBySettings.ok === true, JSON.stringify(openedBySettings));
+            clickedVaultChange === true && onboardingOpen === true, JSON.stringify({ clickedVaultChange, onboardingOpen }));
         await win.webContents.executeJavaScript(`(() => { const s = document.getElementById('onboardingSkip'); if (s) s.click(); return true; })()`);
         await gazeSleep(400);
         r.ok('设置视图:两笔欠账(DSH_HOME / 服务根目录)都写明"改了要重启才生效"',
@@ -7121,7 +7141,7 @@ export async function runSelftest({
 
         // 搜索:跨分区过滤 + 命中数 + 空结果(设计稿里就是这个行为)
         const typeSearch = async (text) => {
-            await win.webContents.executeJavaScript(`(() => {
+            await preferencesWindow.webContents.executeJavaScript(`(() => {
                 const s = document.getElementById('settingsSearch');
                 s.value = ${JSON.stringify(text)};
                 s.dispatchEvent(new Event('input', { bubbles: true }));
@@ -7147,14 +7167,14 @@ export async function runSelftest({
             JSON.stringify({ rows: searchCleared.rowIds.length }));
 
         // 路径类设置:非法值当场拒;合法值写进设置,重载后能读回来
-        await win.webContents.executeJavaScript(`(() => {
+        await preferencesWindow.webContents.executeJavaScript(`(() => {
             const input = document.getElementById('settingsPath-serviceRoot');
             input.value = 'relative-path';
             document.getElementById('settingsPathSave-serviceRoot').click();
             return true;
         })()`);
         await new Promise((res) => { setTimeout(res, 200); });
-        const badState = await win.webContents.executeJavaScript(`(() => {
+        const badState = await preferencesWindow.webContents.executeJavaScript(`(() => {
             const note = document.getElementById('settingsPathNote-serviceRoot');
             return { note: note ? note.textContent : null, state: note ? note.dataset.state : null };
         })()`);
@@ -7164,14 +7184,14 @@ export async function runSelftest({
             JSON.stringify({ ...badState, stored: settings?.get?.(LAYOUT_NAMESPACE, 'serviceRoot') }));
 
         const SAVED_ROOT = 'D:\\kaiwu-selftest-root';
-        await win.webContents.executeJavaScript(`(() => {
+        await preferencesWindow.webContents.executeJavaScript(`(() => {
             const input = document.getElementById('settingsPath-serviceRoot');
             input.value = ${JSON.stringify(SAVED_ROOT)};
             document.getElementById('settingsPathSave-serviceRoot').click();
             return true;
         })()`);
         await new Promise((res) => { setTimeout(res, 250); });
-        const savedNote = await win.webContents.executeJavaScript(`(() => {
+        const savedNote = await preferencesWindow.webContents.executeJavaScript(`(() => {
             const note = document.getElementById('settingsPathNote-serviceRoot');
             return { note: note ? note.textContent : null, state: note ? note.dataset.state : null };
         })()`);
@@ -7195,7 +7215,7 @@ export async function runSelftest({
         // 验收模式下 Agent 是真的在跑(前面 M3 点的连接、握手走注入的夹具),
         // 所以这一段能真的按一次、真的把它停掉;自检模式里它本来就没跑,
         // 那就断言"按钮确实是灰的、确实没被按"。
-        const killItemProbe = async () => await win.webContents.executeJavaScript(`(() => {
+        const killItemProbe = async () => await preferencesWindow.webContents.executeJavaScript(`(() => {
             const row = [...document.querySelectorAll('#settingsBody .settings-item')]
                 .find((r) => r.dataset.item === 'agentKill');
             const btn = document.getElementById('settingsAgentKill');
@@ -7224,17 +7244,17 @@ export async function runSelftest({
 
         let killClicked = { clicked: false, after: null };
         if (killItem.disabled === false) {
-            await win.webContents.executeJavaScript(`(() => {
+            await preferencesWindow.webContents.executeJavaScript(`(() => {
                 document.getElementById('settingsAgentKill').click();
                 return true;
             })()`);
             killClicked.clicked = true;
-            await waitForMatch(win, '#settingsAgentKillNote', /已停止|没停成/, 90);
+            await waitForMatch(preferencesWindow, '#settingsAgentKillNote', /已停止|没停成/, 90);
             // ⚠️ 面板那一侧(状态属性、提示卡、重试按钮搬家)是**排一帧**画的
             // (panel.js 的 scheduleRender)。所以等属性真的翻过去再读,
             // 而不是点完立刻读 —— 窗口在后台时那一帧会晚到,立刻读就是"什么都没发生"。
             const panelStateAfterKill = await waitForAttr(win, '#agentPanel', 'data-agent-state', 'stopped', 90);
-            killClicked.after = await win.webContents.executeJavaScript(`(() => {
+            killClicked.after = await preferencesWindow.webContents.executeJavaScript(`(() => {
                 const panel = document.getElementById('agentPanel');
                 const notice = panel.querySelector('.agent-notice');
                 const retry = document.getElementById('agentRetry');
@@ -7266,7 +7286,7 @@ export async function runSelftest({
 
         win.webContents.reload();
         const bootedAfterSettings = await waitForBoot();
-        await win.webContents.executeJavaScript(`document.getElementById('viewSettings').click()`);
+        await openPreferences();
         await new Promise((res) => { setTimeout(res, 400); });
         const s1 = await settingsProbe();
         // ⚠️ 诊断(不算判定,只留事实):重载之后主进程推的 agent:event 还到得了新页面吗?
@@ -7292,7 +7312,7 @@ export async function runSelftest({
             }));
 
         // 「减少动态效果(强制关)」:根属性 + 全局覆盖 + 那条一直在走的光带真的停
-        const bandSample = () => win.webContents.executeJavaScript(`(async () => {
+        const bandSample = () => preferencesWindow.webContents.executeJavaScript(`(async () => {
             let box = document.getElementById('kaiwuMotionProbe');
             if (!box) {
                 box = document.createElement('div');
@@ -7324,14 +7344,14 @@ export async function runSelftest({
             return { same: a === b, bytes: a.length };
         })()`);
         const starBefore = await starSample();
-        await win.webContents.executeJavaScript(`(() => {
+        await preferencesWindow.webContents.executeJavaScript(`(() => {
             const i = document.getElementById('settingsMotionOff');
             i.checked = true;
             i.dispatchEvent(new Event('change', { bubbles: true }));
             return true;
         })()`);
         await new Promise((res) => { setTimeout(res, 500); });
-        const motionAfter = await win.webContents.executeJavaScript(`(() => {
+        const motionAfter = await preferencesWindow.webContents.executeJavaScript(`(() => {
             const band = document.querySelector('#kaiwuMotionProbe i');
             return {
                 attr: document.documentElement.getAttribute('data-motion'),
@@ -7377,7 +7397,7 @@ export async function runSelftest({
             JSON.stringify(settings?.get?.(LAYOUT_NAMESPACE, 'ui.motion')));
 
         // 切回「笔记」:工作台照旧(外壳面板 + 布局树读数都在)
-        await win.webContents.executeJavaScript(`document.getElementById('viewNotes').click()`);
+        await win.webContents.executeJavaScript(`!document.getElementById('paneNotes').hidden`);
         await new Promise((res) => { setTimeout(res, 200); });
         const backToNotes = await readWorkspace();
         // ⚠️ 这里只断言"工作台照旧":重载之后渲染的是**存档里那份布局**
@@ -7389,18 +7409,18 @@ export async function runSelftest({
             && /^\{row /.test(backToNotes.tree),
             JSON.stringify({ ids: backToNotes.ids, tree: backToNotes.tree }));
 
-        await win.webContents.executeJavaScript(`document.getElementById('viewSettings').click()`);
+        await openPreferences();
         const focusedFromSettings = await openTool('palette');
         const returnedToWorkspace = await win.webContents.executeJavaScript(`({
             notes: !document.getElementById('paneNotes').hidden,
-            settings: document.getElementById('paneSettings').hidden,
+            settings: document.getElementById('paneSettings') === null,
         })`);
         r.ok('从设置打开工具面板会返回笔记工作台并聚焦已有工具',
             focusedFromSettings === true && returnedToWorkspace.notes && returnedToWorkspace.settings,
             JSON.stringify({ focusedFromSettings, ...returnedToWorkspace }));
 
         // 把动效开关放回去(别把"强制关"留给后面的断言)
-        await win.webContents.executeJavaScript(`(() => {
+        await preferencesWindow.webContents.executeJavaScript(`(() => {
             const i = document.getElementById('settingsMotionOff');
             i.checked = false;
             i.dispatchEvent(new Event('change', { bubbles: true }));
@@ -7523,11 +7543,9 @@ export async function runSelftest({
         // =====================================================================
         //
         // 先回到"默认布局 + 没有打开过笔记"的干净起点,再去点列表里的第一篇笔记。
-        // ⚠️ 顺序要紧:**先切回笔记视图再重置布局**。工作台就藏在笔记视图里,视图不可见时
-        //    每一格的宽度都是 0,那时重画标签条会把每一条都算成"窄"→ 降级成下拉、胶囊一个
-        //    都不留(实测:整段标签条断言在 tabs[-1] 上抛)。判据一个字没变,只是把"重画发生
-        //    在可见状态下"这个前置条件钉死。
-        await win.webContents.executeJavaScript(`document.getElementById('viewNotes').click()`);
+        // ⚠️ Notes 工作台在主窗口中常驻可见;先确认可见再重置,防止首启向导或挂载时序
+        //    造成宽度为 0,被误判为窄窗标签条形态。
+        await win.webContents.executeJavaScript(`!document.getElementById('paneNotes').hidden`);
         await gazeSleep(250);
         await win.webContents.executeJavaScript('document.getElementById("layoutReset").click()');
         await gazeSleep(200);

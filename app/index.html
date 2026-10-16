@@ -20,7 +20,7 @@
         <!-- 平铺可停靠面板(工作台)的样式。必须在 shell.css **之后** ——
              它要压过 .pane-notes 的 grid 定义(靠 .pw-host 这个新类,不靠顺序)。 -->
         <link rel="stylesheet" href="toolbox://shell/styles/panel-workspace.css">
-        <!-- 设置视图(方案 D)的样式 + 「减少动态效果(强制关)」那条全局规则。 -->
+        <!-- Preferences 窗口共享设置样式 + 「减少动态效果(强制关)」那条全局规则。 -->
         <link rel="stylesheet" href="toolbox://shell/styles/settings-page.css">
     </head>
     <body>
@@ -52,7 +52,7 @@
         </div>
 
         <div class="shell" id="shell" hidden>
-            <!-- 顶栏:视图切换 + 笔记库 -->
+            <!-- 顶栏:品牌与窗口拖动区 -->
             <header class="topbar">
                 <!-- 品牌:RB1 线形标记 + 「开物」字标。
                      标记只用 currentColor 与 --accent,不写死颜色 ——
@@ -70,16 +70,7 @@
                     </svg>开物
                 </div>
 
-                <nav class="topbar-views" role="tablist" aria-label="主视图">
-                    <button class="view-tab" id="viewNotes" type="button" role="tab"
-                            aria-selected="true" data-view="notes">笔记</button>
-                    <!-- 设置是整屏视图,不属于平铺工作台,布局树管不到它。 -->
-                    <button class="view-tab" id="viewSettings" type="button" role="tab"
-                            aria-selected="false" data-view="settings">设置</button>
-                </nav>
-
-                <!-- 顶栏的「库路径 + 更换」按用户要求**撤掉**了:换库这件事现在只剩设置里那一个入口
-                     (设置 → 笔记库,走 onboarding.open())。这里不留空槽、不留占位。 -->
+                <!-- 库路径与更换入口在「编辑 → 首选项…」的独立窗口里。 -->
 
             </header>
 
@@ -288,23 +279,6 @@
                 </section>
             </section>
 
-            <!-- 设置视图(设计稿方案 D:左导航 + 搜索 + 表单)。
-                 骨架只放"搜索框 / 左导航 / 表单容器 / 顶部总览"四个**空**节点,
-                 每一项都由 app/settings/settings-view.js 用 createElement 画出来 ——
-                 那些项的读数是活的(密钥状态、布局树、索引篇数),写死在 HTML 里只会过期。 -->
-            <section class="pane-settings" id="paneSettings" hidden>
-                <div class="settings-head">
-                    <input type="search" class="settings-search" id="settingsSearch"
-                           placeholder="搜索设置项(试试:密钥 / 布局 / 服务 / 动效)"
-                           aria-label="搜索设置项">
-                    <span class="settings-overview" id="settingsOverview"></span>
-                </div>
-                <div class="settings-split">
-                    <nav class="settings-nav" id="settingsNav" role="tablist"
-                         aria-label="设置分区"></nav>
-                    <div class="settings-body" id="settingsBody"></div>
-                </div>
-            </section>
         </div>
 
         <div id="toast" role="status" aria-live="polite"></div>

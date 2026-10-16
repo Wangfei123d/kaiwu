@@ -1,5 +1,5 @@
 /* 外壳布局。
-   顶栏 + 主体两段(笔记 / 设置)。底部不再有状态条。 */
+   顶栏 + 笔记工作台。底部不再有状态条。 */
 
 .shell {
     display: grid;
@@ -24,23 +24,8 @@
     font-size: 15px; font-weight: 700; letter-spacing: 2px; color: #fff;
 }
 
-/* 品牌标记。尺寸定死、不参与收缩 —— 顶栏变窄时先挤别的,不能把 LOGO 压扁。 */
+/* 品牌标记。尺寸定死、不参与收缩。 */
 .brand-mark { width: 22px; height: 22px; flex: none; }
-
-.topbar-views { display: flex; gap: 4px; }
-
-.view-tab {
-    padding: 5px 14px;
-    font: inherit; font-size: 13px;
-    color: var(--dim);
-    background: none; border: 0; border-radius: 6px;
-    cursor: pointer;
-    transition: background .2s, color .2s;
-}
-.view-tab:hover { background: rgba(126, 200, 255, .08); color: var(--text); }
-.view-tab[aria-selected="true"] {
-    background: rgba(126, 200, 255, .14); color: #fff;
-}
 
     margin-left: auto;
     display: flex; align-items: center; gap: 8px;

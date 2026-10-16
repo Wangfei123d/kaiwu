@@ -146,6 +146,11 @@ const ALLOWED_SEND = [
     // (插件面板是插件激活时才登记的,主进程看不到)—— 布局一变就报一次,
     // 主进程据此重建菜单。递过去的只有 id / 标题 / 开着没有三种叶子字段。
     'kaiwu:panels:report',
+    'preferences:reset-layout',
+    'preferences:change-vault',
+    'preferences:motion-change',
+    'preferences:layout-text',
+    'preferences:layout-text-request',
 ];
 
 // 桥只活在预加载的闭包里,不挂在 window 上。
@@ -233,9 +238,41 @@ const bridge = {
         }
         return bridge.on('menu:add-view', callback);
     },
-    onOpenPreferences(callback) {
-        if (typeof callback !== 'function') throw new Error('onOpenPreferences 需要一个函数');
-        return bridge.on('menu:open-preferences', () => callback());
+    requestPreferencesResetLayout() {
+        bridge.send('preferences:reset-layout');
+    },
+    requestPreferencesChangeVault() {
+        bridge.send('preferences:change-vault');
+    },
+    requestPreferencesMotionChange(off) {
+        if (typeof off !== 'boolean') throw new Error('动效设置必须是布尔值');
+        bridge.send('preferences:motion-change', { off });
+    },
+    onPreferencesResetLayout(callback) {
+        if (typeof callback !== 'function') throw new Error('onPreferencesResetLayout 需要一个函数');
+        return bridge.on('preferences:main-reset-layout', callback);
+    },
+    onPreferencesChangeVault(callback) {
+        if (typeof callback !== 'function') throw new Error('onPreferencesChangeVault 需要一个函数');
+        return bridge.on('preferences:main-change-vault', callback);
+    },
+    onPreferencesMotionChange(callback) {
+        if (typeof callback !== 'function') throw new Error('onPreferencesMotionChange 需要一个函数');
+        return bridge.on('preferences:main-motion-change', callback);
+    },
+    reportPreferencesLayoutText(text) {
+        bridge.send('preferences:layout-text', { text: String(text ?? '') });
+    },
+    requestPreferencesLayoutText() {
+        bridge.send('preferences:layout-text-request');
+    },
+    onPreferencesLayoutTextRequest(callback) {
+        if (typeof callback !== 'function') throw new Error('onPreferencesLayoutTextRequest 需要一个函数');
+        return bridge.on('preferences:main-layout-text-request', callback);
+    },
+    onPreferencesLayoutText(callback) {
+        if (typeof callback !== 'function') throw new Error('onPreferencesLayoutText 需要一个函数');
+        return bridge.on('preferences:layout-text', callback);
     },
 };
 
