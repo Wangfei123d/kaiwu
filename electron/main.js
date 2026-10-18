@@ -138,6 +138,11 @@ function createWindow() {
         minHeight: 600,
         backgroundColor: '#12100f',
         show: false,
+        ...(process.platform === 'win32' ? {
+            autoHideMenuBar: true,
+            titleBarStyle: 'hidden',
+            titleBarOverlay: { color: '#12100f', symbolColor: '#aaa39b', height: 46 },
+        } : {}),
         webPreferences: {
             preload: path.join(DIR, 'preload.cjs'),
             contextIsolation: true,
@@ -157,6 +162,7 @@ function createWindow() {
     //     而 CSS 过渡是按帧推进的:180ms 的过渡会被拖到秒级,于是"移开后转回原状"
     //     那条断言读到的还是中间值(实测偶发红,`:hover` 已经不再匹配)。
     win.once('ready-to-show', () => {
+        stage(`主窗口 ready-to-show(isSelftest=${isSelftest})`);
         if (!isSelftest) { win.show(); return; }
         win.showInactive();
         win.moveTop();
@@ -241,12 +247,87 @@ app.whenReady().then(async () => {
     const selftestVault = isSelftest ? createSelftestVault() : null;
 
     // ---- 应用菜单 ----
-    // 不设的话窗口顶部露出来的是 Electron 的原生英文菜单(File/Edit/View/Window)——
-    // 模板在 app-menu.js 里,那部分是可单测的纯数据。
+    // Windows 用隐藏原生菜单栏 + 标题栏覆盖,再把同一份模板序列化给外壳绘制;
+    // macOS / Linux 继续使用原生菜单。模板本身仍集中在 app-menu.js。
     // 开发者项(重新加载/开发者工具)只在 `--dev` 下出现。
     const isDev = process.argv.includes('--dev');
+    const customHeaderMenu = process.platform === 'win32';
     let win = null;
     let preferencesWindow = null;
+    let applicationMenuModel = null;
+    let availablePanelIds = new Set();
+    let availableMenuActions = new Set();
+
+    if (customHeaderMenu) Menu.setApplicationMenu(null);
+
+    const serializeMenuTemplate = (items = []) => items.map((item) => {
+        if (item.type === 'separator') return { type: 'separator' };
+        const result = {
+            label: String(item.label ?? ''),
+            enabled: item.enabled !== false,
+        };
+        if (item.type === 'checkbox') {
+            result.type = 'checkbox';
+            result.checked = item.checked === true;
+        }
+        if (Array.isArray(item.submenu)) result.items = serializeMenuTemplate(item.submenu);
+        if (typeof item.role === 'string') result.action = `role:${item.role}`;
+        else if (typeof item.id === 'string' && item.id.startsWith('kaiwu-panel-')) {
+            result.action = `panel:${item.id.slice('kaiwu-panel-'.length)}`;
+        } else if (typeof item.id === 'string' && item.id.startsWith('kaiwu-tool-')) {
+            result.action = `panel:${item.id.slice('kaiwu-tool-'.length)}`;
+        } else if (item.label === '首选项…') result.action = 'preferences';
+        return result;
+    });
+
+    const isMainWindowSender = (event) => win !== null
+        && !win.isDestroyed()
+        && event.sender === win.webContents;
+
+    const runMenuRole = (role) => {
+        if (win === null || win.isDestroyed()) return;
+        const contents = win.webContents;
+        switch (role) {
+            case 'quit': app.quit(); break;
+            case 'close': win.close(); break;
+            case 'minimize': win.minimize(); break;
+            case 'undo': contents.undo(); break;
+            case 'redo': contents.redo(); break;
+            case 'cut': contents.cut(); break;
+            case 'copy': contents.copy(); break;
+            case 'paste': contents.paste(); break;
+            case 'selectAll': contents.selectAll(); break;
+            case 'reload': contents.reload(); break;
+            case 'forceReload': contents.reloadIgnoringCache(); break;
+            case 'toggleDevTools': contents.toggleDevTools(); break;
+            case 'resetZoom': contents.setZoomFactor(1); break;
+            case 'zoomIn': contents.setZoomLevel(Math.min(9, contents.getZoomLevel() + 1)); break;
+            case 'zoomOut': contents.setZoomLevel(Math.max(-9, contents.getZoomLevel() - 1)); break;
+            case 'togglefullscreen': win.setFullScreen(!win.isFullScreen()); break;
+            default: break;
+        }
+    };
+
+    ipcMain.handle('appmenu:get', (event) => {
+        if (!isMainWindowSender(event)) return null;
+        return applicationMenuModel;
+    });
+    ipcMain.on('appmenu:action', (event, action) => {
+        if (!customHeaderMenu || !isMainWindowSender(event) || typeof action !== 'string'
+            || !availableMenuActions.has(action)) return;
+        if (action === 'preferences') {
+            openPreferencesWindow();
+            return;
+        }
+        if (action.startsWith('panel:')) {
+            const id = action.slice('panel:'.length);
+            if (availablePanelIds.has(id)) win.webContents.send('menu:add-view', id);
+            return;
+        }
+        if (action.startsWith('role:')) {
+            runMenuRole(action.slice('role:'.length));
+        }
+    });
 
     function openPreferencesWindow() {
         if (preferencesWindow !== null && !preferencesWindow.isDestroyed()) {
@@ -304,11 +385,11 @@ app.whenReady().then(async () => {
      * 等于把"菜单长什么样"拆到两处写。整份模板重建只有一个调用点、一份真值(app-menu.js),
      * 代价是几毫秒。
      *
-     * 菜单先于窗口安装,首选项在初始菜单里就能被点击。
+     * 初始菜单模型先于窗口建立;Windows 外壳加载后立即能取到,原生平台也能先安装原生菜单。
      * 回调捕获已初始化的 win,窗口尚未创建或已经销毁时直接返回。
      */
     const rebuildMenu = (views, tools) => {
-        Menu.setApplicationMenu(Menu.buildFromTemplate(buildMenuTemplate({
+        const template = buildMenuTemplate({
             isDev,
             views,
             tools,
@@ -320,7 +401,24 @@ app.whenReady().then(async () => {
             onOpenPreferences: () => {
                 if (win !== null && !win.isDestroyed()) openPreferencesWindow();
             },
-        })));
+        });
+        availablePanelIds = new Set([...views, ...tools].map(({ id }) => id));
+        if (customHeaderMenu) {
+            applicationMenuModel = serializeMenuTemplate(template);
+            availableMenuActions = new Set();
+            const collectActions = (items) => {
+                for (const item of items) {
+                    if (item.enabled && typeof item.action === 'string') availableMenuActions.add(item.action);
+                    if (Array.isArray(item.items)) collectActions(item.items);
+                }
+            };
+            collectActions(applicationMenuModel);
+            if (win !== null && !win.isDestroyed() && !win.webContents.isLoading()) {
+                win.webContents.send('appmenu:state', applicationMenuModel);
+            }
+            return;
+        }
+        Menu.setApplicationMenu(Menu.buildFromTemplate(template));
     };
 
     // 第一次(空视图表)**必须先建**:macOS 的第一项菜单在窗口出现之前就得是对的,
@@ -707,7 +805,7 @@ app.whenReady().then(async () => {
         ipcMain,
         dialog,
         settings,
-        // 非笔记文件(图片 / docx / json)在树里点一下要"用系统程序打开" —— 所以要 shell。
+        // 非笔记文件(图片 / json 等；DOCX 走内置阅读器)在树里点一下要"用系统程序打开" —— 所以要 shell。
         // 渲染进程仍然只递相对路径,由这一侧过路径守卫再交给 shell。
         shell,
         getWindow: () => (win.isDestroyed() ? null : win),
@@ -905,6 +1003,13 @@ app.whenReady().then(async () => {
     // 读设置里的 apiBase 并取一次队列,晚一步它拿到的就是默认的 3302(而自检不拉服务)。
     const queueFixture = isSelftest ? await startQueueFixture(settings) : null;
     await win.loadURL(shellUrl);
+
+    // 某些 Windows 图形环境中,渲染进程已完成启动但 Chromium 不会发出
+    // ready-to-show。loadURL 已完成时页面可用,因此在非自检模式下补一次显示兜底。
+    if (!isSelftest && !win.isVisible()) {
+        stage('主窗口 loadURL 完成时仍隐藏 → 兜底显示');
+        win.show();
+    }
 
     if (isSelftest) {
         const { runSelftest } = await import('./selftest.js');

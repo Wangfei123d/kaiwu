@@ -7,6 +7,7 @@
 // 编辑交互本身在 editor.js(光标所在块是源码、其余是渲染结果;可切只读预览)。
 // 这个模块只负责"文件 ↔ 编辑器"的接线,以及列表、标签与链接栏。
 import { createEditor } from './editor.js';
+import { createDocxReader, showDocxReaderError } from './docx-reader.js';
 
 // 「正在拖什么」的全应用总线:拖动是**自己画的**指针拖拽(不是浏览器拖放),
 // 所以别的面板收不到 drop 事件 —— 由这里把"这一拖"播出去(见 app/lib/drag-bus.js)。
@@ -61,7 +62,7 @@ function parentDir(relPath) {
 }
 
 export function createNotesView({
-    els, bridge, log = console, onOpenNote = null,
+    els, bridge, log = console, onOpenNote = null, onCloseDocx = null,
     /**
      * 「删除笔记」两步确认里,"再点一次确认删除"这个告警态自动还原的毫秒数。
      *
@@ -80,6 +81,8 @@ export function createNotesView({
 
     let index = null;              // 最近一次 notes:index 的结果
     let currentPath = null;
+    let docxReaderDispose = null;
+    let openGeneration = 0;
     let saving = false;
     let saveTimer = null;
     let keyword = '';
@@ -497,8 +500,8 @@ export function createNotesView({
     /**
      * 一个**非笔记文件**的列表项。
      *
-     * 与 noteItem 的关键区别:点它**不进编辑器**(没有正文可编辑),而是让主进程
-     * 用系统程序打开。它同样可拖 —— "把 shots 里的图拖进另一个文件夹"正是
+     * 与 noteItem 的关键区别:它不参与 Markdown 编辑。DOCX 进入内置只读阅读器，
+     * 其余非笔记文件交给系统程序打开。它们同样可拖 —— "把 shots 里的图拖进另一个文件夹"正是
      * 这次拖放要支持的主要动作之一。
      */
     function otherItem(other, depth) {
@@ -519,6 +522,10 @@ export function createNotesView({
         size.textContent = humanSize(other.size);
         btn.append(name, size);
         btn.addEventListener('click', () => {
+            if (/\.docx$/i.test(other.name)) {
+                void open(other.path);
+                return;
+            }
             // 用系统程序打开。失败只提示一句 —— 没有关联程序是很常见的情况,
             // 不该让整个列表跟着报错(与"打开笔记失败"同一套反馈)。
             void bridge.invoke('notes:openPath', { path: other.path }).catch((err) => {
@@ -727,7 +734,7 @@ export function createNotesView({
         // 点一下进的是**纯文本模式**的编辑器(不渲染 Markdown)。
         for (const text of node.texts) listEl.appendChild(textItem(text, depth));
         // 非笔记文件排在最后:先"能编辑的",再"只能看的"。
-        // 点它们不进编辑器(没有正文可编辑),走主进程用系统程序打开。
+        // DOCX 走内置只读阅读器；其他文件交给系统程序打开。
         for (const other of node.others) listEl.appendChild(otherItem(other, depth));
     }
 
@@ -1091,6 +1098,10 @@ export function createNotesView({
      * refreshIndex 重画(那里才是列表的唯一真相)。
      */
     function detachEditor() {
+        openGeneration += 1;
+        docxReaderDispose?.destroy?.();
+        docxReaderDispose = null;
+        if (editorEl?.dataset) delete editorEl.dataset.documentKind;
         currentPath = null;
         dirty = false;
         // 待触发的自动保存也要收走,否则它醒来时会拿着一份内存里的正文,
@@ -1727,6 +1738,76 @@ export function createNotesView({
      *   · 'tabs' —— 标签条自己切过去的(用户点了另一个 doc 标签)。
      *     这时标签**已经**是那个了,外壳再做一次替换就会把旁边几个标签全关掉。
      */
+    function destroyDocxReader() {
+        docxReaderDispose?.destroy?.();
+        docxReaderDispose = null;
+        if (editorEl?.dataset) delete editorEl.dataset.documentKind;
+    }
+
+    function mountDocxReader(relPath, result) {
+        destroyDocxReader();
+        currentPath = relPath;
+        dirty = false;
+        const fileName = relPath.split('/').at(-1) ?? relPath;
+        if (titleEl) {
+            titleEl.value = fileName;
+            titleEl.readOnly = true;
+            titleEl.title = 'DOCX 文档只读 —— 原文件保持不变';
+        }
+        if (pathEl) pathEl.textContent = relPath;
+        if (editorEl?.dataset) editorEl.dataset.documentKind = 'docx';
+        if (saveBtn) saveBtn.disabled = true;
+        if (emptyEl) emptyEl.hidden = true;
+        if (editorEl) editorEl.hidden = false;
+        docxReaderDispose = createDocxReader({
+            document,
+            root: docEl,
+            html: result.html,
+            fileName,
+            size: result.size,
+            mtimeMs: result.mtimeMs,
+            openExternal: (url) => {
+                void bridge.invoke('kaiwu:shell:openExternal', { url }).catch((err) => {
+                    log.warn?.('[notes] 打开 DOCX 链接失败', err);
+                    setStatus(`链接打不开:${err.message}`, 'error');
+                });
+            },
+        });
+        renderList();
+        renderLinks({ backlinks: [], outgoing: [], unresolved: [] });
+        const warning = (result.messages ?? []).some((item) => item.type === 'warning');
+        setStatus(warning ? 'DOCX 已打开，部分格式可能未能还原' : `只读预览 · 上次修改:${new Date(result.mtimeMs).toLocaleString()}`);
+    }
+
+    function mountDocxError(relPath, err) {
+        destroyDocxReader();
+        currentPath = relPath;
+        dirty = false;
+        const fileName = relPath.split('/').at(-1) ?? relPath;
+        if (titleEl) {
+            titleEl.value = fileName;
+            titleEl.readOnly = true;
+            titleEl.title = 'DOCX 文档只读 —— 原文件保持不变';
+        }
+        if (pathEl) pathEl.textContent = relPath;
+        if (editorEl?.dataset) editorEl.dataset.documentKind = 'docx';
+        if (saveBtn) saveBtn.disabled = true;
+        if (emptyEl) emptyEl.hidden = true;
+        if (editorEl) editorEl.hidden = false;
+        showDocxReaderError({
+            document,
+            root: docEl,
+            message: err.message,
+            fileName,
+            onBack: () => {
+                detachEditor();
+                onCloseDocx?.(relPath);
+            },
+        });
+        renderList();
+        renderLinks({ backlinks: [], outgoing: [], unresolved: [] });
+    }
+
     async function open(relPath, { source = 'user' } = {}) {
         // ⚠️ 第二道闸(第一道是 document 上那个捕获阶段的 click 吞噬):**刚拖过一手**时,
         //    紧跟着的那一下 click 不算"打开笔记"。放在这里是因为"打开笔记"最终都会走到这个漏斗,
@@ -1739,11 +1820,27 @@ export function createNotesView({
             log.info?.('[notes] 这一下是拖动收尾补来的 click,不当"打开笔记"');
             return;
         }
-        if (relPath === currentPath) { onOpenNote?.(relPath, { source }); return; }
+        if (relPath === currentPath) {
+            openGeneration += 1;            // 打开当前项也要取消尚未完成的其它读取
+            onOpenNote?.(relPath, { source });
+            return;
+        }
+        const generation = ++openGeneration;
         if (dirty) await save({ silent: true });     // 切走前强制保存
 
+        const isDocx = typeof relPath === 'string' && /\.docx$/i.test(relPath);
         try {
+            if (isDocx) {
+                setStatus('正在读取并排版 DOCX…');
+                const result = await bridge.invoke('notes:readDocx', { path: relPath });
+                if (generation !== openGeneration) return;
+                mountDocxReader(relPath, result);
+                onOpenNote?.(relPath, { source, kind: 'docx' });
+                return;
+            }
             const r = await bridge.invoke('notes:read', { path: relPath });
+            if (generation !== openGeneration) return;
+            destroyDocxReader();
             currentPath = relPath;
             const meta = (index?.notes ?? []).find(n => n.path === relPath);
             if (titleEl) {
@@ -1788,7 +1885,12 @@ export function createNotesView({
             await refreshLinks();
             onOpenNote?.(relPath, { source });
         } catch (err) {
+            if (generation !== openGeneration) return;
             log.error?.('[notes] 打开失败', err);
+            if (isDocx) {
+                mountDocxError(relPath, err);
+                onOpenNote?.(relPath, { source, kind: 'docx' });
+            }
             setStatus(`打开失败:${err.message}`, 'error');
         }
     }
@@ -1804,7 +1906,7 @@ export function createNotesView({
     }
 
     async function save({ silent = false } = {}) {
-        if (!currentPath || saving) return;
+        if (!currentPath || saving || editorEl?.dataset?.documentKind === 'docx') return;
         const text = editor.value();
         saving = true;
         if (saveBtn) saveBtn.disabled = true;
@@ -1879,7 +1981,7 @@ export function createNotesView({
     }
 
     async function commitTitle() {
-        if (!currentPath || titleBusy) return;
+        if (!currentPath || titleBusy || editorEl?.dataset?.documentKind === 'docx') return;
 
         const current = shownTitle();
         const wanted = cleanTitle(titleEl?.value);
@@ -2030,6 +2132,8 @@ export function createNotesView({
     return {
         /** 设定当前笔记库并载入索引 */
         async setVault() {
+            openGeneration += 1;
+            destroyDocxReader();
             if (emptyEl) emptyEl.hidden = false;
             if (editorEl) editorEl.hidden = true;
             currentPath = null;

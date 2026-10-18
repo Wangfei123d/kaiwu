@@ -368,7 +368,7 @@ export function reduceAgentEvent(state, event) {
 
     case 'caps': {
         // 连接能力的**单独**一路:重连(重新握手)之后界面要立刻把"已知能力"换成新的 ——
-        // 否则它会拿旧值继续拦(实测:换到视觉模型、重连成功了,界面还在说"这条连接不收图片")。
+        // 否则它会拿旧值继续拦(切换模型后必须重新读取当前模型的能力)。
         // `caps: null` 是合法的:**"还不知道"**(那是重连刚发生、新会话还没建的那一刻)。
         if (event.caps === undefined) return base;
         return { ...base, caps: event.caps === null ? null : normalizeCaps(event.caps) };

@@ -31,6 +31,7 @@ class El {
         this.firstChild = null;
     }
     appendChild(child) {
+        if (child.parentNode) child.parentNode.removeChild(child);
         child.parentNode = this;
         this.children.push(child);
         this.firstChild = this.children[0] ?? null;
@@ -82,6 +83,7 @@ class El {
     addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
     setAttribute(k, v) { this.attrs[k] = String(v); }
     getAttribute(k) { return this.attrs[k] ?? null; }
+    removeAttribute(k) { delete this.attrs[k]; }
     focus() { this.ownerDocument.activeElement = this; }
     /** 触发事件;await 监听器返回的 promise(项目既有约定,见 onboarding.test.js)。 */
     async fire(type, event = {}) {
@@ -163,7 +165,9 @@ const flush = () => new Promise(r => setTimeout(r, 0));
 function textOf(node) {
     if (node === null || node === undefined) return '';
     let out = String(node.textContent ?? '');
-    for (const child of node.children ?? []) out += textOf(child);
+    for (const child of node.children ?? []) {
+        if (child.getAttribute?.('aria-hidden') !== 'true') out += textOf(child);
+    }
     return out;
 }
 
@@ -250,6 +254,114 @@ const chunks = (...texts) => texts.map(text => ({
     kind: 'update', sessionId: 's1',
     update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } },
 }));
+
+/** 控制浏览器帧时间，直接检查帧间 DOM，避免依赖等待墙上时钟。 */
+function replyFrameClock() {
+    const previous = doc.defaultView;
+    let now = 0, id = 0;
+    const jobs = new Map();
+    doc.defaultView = {
+        performance: { now: () => now },
+        matchMedia: () => ({ matches: false }),
+        requestAnimationFrame: fn => { jobs.set(++id, fn); return id; },
+        cancelAnimationFrame: key => jobs.delete(key),
+    };
+    return {
+        step(ms = 16) {
+            now += ms;
+            const callbacks = [...jobs.values()]; jobs.clear();
+            callbacks.forEach(fn => fn(now));
+        },
+        get pending() { return jobs.size; },
+        restore() { doc.defaultView = previous; },
+    };
+}
+
+test('缓冲逐帧显示：未来段落不在正文或扫光 DOM 中，收尾后继续显示且不重播', async () => {
+    const clock = replyFrameClock();
+    let panel;
+    try {
+        const mounted = await mountPanel(); panel = mounted.panel;
+        const { bridge, els } = mounted;
+        const source = '第一段正文。'.repeat(40) + '\n\n' + '未来段落。'.repeat(40) + '\n\n最终末尾';
+        bridge.emit(chunks(source)[0]); await flush();
+        const base = els.messagesEl.query('.agent-stream-base');
+        const sweep = els.messagesEl.query('.agent-sweep');
+        assert.equal(textOf(base), '', '收进缓存时不应挂出不可见的未来节点');
+        assert.equal(base.children.length, 0);
+        assert.equal(sweep.children.length, 0);
+        clock.step();
+        const visible = textOf(base);
+        assert.ok(visible.length > 0 && visible.length < source.length);
+        assert.equal(base.queryAll('p').length, 1, '未来段落不占布局高度');
+        assert.equal(textOf(sweep), visible, '扫光只能照到已显示正文');
+        assert.equal(textOf(els.messagesEl).includes('未来段落'), false);
+        bridge.emit({ kind: 'prompt-end', sessionId: 's1' }); await flush();
+        assert.equal(els.messagesEl.query('.agent-stream-base'), base, '收尾不能重建正文');
+        assert.equal(textOf(base), visible, '结束事件不能突然显示全部缓存或从头重播');
+        assert.equal(els.messagesEl.query('.agent-sweep'), sweep, '缓存未排空时扫光仍连续运行');
+        for (let i = 0; i < 130; i++) clock.step();
+        assert.equal(textOf(base), source.replace(/\n/g, ''));
+        assert.equal(els.messagesEl.query('.agent-sweep'), null);
+        assert.equal(clock.pending, 0);
+    } finally { panel?.dispose(); clock.restore(); }
+});
+
+test('缓冲显示中实时渲染标题、粗体、开放代码围栏和表格；缺字时扫光持续，卸载取消帧', async () => {
+    const clock = replyFrameClock();
+    let panel;
+    try {
+        const mounted = await mountPanel(); panel = mounted.panel;
+        const { bridge, els } = mounted;
+        let source = '## 标题\n\n**加粗**\n\n```js\nconst n = 1;';
+        bridge.emit(chunks(source)[0]); await flush();
+        for (let i = 0; i < 100; i++) clock.step();
+        const base = els.messagesEl.query('.agent-stream-base');
+        const sweep = els.messagesEl.query('.agent-sweep');
+        assert.ok(base.query('h2'));
+        assert.equal(textOf(base.query('strong')), '加粗');
+        const pre = base.query('pre');
+        assert.equal(textOf(pre.query('code')), 'const n = 1;');
+        assert.ok(sweep, '缓存耗尽但网络未结束时仍然扫光');
+        assert.equal(clock.pending, 0, '缺字期间无需空转帧任务');
+        pre.scrollLeft = 37;
+        const delta = '\n```\n\n| 名称 | 状态 |\n| --- | --- |\n| 缓冲 | 正常 |';
+        source += delta;
+        bridge.emit(chunks(delta)[0]); await flush();
+        for (let i = 0; i < 100; i++) clock.step();
+        assert.equal(base.query('pre'), pre, '已显示代码块要保留节点');
+        assert.equal(pre.scrollLeft, 37, '增量解析不重置代码滚动位置');
+        assert.ok(base.query('table'));
+        assert.equal(els.messagesEl.query('.agent-sweep'), sweep);
+        bridge.emit(chunks('未显示的字'.repeat(1000))[0]);
+        assert.ok(clock.pending > 0);
+        panel.dispose();
+        await flush();
+        assert.equal(clock.pending, 0, '卸载不能留下播放任务');
+    } finally { panel?.dispose(); clock.restore(); }
+});
+
+test('同一批收到全文和结束事件仍缓冲显示，切换新会话立即取消旧缓存', async () => {
+    const clock = replyFrameClock();
+    let panel;
+    try {
+        const mounted = await mountPanel(); panel = mounted.panel;
+        const { bridge, els } = mounted;
+        bridge.emit(chunks('旧会话待显示内容。'.repeat(200))[0]);
+        bridge.emit({ kind: 'prompt-end', sessionId: 's1' });
+        await flush();
+        assert.equal(textOf(els.messagesEl.query('.agent-stream-base')), '');
+        clock.step();
+        assert.ok(textOf(els.messagesEl.query('.agent-stream-base')).length > 0);
+        bridge.emit({ kind: 'session', sessionId: 's2', fresh: true });
+        await flush();
+        assert.equal(clock.pending, 0);
+        assert.equal(els.messagesEl.query('.agent-stream-base'), null);
+        bridge.emit({ kind: 'update', sessionId: 's1', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '迟到内容' } } });
+        await flush();
+        assert.equal(clock.pending, 0, '旧会话迟到的文本不能重启播放器');
+    } finally { panel?.dispose(); clock.restore(); }
+});
 
 // ---------- 挂载即对话 ----------
 
@@ -477,44 +589,36 @@ test('prompt-end 到达后气泡不再标 data-streaming', async () => {
     assert.equal(els.messagesEl.queryAll('.agent-msg')[0].getAttribute('data-streaming'), null);
 });
 
-test('流式正文包在内层 .agent-sweep 里,末 8 字再包一层 .agent-tail(B4),写完都撤掉', async () => {
+test('实时 Markdown 正文与扫光副本一致，写完只保留正文', async () => {
     const { bridge, els } = await mountPanel();
 
-    // 不足 8 字:整段在扫光层里,没有尾巴层
     bridge.emit(chunks('短句')[0]);
     await flush();
     let sweep = els.messagesEl.queryAll('.agent-sweep');
     assert.equal(sweep.length, 1,
         '流式正文必须包一层 .agent-sweep —— 扫光只能作用在文字上,气泡底不能跟着被 background-clip 裁掉');
     assert.equal(textOf(sweep[0]), '短句');
-    assert.equal(els.messagesEl.queryAll('.agent-tail').length, 0, '不足 8 字时不该有尾巴层');
 
-    // 追加到 12 字:前 4 字留在扫光层,末 8 字单独一层交给 .agent-tail 显影
     bridge.emit(chunks('一二三四五六七八九十')[0]);
     await flush();
     sweep = els.messagesEl.queryAll('.agent-sweep');
     assert.equal(sweep.length, 1, '同一个气泡里只该有一层扫光');
-    const tails = els.messagesEl.queryAll('.agent-tail');
-    assert.equal(tails.length, 1, `末 8 字该单独一层,实际 ${tails.length} 层`);
-    assert.equal(textOf(tails[0]), '三四五六七八九十', '尾巴层正好是最后 8 个字');
     assert.equal(textOf(sweep[0]), '短句一二三四五六七八九十', '两层加起来还是完整正文,不许丢字');
 
     // 写完:两层都撤干净,正文一个字不少
     bridge.emit({ kind: 'prompt-end', sessionId: 's1', stopReason: 'end_turn' });
     await flush();
     assert.equal(els.messagesEl.queryAll('.agent-sweep').length, 0, '写完之后扫光层要撤干净');
-    assert.equal(els.messagesEl.queryAll('.agent-tail').length, 0, '写完之后尾巴层也要撤干净');
     assert.equal(textOf(els.messagesEl.queryAll('.agent-msg')[0]), '短句一二三四五六七八九十');
 });
 
 test('流式增量只改文字、不重建 DOM(重建会把扫光/光标动画从头开始)', async () => {
     const { bridge, els } = await mountPanel();
 
-    // 先攒过 8 字,让"尾巴层"那一层出现(结构稳定下来)
+    // 已显示结构应复用，CSS 扫光保持同一相位。
     bridge.emit(chunks('一二三四五六七八九十')[0]);
     await flush();
     const sweepBefore = els.messagesEl.queryAll('.agent-sweep')[0];
-    const tailBefore = els.messagesEl.queryAll('.agent-tail')[0];
     const thinkBefore = els.messagesEl.queryAll('.agent-think')[0];
     assert.ok(sweepBefore, '应当有扫光层');
 
@@ -524,14 +628,13 @@ test('流式增量只改文字、不重建 DOM(重建会把扫光/光标动画�
     const sweepAfter = els.messagesEl.queryAll('.agent-sweep')[0];
     assert.equal(sweepAfter, sweepBefore,
         '追加正文不许把 .agent-sweep 重建 —— 每次更新都换新节点,扫光的 CSS 动画就永远停在起点');
-    assert.equal(els.messagesEl.queryAll('.agent-tail')[0], tailBefore);
     assert.equal(els.messagesEl.queryAll('.agent-think')[0], thinkBefore);
     assert.equal(textOf(sweepAfter), '一二三四五六七八九十十一十二', '复用节点也要把新正文写进去');
 
     // 但结构真变了(比如来了一条工具卡)就必须重建,不能拿旧节点凑合
     bridge.emit({ kind: 'update', sessionId: 's1', update: { sessionUpdate: 'tool_call', toolCallId: 'c1', title: 'read', kind: 'read', status: 'pending' } });
     await flush();
-    assert.notEqual(els.messagesEl.queryAll('.agent-sweep')[0], sweepBefore, '结构变了要重建');
+    assert.equal(els.messagesEl.queryAll('.agent-sweep')[0], sweepBefore, '工具改变列表结构也不能重置回复播放器');
     assert.match(textOf(els.messagesEl), /一二三四五六七八九十十一十二/, '重建之后正文一个字都不能少');
 });
 
@@ -1512,7 +1615,7 @@ test('方案B(界面):工具全跑完之前摘要行标"运行中",跑完就不�
 // 三条边界在这里钉死:
 //   1. 只有助手的回复排版 —— 用户气泡里是用户自己说的话,而且自检夹具回显的那条
 //      带着 `当前笔记:…` + frontmatter 的 `---` 与 `# 甲篇`,排版会把它画成标题与分隔线;
-//   2. 流式期间保持纯文本(扫光/末字显影靠直接切文本节点,中途插入元素会把动画打断);
+//   2. 流式期间也渲染 Markdown，扫光容器独立保留，不随解析重建;
 //   3. 排版之后,不可信内容**仍然**只能是文字节点。
 
 const endTurn = { kind: 'prompt-end', sessionId: 's1', stopReason: 'end_turn' };
@@ -1554,14 +1657,15 @@ test('用户气泡**不**渲染 Markdown(那里是用户自己说的话,以及�
     assert.match(textOf(bubble), /\*\*不是加粗\*\*/, '原样显示');
 });
 
-test('流式期间保持纯文本 —— 扫光层还在,中途排版会把动画打断', async () => {
+test('流式期间实时排版 Markdown，扫光容器保持稳定', async () => {
     const { bridge, els } = await mountPanel();
-    bridge.emit(evText('**还没写完的加粗')); await flush();
+    bridge.emit(evText('**正在输出的加粗**\n\n- 列表项')); await flush();
 
     const bubble = els.messagesEl.query('.agent-msg');
-    assert.ok(bubble.query('.agent-sweep') !== null, '流式中仍然是纯文本 + 扫光层');
-    assert.equal(bubble.query('strong'), null, '没收尾之前不做 Markdown');
-    assert.match(textOf(bubble), /\*\*还没写完的加粗/, '原样显示,一个字都不许吞');
+    assert.ok(bubble.query('.agent-sweep') !== null, '实时排版也应保留扫光');
+    assert.ok(bubble.query('strong'), '不必等收尾就应渲染粗体');
+    assert.ok(bubble.query('ul'), '不必等收尾就应渲染列表');
+    assert.match(textOf(bubble), /正在输出的加粗/);
 
     bridge.emit(endTurn); await flush();
     assert.equal(els.messagesEl.query('.agent-sweep'), null, '收尾后扫光层撤掉');

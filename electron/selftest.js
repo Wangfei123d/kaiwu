@@ -417,7 +417,7 @@ export async function runSelftest({
         })()`);
         r.ok('顶栏品牌是矢量标记,不是纯文字', brand.ok === true, JSON.stringify(brand));
         r.ok('标记尺寸 22×22(没有被压扁)', brand.size === '22x22', brand.size);
-        r.ok('标记旁边仍保留「开物」字标', brand.text === '开物', JSON.stringify(brand.text));
+        r.ok('品牌入口只保留图形标记(按钮无文字)', brand.text === '', JSON.stringify(brand.text));
         r.ok('标记用 currentColor 描边,并有点缀色节点(颜色来自令牌,没写死)',
             brand.stroke === 'rgb(255, 255, 255)' && brand.dotFill === 'rgb(126, 200, 255)',
             `${brand.stroke} / ${brand.dotFill}`);
@@ -612,15 +612,33 @@ export async function runSelftest({
             `${hovered.raw} → ${left.raw} (${formatAngle(left.deg)})`
             + ` · 移开后 :hover 匹配数=${left.hoverMatch}`);
 
-        // 菜单是主进程对象,页面里看不到 —— 在自检(主进程)这侧直接查。
+        // Windows 用外壳里的无文字图形标记弹出菜单,原生菜单栏隐藏;
+        // 其它平台保留系统原生菜单。
         const { Menu } = await import('electron');
         const appMenu = Menu.getApplicationMenu();
         const menuLabels = appMenu ? appMenu.items.map(i => i.label) : [];
-        r.ok('应用菜单已设置成中文(不再露 Electron 的原生英文菜单)',
-            menuLabels.length > 0 && menuLabels.every(l => /[\u4e00-\u9fa5]/.test(l)),
-            JSON.stringify(menuLabels));
-        r.ok('自检(非 --dev)下不含开发者项', !menuLabels.includes('开发者工具'),
-            JSON.stringify(menuLabels));
+        if (process.platform === 'win32') {
+            await waitForCount(win, '#applicationMenuPopup .app-menu-heading', 4);
+            const headerMenu = await win.webContents.executeJavaScript(`(() => ({
+                headings: [...document.querySelectorAll('#applicationMenuPopup > .app-menu-groups > .app-menu-group > .app-menu-button .app-menu-label')]
+                    .map((el) => el.textContent.trim()),
+                brandText: document.getElementById('topbarBrand')?.textContent.trim() ?? null,
+                customChrome: document.documentElement.dataset.customChrome === 'true',
+            }))()`);
+            r.ok('Windows 主窗口隐藏了原生菜单栏,标题栏覆盖为外壳顶部栏',
+                appMenu === null && headerMenu.customChrome === true,
+                JSON.stringify({ nativeMenu: menuLabels, headerMenu }));
+            r.ok('图形标记无字,自定义菜单显示文件/编辑/视图/窗口',
+                headerMenu.brandText === ''
+                && JSON.stringify(headerMenu.headings) === JSON.stringify(['文件', '编辑', '视图', '窗口']),
+                JSON.stringify(headerMenu));
+        } else {
+            r.ok('应用菜单已设置成中文(不再露 Electron 的原生英文菜单)',
+                menuLabels.length > 0 && menuLabels.every(l => /[\u4e00-\u9fa5]/.test(l)),
+                JSON.stringify(menuLabels));
+            r.ok('自检(非 --dev)下不含开发者项', !menuLabels.includes('开发者工具'),
+                JSON.stringify(menuLabels));
+        }
 
         // 打开一篇:源码、预览、反链都要出来
         await win.webContents.executeJavaScript(
@@ -1195,12 +1213,12 @@ export async function runSelftest({
             && guardCriterion.onCeFalse === true,
             JSON.stringify(guardCriterion));
 
-        // ②b 端到端:**真鼠标**点顶栏(品牌标记那块,非可编辑、点了什么也不触发)让它失焦,
+        // ②b 端到端:**真鼠标**点顶栏空白区(非可编辑、点了什么也不触发)让它失焦,
         //     再按**真 Ctrl+A**。先收读数,断言放到 ③ 之后(要拿 ③ 当注入活性对照)。
         const guardTopbarPoint = await win.webContents.executeJavaScript(`(() => {
-            const el = document.querySelector('.topbar-brand') || document.querySelector('.topbar');
+            const el = document.querySelector('.topbar');
             const r = el.getBoundingClientRect();
-            return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+            return { x: Math.round(Math.min(r.left + 260, r.right - 160)), y: Math.round(r.top + r.height / 2) };
         })()`);
         win.webContents.sendInputEvent({
             type: 'mouseDown', x: guardTopbarPoint.x, y: guardTopbarPoint.y,

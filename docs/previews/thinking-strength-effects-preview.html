@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>思考强度动效方案预览</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111110;
+      --panel: #1a1918;
+      --panel-hi: #211f1d;
+      --line: #373431;
+      --text: #f4f2ee;
+      --dim: #aaa59d;
+      --muted: #76716a;
+      --cyan: #82cfff;
+      --pink: #f184c0;
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-width: 320px; min-height: 100vh; margin: 0; color: var(--text);
+      background:
+        radial-gradient(ellipse at 50% -24%, rgba(92, 117, 142, .16), transparent 52%),
+        var(--bg);
+    }
+    .page { width: min(1050px, calc(100% - 48px)); margin: 0 auto; padding: 48px 0 56px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 34px; }
+    .brand { display: flex; align-items: center; gap: 10px; color: #ddd9d2; font-size: 13px; }
+    .brand-mark { position: relative; width: 22px; height: 22px; }
+    .brand-mark::before, .brand-mark::after, .brand-mark i { content: ""; position: absolute; display: block; border-radius: 4px; background: #f4f2ee; }
+    .brand-mark::before { width: 4px; height: 18px; left: 4px; top: 2px; transform: rotate(-8deg); }
+    .brand-mark::after { width: 15px; height: 4px; left: 5px; top: 6px; transform: rotate(-32deg); }
+    .brand-mark i { width: 14px; height: 4px; left: 6px; top: 13px; transform: rotate(30deg); }
+    .brand-mark b { position: absolute; width: 7px; height: 7px; z-index: 1; left: 1px; top: 8px; border-radius: 50%; background: var(--cyan); }
+    .tag { padding: 6px 10px; border: 1px solid #36332f; border-radius: 99px; color: var(--dim); font-size: 11px; }
+    h1 { margin: 0; font-size: clamp(25px, 4vw, 34px); font-weight: 620; letter-spacing: -.04em; }
+    .intro { max-width: 680px; margin: 10px 0 23px; color: var(--dim); font-size: 13px; line-height: 1.8; }
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .demo-button {
+      display: inline-flex; align-items: center; gap: 8px; min-height: 35px; padding: 0 13px;
+      border: 1px solid #48433e; border-radius: 8px; color: var(--text); background: #242220;
+      font: inherit; font-size: 12px; cursor: pointer; transition: background .18s, border-color .18s, transform .18s;
+    }
+    .demo-button:hover { border-color: #777068; background: #2b2926; }
+    .demo-button:active { transform: scale(.98); }
+    .demo-button[aria-pressed="true"] { border-color: rgba(130,207,255,.55); color: var(--cyan); background: rgba(130,207,255,.08); }
+    .demo-icon { font-size: 14px; }
+    .hint { color: var(--muted); font-size: 11px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card {
+      --accent: var(--cyan);
+      --progress: 66.667%;
+      position: relative; overflow: hidden; min-width: 0; padding: 19px 20px 16px;
+      border: 1px solid var(--line); border-radius: 13px; background: linear-gradient(145deg, #1d1c1a, #171615 72%);
+      box-shadow: 0 9px 28px rgba(0,0,0,.15); transition: border-color .2s, transform .2s;
+    }
+    .card:hover { border-color: #514d47; transform: translateY(-1px); }
+    .card.pink { --accent: var(--pink); }
+    .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .title-row { display: flex; align-items: center; gap: 9px; }
+    .index { color: var(--muted); font: 11px/1 ui-monospace, Consolas, monospace; }
+    h2 { margin: 0; font-size: 15px; font-weight: 570; letter-spacing: -.01em; }
+    .description { margin: 5px 0 0 25px; color: var(--muted); font-size: 11px; }
+    .style-tag { flex: none; padding: 4px 7px; border: 1px solid #3b3834; border-radius: 5px; color: #a8a198; font-size: 10px; }
+    .slider-wrap { padding: 25px 3px 0; }
+    .track { position: relative; height: 24px; display: flex; align-items: center; --pct: var(--progress); }
+    .rail { position: absolute; inset: auto 0; height: 5px; border-radius: 99px; background: #393633; }
+    .fill {
+      position: absolute; left: 0; width: var(--progress); height: 5px; border-radius: 99px;
+      background: var(--accent); transition: width .34s cubic-bezier(.2,.85,.25,1.25);
+    }
+    .range {
+      position: absolute; inset: 0; width: 100%; height: 24px; margin: 0; appearance: none; -webkit-appearance: none;
+      background: transparent; cursor: pointer; outline: none;
+    }
+    .range::-webkit-slider-runnable-track { height: 24px; background: transparent; }
+    .range::-moz-range-track { height: 24px; background: transparent; }
+    .range::-webkit-slider-thumb {
+      width: 19px; height: 19px; margin-top: 2.5px; appearance: none; -webkit-appearance: none;
+      border: 0; border-radius: 50%; background: #f5f7f8;
+      box-shadow: 0 1px 6px rgba(0,0,0,.58); transition: box-shadow .2s, transform .2s;
+    }
+    .range::-moz-range-thumb {
+      width: 19px; height: 19px; border: 0; border-radius: 50%; background: #f5f7f8;
+      box-shadow: 0 1px 6px rgba(0,0,0,.58); transition: box-shadow .2s, transform .2s;
+    }
+    .range:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .stops { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 4px; }
+    .stop {
+      padding: 2px 0; border: 0; color: #77726b; background: transparent;
+      font: inherit; font-size: 12px; line-height: 1.5; cursor: pointer; transition: color .2s, transform .2s;
+    }
+    .stop:hover { color: #ccc7bf; }
+    .stop.active { color: #f2eee8; transform: translateY(-1px); }
+    .card-foot { display: flex; justify-content: space-between; margin-top: 13px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.055); color: #77726b; font-size: 10px; }
+    .state { color: var(--accent); }
+
+    /* A · 安静的呼吸光：空闲时轻呼吸，拖动时增强一瞬。 */
+    .breath .range::-webkit-slider-thumb { animation: breathe 2.4s ease-in-out infinite; }
+    .breath .range::-moz-range-thumb { animation: breathe 2.4s ease-in-out infinite; }
+    @keyframes breathe { 0%,100% { box-shadow: 0 1px 6px rgba(0,0,0,.58), 0 0 0 0 color-mix(in srgb, var(--accent), transparent 83%); } 50% { box-shadow: 0 1px 7px rgba(0,0,0,.48), 0 0 0 6px color-mix(in srgb, var(--accent), transparent 92%); } }
+    .breath .fill { box-shadow: 0 0 10px color-mix(in srgb, var(--accent), transparent 68%); }
+
+    /* B · 流动光点：亮点沿已选进度持续前行。 */
+    .flow .track { overflow: hidden; border-radius: 99px; }
+    .flow .fill { box-shadow: 0 0 10px color-mix(in srgb, var(--accent), transparent 50%); }
+    .flow .track::after {
+      content: ""; position: absolute; top: 50%; left: -20%; width: min(76px, var(--progress)); height: 13px;
+      transform: translateY(-50%); border-radius: 99px;
+      background: linear-gradient(90deg, transparent, color-mix(in srgb, white, transparent 20%), transparent);
+      opacity: .86; pointer-events: none; animation: flow 1.55s linear infinite;
+    }
+    @keyframes flow { from { left: -24%; } to { left: 105%; } }
+
+    /* C · 弹性回弹：切换档位时滑块越过一点再落定。 */
+    .bounce .fill { transition-timing-function: cubic-bezier(.22,1.65,.42,1); }
+    .bounce .range.bump::-webkit-slider-thumb { animation: bump .48s cubic-bezier(.2,1.5,.4,1) both; }
+    .bounce .range.bump::-moz-range-thumb { animation: bump .48s cubic-bezier(.2,1.5,.4,1) both; }
+    @keyframes bump { 0% { transform: scale(1); box-shadow: 0 1px 6px rgba(0,0,0,.58); } 42% { transform: scale(1.34); box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent), transparent 79%); } 100% { transform: scale(1); box-shadow: 0 1px 6px rgba(0,0,0,.58); } }
+
+    /* D · 星点脉冲：粉色流光 + 细小星屑，更接近录屏里的 GPT 视觉。 */
+    .spark .fill { background: linear-gradient(90deg, #eb74b7, #ff9dcc); box-shadow: 0 0 13px rgba(241,132,192,.32); }
+    .spark .track::after {
+      content: "✦  ·   ·   ✧"; position: absolute; left: 6px; top: 50%; width: calc(var(--progress) - 12px);
+      overflow: hidden; white-space: nowrap; transform: translateY(-52%); color: rgba(255,255,255,.77);
+      font-size: 9px; letter-spacing: 12px; line-height: 1; pointer-events: none;
+      animation: twinkle 1.3s ease-in-out infinite alternate;
+    }
+    .spark .range::-webkit-slider-thumb { animation: spark-glow 2s ease-in-out infinite; }
+    .spark .range::-moz-range-thumb { animation: spark-glow 2s ease-in-out infinite; }
+    @keyframes spark-glow { 0%,100% { box-shadow: 0 1px 6px rgba(0,0,0,.58), 0 0 8px rgba(241,132,192,.35); } 50% { box-shadow: 0 1px 6px rgba(0,0,0,.45), 0 0 15px rgba(241,132,192,.68); } }
+    @keyframes twinkle { from { opacity: .48; filter: brightness(.8); } to { opacity: 1; filter: brightness(1.35); } }
+
+    .card.changed { border-color: color-mix(in srgb, var(--accent), #514d47 62%); }
+    @media (max-width: 700px) { .page { width: min(100% - 28px, 520px); padding-top: 28px; } .grid { grid-template-columns: 1fr; } header { margin-bottom: 28px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><b></b></span><span>开物 · AI 面板</span></div>
+      <span class="tag">交互方案预览</span>
+    </header>
+    <h1>思考强度切换 · 动效方案</h1>
+    <p class="intro">四种方向共用同一条“关 / 低 / 中 / 高”滑条。拖动滑块或点击档位即可体验切换反馈；“自动演示”会循环切换档位。</p>
+    <div class="toolbar">
+      <button class="demo-button" id="demo" type="button" aria-pressed="false"><span class="demo-icon" aria-hidden="true">▶</span><span>自动演示</span></button>
+      <span class="hint">动效可单独评估，选定后再落入开物界面</span>
+    </div>
+    <section class="grid" aria-label="思考强度动效方案">
+      <article class="card breath" data-effect="breath">
+        <div class="card-head"><div><div class="title-row"><span class="index">A</span><h2>柔光呼吸</h2></div><p class="description">安静克制 · 空闲时轻微呼吸</p></div><span class="style-tag">低干扰</span></div>
+        <div class="slider-wrap"><div class="track"><span class="rail"></span><span class="fill"></span><input class="range" type="range" min="0" max="3" step="1" value="2" aria-label="柔光呼吸预览"></div><div class="stops"></div></div>
+        <div class="card-foot"><span>切换时滑块光晕增强</span><span class="state">中</span></div>
+      </article>
+      <article class="card flow" data-effect="flow">
+        <div class="card-head"><div><div class="title-row"><span class="index">B</span><h2>流动光点</h2></div><p class="description">能量向前 · 光带沿进度流动</p></div><span class="style-tag">明确反馈</span></div>
+        <div class="slider-wrap"><div class="track"><span class="rail"></span><span class="fill"></span><input class="range" type="range" min="0" max="3" step="1" value="2" aria-label="流动光点预览"></div><div class="stops"></div></div>
+        <div class="card-foot"><span>方向感强，进度一眼可见</span><span class="state">中</span></div>
+      </article>
+      <article class="card bounce" data-effect="bounce">
+        <div class="card-head"><div><div class="title-row"><span class="index">C</span><h2>弹性回弹</h2></div><p class="description">切换瞬间 · 轻越位后落在新档</p></div><span class="style-tag">触感突出</span></div>
+        <div class="slider-wrap"><div class="track"><span class="rail"></span><span class="fill"></span><input class="range" type="range" min="0" max="3" step="1" value="2" aria-label="弹性回弹预览"></div><div class="stops"></div></div>
+        <div class="card-foot"><span>只在操作时播放，不持续闪动</span><span class="state">中</span></div>
+      </article>
+      <article class="card spark pink" data-effect="spark">
+        <div class="card-head"><div><div class="title-row"><span class="index">D</span><h2>星点脉冲</h2></div><p class="description">粉色流光 · 细小星点随能量闪烁</p></div><span class="style-tag">表现力强</span></div>
+        <div class="slider-wrap"><div class="track"><span class="rail"></span><span class="fill"></span><input class="range" type="range" min="0" max="3" step="1" value="2" aria-label="星点脉冲预览"></div><div class="stops"></div></div>
+        <div class="card-foot"><span>最接近录屏中的 GPT 星点风格</span><span class="state">中</span></div>
+      </article>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const labels = ['关', '低', '中', '高'];
+      const cards = [...document.querySelectorAll('.card')];
+      const update = (card, animate = false) => {
+        const range = card.querySelector('.range');
+        const value = Number(range.value);
+        card.style.setProperty('--progress', `${value / 3 * 100}%`);
+        card.querySelector('.state').textContent = labels[value];
+        card.querySelectorAll('.stop').forEach((stop, index) => {
+          stop.classList.toggle('active', index === value);
+          stop.setAttribute('aria-pressed', String(index === value));
+        });
+        if (animate) {
+          card.classList.add('changed');
+          if (card.classList.contains('bounce')) {
+            range.classList.remove('bump');
+            void range.offsetWidth;
+            range.classList.add('bump');
+            setTimeout(() => range.classList.remove('bump'), 520);
+          }
+          clearTimeout(card._changeTimer);
+          card._changeTimer = setTimeout(() => card.classList.remove('changed'), 500);
+        }
+      };
+      cards.forEach((card) => {
+        const range = card.querySelector('.range');
+        const stops = card.querySelector('.stops');
+        labels.forEach((label, index) => {
+          const button = document.createElement('button');
+          button.className = 'stop';
+          button.type = 'button';
+          button.textContent = label;
+          button.addEventListener('click', () => {
+            if (Number(range.value) === index) return;
+            range.value = String(index);
+            update(card, true);
+          });
+          stops.appendChild(button);
+        });
+        range.addEventListener('input', () => update(card, true));
+        update(card);
+      });
+
+      const demo = document.getElementById('demo');
+      let timer = null;
+      let step = 0;
+      demo.addEventListener('click', () => {
+        if (timer !== null) {
+          clearInterval(timer); timer = null;
+          demo.setAttribute('aria-pressed', 'false');
+          demo.querySelector('.demo-icon').textContent = '▶';
+          demo.lastElementChild.textContent = '自动演示';
+          return;
+        }
+        demo.setAttribute('aria-pressed', 'true');
+        demo.querySelector('.demo-icon').textContent = 'Ⅱ';
+        demo.lastElementChild.textContent = '暂停演示';
+        timer = setInterval(() => {
+          step = (step + 1) % labels.length;
+          cards.forEach((card, index) => {
+            const range = card.querySelector('.range');
+            range.value = String((step + index) % labels.length);
+            update(card, true);
+          });
+        }, 1150);
+      });
+    })();
+  </script>
+</body>
+</html>

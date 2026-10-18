@@ -35,6 +35,7 @@ import {
 // Markdown 走**建节点**那一版渲染器:面板的规矩是"绝不 innerHTML 拼字符串",而这里的
 // 内容来自模型。同一条解析也喂着笔记预览(那边出 HTML 字符串),规则只有一份。
 import { renderMarkdownNodes } from '../lib/markdown.js';
+import { createReplyPlayback } from './reply-playback.js';
 // 「接着聊」:对端**不重放旧消息**,所以历史由开物自己的台账铺回来 ——
 // 记录 → 步骤(用户消息 / 归约事件)那一层是纯函数,单测钉着(会话记录格式也在那里)。
 import { recordToSteps } from '../lib/session-record.js';
@@ -407,6 +408,7 @@ export function createAgentPanel({
 
     let state = initialStreamState();
     let renderQueued = false;
+    let disposed = false;
     let credentials = null;
     let started = false;              // 挂载时自动 start 只做一次(重试走按钮)
     let starting = false;             // start() 在飞,防连点
@@ -1764,8 +1766,40 @@ export function createAgentPanel({
         credentialEl.dataset.state = kind;
     }
 
-    /** 流式正文里"还在显影"的那几个字(渐变擦除的宽度,与 shell.css 的 .agent-tail 一致)。 */
-    const TAIL_CHARS = 8;
+    // 每条消息的显示游标独立于归约状态，结构重画、收尾都不重置播放器。
+    const replyViews = new Map();
+    function paintReplyEntry(entry) {
+        if (entry.textEl) entry.textEl.hidden = entry.player.text === '';
+        if (entry.bubble) {
+            if (entry.player.active) entry.bubble.setAttribute('data-streaming', 'true');
+            else entry.bubble.removeAttribute?.('data-streaming');
+        }
+    }
+    function clearReplyViews() {
+        for (const entry of replyViews.values()) entry.player.dispose();
+        replyViews.clear();
+    }
+    function syncReplyViews() {
+        const ids = new Set(asArray(state.messages).map(message => message.id));
+        for (const [id, entry] of replyViews) {
+            if (!ids.has(id)) { entry.player.dispose(); replyViews.delete(id); }
+        }
+        for (const message of asArray(state.messages)) {
+            if (message.role !== 'assistant') continue;
+            let entry = replyViews.get(message.id);
+            if (!entry && (message.done === true || message.text === '')) continue;
+            if (!entry) {
+                entry = { player: null, bubble: null, textEl: null };
+                entry.player = createReplyPlayback({ doc, onPaint: () => {
+                    paintReplyEntry(entry);
+                    scrollToBottom();
+                    scheduleRailFrame();
+                } });
+                replyViews.set(message.id, entry);
+            }
+            entry.player.update(message.text, message.done);
+        }
+    }
 
     /**
      * 增量渲染的缓存(见 renderMessages 顶上的快速通道)。
@@ -1816,7 +1850,7 @@ export function createAgentPanel({
      * ⚠️ 它现在是从**渲染单元**算出来的,不是从三个数组:时间线的顺序、分组的边界、
      * 以及"哪个工具进了哪一组"都会改变结构,漏掉任何一项,快速通道就会拿旧节点
      * 凑合新结构(表现是新增的卡片不出现)。
-     * 正文长度跨过 TAIL_CHARS 会让尾巴那一层出现/消失,所以那个布尔算结构变化。
+     * 正文由独立播放器增量协调，文字长度不再影响列表结构。
      */
     function shapeOf(units) {
         return JSON.stringify(units.map((unit) => {
@@ -1838,7 +1872,6 @@ export function createAgentPanel({
             //    漏了就会当场抛(整条消息列表画不出来)。
             if (unit.kind === 'noReply') return ['noreply', unit.tools, unit.thoughts];
             return ['msg', unit.message.id, unit.message.role, unit.message.done === true,
-                unit.message.text.length > TAIL_CHARS,
                 // 四段状态行的**结构**指纹:有哪些行、每行什么状态。
                 // ⚠️ 刻意**不含百分比/秒数/字数** —— 那些每 60ms 就变一次,放进指纹
                 // 就等于每来一片正文都重建整条消息列表(扫光动画会一遍遍从头开始)。
@@ -1861,14 +1894,6 @@ export function createAgentPanel({
         if (live.stages !== null && live.stages !== undefined && liveNodes.stages !== null
             && liveNodes.stages !== undefined) {
             paintVideoStages(live.stages, liveNodes.stages.refs);
-        }
-        const msg = live.message;
-        if (liveNodes.sweep === null || msg === null) return;
-        if (liveNodes.sweepTail !== null) {
-            liveNodes.sweepHead.textContent = msg.text.slice(0, -TAIL_CHARS);
-            liveNodes.sweepTail.textContent = msg.text.slice(-TAIL_CHARS);
-        } else {
-            liveNodes.sweep.textContent = msg.text;
         }
     }
 
@@ -2005,11 +2030,23 @@ export function createAgentPanel({
                     //    那块内容会自己一鼓一鼓地动(典型的"动画没做成一次性"的坑)。
                     if (!live && typeof box.setAttribute === 'function') {
                         box.setAttribute('data-reveal', '1');
-                        const clear = () => {
+                        const revealLineCount = String(bodyText).split('\n').length;
+                        let revealEnded = 0;
+                        let fallbackTimer = null;
+                        const clear = (event) => {
+                            if (event !== undefined) {
+                                if (event.animationName !== 'agent-think-bright') return;
+                                revealEnded += 1;
+                                if (revealEnded < revealLineCount) return;
+                            }
                             if (typeof box.removeAttribute === 'function') box.removeAttribute('data-reveal');
+                            box.removeEventListener?.('animationend', clear);
+                            if (fallbackTimer !== null && typeof clearTimeout === 'function') clearTimeout(fallbackTimer);
                         };
-                        box.addEventListener('animationend', clear, { once: true });
-                        if (typeof setTimeout === 'function') setTimeout(clear, 1200);
+                        box.addEventListener('animationend', clear);
+                        if (typeof setTimeout === 'function') {
+                            fallbackTimer = setTimeout(() => clear(), Math.max(1200, revealLineCount * 70 + 800));
+                        }
                     }
                 } else thinkOpenIds.delete(thought.id);
             });
@@ -2305,39 +2342,18 @@ export function createAgentPanel({
             if (liveNodes !== null) liveNodes.stages = { stages, refs: rendered.refs };
         }
         const textEl = el(doc, 'div', 'agent-msg-text');
-        // 流式中的正文:整段再包一层 `.agent-sweep`,让扫光只作用在**文字**上。
-        // ⚠️ 为什么不能直接给 `.agent-msg-text` 加 background-clip:text:
-        // 那一下会把气泡自己的底也一起裁进字形里 —— 气泡背景"消失",看起来像
-        // 流式中途换了一套样式(实测踩到过)。扫光层与气泡层必须分开。
-        // (.agent-sweep 在 CSS 里是 display:block —— 百分比 background-position
-        //  要有个确定参照宽度,行内折行后光带落点会随文字长度乱跳,见 shell.css。)
-        // 最后几个字再单独包一层,交给 .agent-tail 显影:它自己裁一层**半透明**罩子
-        // 画在父层文字之上,所以扫光的亮带仍然透得出来(用 mask 是无效的,已实测推翻)。
-        // 一律用 textContent 赋值(正文来自模型,不解析标记)。
-        if (msg.done !== true) {
-            const sweep = el(doc, 'span', 'agent-sweep');
-            if (msg.text.length > TAIL_CHARS) {
-                const head = el(doc, 'span', '', msg.text.slice(0, -TAIL_CHARS));
-                const tail = el(doc, 'span', 'agent-tail', msg.text.slice(-TAIL_CHARS));
-                sweep.appendChild(head);
-                sweep.appendChild(tail);
-                liveNodes.sweepHead = head;
-                liveNodes.sweepTail = tail;
-            } else {
-                sweep.textContent = msg.text;
-            }
-            textEl.appendChild(sweep);
-            // 这一层与它的两个子节点会一直被原地改文字(见 paintLive)——
-            // 重建就等于把扫光/光标动画从头开始,所以只在这一条流式消息上留引用。
-            liveNodes.sweep = sweep;
-        } else if (msg.role === 'assistant') {
-            // 收尾后的助手回复:渲染常用子集的 Markdown。
-            // ⚠️ 走的是**建节点**那条路(createElement / createTextNode),面板里依然一个
-            // innerHTML 都没有 —— 模型给的 `<img onerror=...>` 只会是一段文字。
-            // ⚠️ 为什么只在收尾后做:流式期间那套扫光/末字显影是直接切文本节点的,
-            // 中途插进 <strong>/<p> 会把动画每次都从头开始,也破坏"增量不重建 DOM"。
+        if (msg.role === 'assistant') {
             textEl.className = 'agent-msg-text md';
-            for (const node of renderMarkdownNodes(doc, msg.text)) textEl.appendChild(node);
+            const entry = replyViews.get(msg.id);
+            if (entry) {
+                entry.bubble = bubble;
+                entry.textEl = textEl;
+                textEl.appendChild(entry.player.element);
+                paintReplyEntry(entry);
+            } else {
+                // 历史回复直接显示；实时回复由播放器只解析已显示的前缀。
+                for (const node of renderMarkdownNodes(doc, msg.text, { tables: true })) textEl.appendChild(node);
+            }
         } else {
             // 用户气泡**不排版**:那是用户自己说的话,而且自检夹具回显的那条带着
             // `当前笔记:…` + frontmatter 的 `---` 与 `# 甲篇`,排版会把它画成标题与分隔线。
@@ -2408,6 +2424,7 @@ export function createAgentPanel({
     }
 
     function renderMessages() {
+        syncReplyViews();
         // 快速通道:只有文本在长(结构一个字节都没变)时,别把 DOM 推倒重来。
         const units = planTimeline(state);
         const shape = shapeOf(units);
@@ -2415,7 +2432,7 @@ export function createAgentPanel({
             paintLive(liveOf(units));
             return;
         }
-        liveNodes = { thinkCount: null, thinkBody: null, thinkTime: null, sweep: null, sweepHead: null, sweepTail: null, stages: null };
+        liveNodes = { thinkCount: null, thinkBody: null, thinkTime: null, stages: null };
         // 按**有序时间线**画:思考内联在它那段输出前面、工具与中间回复折成一行。
         // ⚠️ 外面还要按**轮**包一层 `.agent-turn`:轮次轨要拿每一轮的盒子算 offset
         // 与跳转,没有这一层就只能按"第几条消息"猜边界。分包是纯函数(groupTurns)。
@@ -2862,6 +2879,7 @@ export function createAgentPanel({
     }
 
     function render() {
+        if (disposed) return;
         renderQueued = false;
         // 先把**已经没有任何消息引用**的气泡图片 URL 回收掉(清空会话 / 换会话)。
         // 还留在状态里的一个都不碰 —— 撤销了就是破图(见 handOffImages 的归属说明)。
@@ -2892,7 +2910,7 @@ export function createAgentPanel({
     }
 
     function scheduleRender() {
-        if (renderQueued) return;
+        if (disposed || renderQueued) return;
         renderQueued = true;
         if (typeof queueMicrotask === 'function') queueMicrotask(() => { if (renderQueued) render(); });
         else render();
@@ -3037,11 +3055,9 @@ export function createAgentPanel({
         if (images === null) return;
 
         const note = readNote();
-        // ⚠️ **发图之前**先看对端广告的能力:ACP 规定"只有对方广告了才准发内联图片"。
-        //    装机那份桥钉的模型(deepseek-v4-flash)没有声明图片输入,握手时就广告了
-        //    `image:false`;照发的结果是 -32602 + 一句英文(用户实测看到的就是它),
-        //    而且图片与文字是一起发的 —— 被拒就是**整条提示都没发出去**,还白等一轮。
-        //    所以在这里就停住,并说清"为什么 / 怎么办"。caps 为 null(还不知道)不拦。
+        // ⚠️ **发图之前**先看对端当前模型的图片能力:图片与文字一起发,不支持时整条提示都会被拒。
+        //    新会话会优先自动选已配置的图片模型,用户也可以在模型清单中手动切换。
+        //    caps 为 null(还不知道)不拦。
         if (images.length > 0 && state.caps !== null && state.caps.image !== true) {
             showImageNotice(imageCapabilityRefusal(state.caps, currentModelValue()));
             return;
@@ -3115,38 +3131,6 @@ export function createAgentPanel({
         }
     }
 
-    /**
-     * 重连 Agent 进程(停掉再起)。
-     *
-     * 为什么需要它 —— 唯一一件**必须重连才能生效**的事:图片能力。
-     * 桥在 `initialize` 那一刻算一次 `imagePromptEnabled`(判据是"当前模型有没有声明
-     * 图片输入"),之后整条连接都用那个值,连 `set_config_option` 换模型也不重算。
-     * 所以:换到视觉模型之后,想真的发得出去图,就得让它重新握一次手。
-     *
-     * ⚠️ 代价要**说在前面**:ACP 的会话随进程一起消失(上下文清零),面板里的聊天记录还在,
-     *    但新的一轮不再记得之前聊过什么。所以这是个**用户自己按的按钮**,不替用户决定。
-     */
-    async function restartAgent() {
-        if (cfgRestarting) return false;
-        cfgRestarting = true;
-        cfgPaint();
-        try {
-            await calls('agent:stop', {});
-            await loadCredentials();
-            applyCredentialVisibility();
-            // 重连之后能力要重新学:先把"已知能力"清成"还不知道",避免界面拿旧值继续拦。
-            state = reduceAgentEvent(state, { kind: 'caps', caps: null });
-            await start();
-            return true;
-        } catch (err) {
-            log.warn?.('[agent] 重连失败', err);
-            return false;
-        } finally {
-            cfgRestarting = false;
-            render();
-        }
-    }
-
     async function killProcess() {
         // ⚠️ 停掉之后**必须留一个再连的出口**:进程没了,面板就停在 stopped,
         // 而 stopped 下「发送」是灰的、「重试」本来也不出现 —— 用户会以为只能重启开物。
@@ -3183,6 +3167,7 @@ export function createAgentPanel({
 
     /** 主进程推来一个事件。kind 契约见 M3-B 计划(与 B1 共用,冻结)。 */
     function onEvent(event) {
+        if (disposed) return;
         if (event === null || typeof event !== 'object') return;
         // 别的会话的增量不该进这个面板(多会话并存时会把两条回复搅在一起)。
         //
@@ -3198,7 +3183,11 @@ export function createAgentPanel({
         // (它只在有东西可停时出现)。所以这一刻必须在对话里留一个再连的出口。
         // 不绑定到"谁按的按钮":面板那一行、设置页那一项、外部把进程干掉,都算。
         const wasRunning = state.status.state === 'ready' || state.status.state === 'starting';
+        const previousSession = state.sessionId;
         state = reduceAgentEvent(state, event);
+        if (event.kind === 'session' && state.sessionId !== previousSession) clearReplyViews();
+        // 在事件边界收进缓冲：同一帧里连续收到 chunk 和 prompt-end 也不丢逐字进度。
+        syncReplyViews();
         // 「接着聊」接回来的会话:对端不重放旧消息,历史得由**开物自己的台账**铺回来。
         // 放在 reduce 之后:此刻 sessionId / configOptions / caps 都已经归位。
         if (event.kind === 'session' && event.resumed === true && typeof event.sessionId === 'string') {
@@ -3244,6 +3233,7 @@ export function createAgentPanel({
      *    换一条会话不等于换了连接,连接该是 ready 就还是 ready。
      */
     function clearConversation() {
+        clearReplyViews();
         releaseMessageImages(true);
         state = {
             ...state,
@@ -3285,6 +3275,7 @@ export function createAgentPanel({
                 ? beginPrompt(next, step.text, step.images)
                 : reduceAgentEvent(next, step.event);
         }
+        clearReplyViews();
         state = {
             ...state,
             messages: next.messages,
@@ -3313,8 +3304,7 @@ export function createAgentPanel({
     let cfgEls = null;           // 浮层里的节点(懒建一次,之后只改文本/类名 —— 见 cfgPaint 的说明)
     let cfgStopsKey = '';        // 档位那次构建的指纹(数据没变就不重建,否则动效会一遍遍重播)
     let cfgModelsKey = '';
-    let cfgDrag = null;          // 拖动中:落点档位(松手才提交)
-    let cfgRestarting = false;   // 正在重连(按钮要禁用,别连点两次把进程来回停) 
+    let cfgDrag = null;          // 拖动中:连续预览档位位置(松手吸附并提交最近档)
 
     const reasonOption = () => configOptionOf(state.configOptions, REASONING_CONFIG_ID);
     const modelOption = () => configOptionOf(state.configOptions, MODEL_CONFIG_ID);
@@ -3365,8 +3355,7 @@ export function createAgentPanel({
         const nowVal = cfgNode('span', 'v');
         const nowGo = cfgNode('span', 'go', '›');
         nowBtn.append(nowVal, nowGo);
-        const tip = cfgNode('span', 'agent-cfg-tip', '点上面的字可换模型');
-        head.append(nowBtn, tip);
+        head.appendChild(nowBtn);
 
         const track = cfgNode('div', 'agent-cfg-track');
         track.tabIndex = 0;
@@ -3378,17 +3367,7 @@ export function createAgentPanel({
         track.append(rail, fill, knob);
 
         const stops = cfgNode('div', 'agent-cfg-stops');
-        const desc = cfgNode('p', 'agent-cfg-desc');
-        const foot = cfgNode('div', 'agent-cfg-foot');
-        const footText = cfgNode('span', 'agent-cfg-foot-text', '松手即生效(续聊,不丢上下文)');
-        // 重连按钮:只在"图片能力与当前模型不一致"时出现(见 cfgPaint)。
-        // 文案带代价 —— 会话上下文会随进程一起消失,用户有权知道。
-        const renew = cfgNode('button', 'agent-cfg-renew', '重连以启用图片');
-        renew.type = 'button';
-        renew.title = '图片能力是连接建立时确定的,换模型后要重新握手才生效。重连会清空这次对话的上下文(聊天记录还在)。';
-        renew.addEventListener('click', () => { void restartAgent(); });
-        foot.append(footText, renew);
-        pane1.append(head, track, stops, desc, foot);
+        pane1.append(head, track, stops);
 
         // —— 第 2 层:模型 ——
         const pane2 = cfgNode('div', 'agent-cfg-pane');
@@ -3401,8 +3380,8 @@ export function createAgentPanel({
         configWrap.appendChild(pop);
 
         cfgEls = {
-            pop, pane1, pane2, head, nowBtn, nowVal, tip, track, rail, fill, knob,
-            stops, desc, foot, footText, back, list, renew,
+            pop, pane1, pane2, head, nowBtn, nowVal, track, rail, fill, knob,
+            stops, back, list,
         };
 
         // ---- 交互 ----
@@ -3434,7 +3413,7 @@ export function createAgentPanel({
             const box = typeof track.getBoundingClientRect === 'function' ? track.getBoundingClientRect() : null;
             if (box === null || box.width <= 0) return 0;
             const t = Math.max(0, Math.min(1, (clientX - box.left) / box.width));
-            return Math.round(t * (n - 1));
+            return t * (n - 1);
         };
         const preview = (i) => {
             // 拖动中只改视觉(不发请求):档位、填充、把手、说明
@@ -3454,7 +3433,7 @@ export function createAgentPanel({
         });
         const release = (e) => {
             if (cfgDrag === null) return;
-            const i = indexAt(e.clientX ?? 0);
+            const i = Math.round(indexAt(e.clientX ?? 0));
             track.classList.remove('dragging');
             cfgDrag = null;
             track.classList.add('settle');
@@ -3463,7 +3442,7 @@ export function createAgentPanel({
             const wanted = levels[i];
             cfgDrag = null;
             if (wanted !== undefined && wanted.value !== reasonOption()?.currentValue) {
-                void commitConfig(REASONING_CONFIG_ID, wanted.value, { label: wanted.short });
+                void commitConfig(REASONING_CONFIG_ID, wanted.value);
             } else {
                 cfgPaintStops();
             }
@@ -3476,7 +3455,7 @@ export function createAgentPanel({
             const go = (i) => {
                 const want = levels[Math.max(0, Math.min(levels.length - 1, i))];
                 if (want !== undefined && want.value !== reasonOption()?.currentValue) {
-                    void commitConfig(REASONING_CONFIG_ID, want.value, { label: want.short });
+                    void commitConfig(REASONING_CONFIG_ID, want.value);
                 }
                 e.preventDefault?.();
             };
@@ -3500,12 +3479,13 @@ export function createAgentPanel({
     /** 一把刷:胶囊 + 浮层(结构只在数据变了时重建)。 */
     function cfgPaint(force = false) {
         if (ensureConfig() === null) return;
-        const { pop, pane1, pane2, nowVal, track, stops, desc, footText, list, renew } = cfgEls;
+        const { pop, pane1, pane2, nowVal, track, stops, list } = cfgEls;
 
         const levels = reasonLevels();
         const current = reasonOption()?.currentValue ?? '';
         const at = cfgDrag !== null ? cfgDrag.index : effortIndexOf(levels, current);
-        const label = chipLabel({ expanded: cfgOpen !== 'none', level: levels[at] ?? null });
+        const nearest = Math.max(0, Math.min(levels.length - 1, Math.round(at)));
+        const label = chipLabel({ expanded: cfgOpen !== 'none', level: levels[nearest] ?? null });
 
         // 胶囊
         if (configBtn !== null) {
@@ -3524,21 +3504,11 @@ export function createAgentPanel({
                 : `思考强度:${cur.full}${cur.description !== '' ? ` · ${cur.name}` : ''}`;
         }
 
-        // 重连按钮:只在**这条连接不能发图片**时露出来。
-        // 它就是"换到视觉模型之后让图片真的能用"的唯一出口(见 restartAgent 的说明)。
-        // ⚠️ 用 `hidden` **属性**而不是类名:`.agent-cfg-renew` 那条规则不写 display,
-        //    于是 [hidden]{display:none} 能正常压住它(写了 display 就同权重、按顺序,会压不住)。
-        // 有会话、但能力不是明确的 true → 露出来(不知道 / 明确 false 都值得给一个出口)。
-        // 换到视觉模型之后 refreshCapabilities 会把 caps 刷成 true,它就自己藏起来。
-        renew.hidden = state.sessionId === null || state.caps?.image === true;
-        renew.disabled = cfgRestarting === true || cfgDisabled();
-        renew.textContent = cfgRestarting === true ? '正在重连…' : '重连以启用图片';
-
         // 浮层显示/隐藏(两层各自一个类,动画交给 CSS)
         pop.classList.toggle('open', cfgOpen !== 'none' && !cfgDisabled());
         pane1.classList.toggle('on', cfgOpen === 'effort');
         pane2.classList.toggle('on', cfgOpen === 'models');
-        nowVal.textContent = levels[at]?.short ?? '默';
+        nowVal.textContent = levels[nearest]?.short ?? '默';
 
         // 档位:数据变了才重建(否则每帧重建会把入场动效一遍遍重播)
         const key = JSON.stringify(levels.map((l) => [l.value, l.name, l.short, l.full, l.description]));
@@ -3555,7 +3525,7 @@ export function createAgentPanel({
                 // 点某一档也能直接切(不必拖):与"拖动松手"走同一条提交路。
                 s.addEventListener('click', () => {
                     if (cfgDisabled() || lv.value === reasonOption()?.currentValue) return;
-                    void commitConfig(REASONING_CONFIG_ID, lv.value, { label: lv.short });
+                    void commitConfig(REASONING_CONFIG_ID, lv.value);
                 });
                 stops.appendChild(s);
             });
@@ -3603,7 +3573,7 @@ export function createAgentPanel({
                     row.addEventListener('click', () => {
                         if (cfgDisabled()) return;
                         if (m.value === modelOption()?.currentValue) { setCfgOpen('none'); return; }
-                        void commitConfig(MODEL_CONFIG_ID, m.value, { label: m.name });
+                        void commitConfig(MODEL_CONFIG_ID, m.value);
                     });
                     list.appendChild(row);
                 }
@@ -3629,25 +3599,17 @@ export function createAgentPanel({
         const idx = at !== null ? at : effortIndexOf(levels, current);
         const n = levels.length;
         const pct = n <= 1 ? 0 : (idx / (n - 1)) * 100;
+        const nearest = Math.max(0, Math.min(n - 1, Math.round(idx)));
         cfgEls.fill.style.width = `${pct}%`;
         cfgEls.knob.style.left = `${pct}%`;
-        const lv = levels[idx] ?? null;
+        const lv = levels[nearest] ?? null;
         cfgEls.nowVal.textContent = lv?.short ?? '默';
-        cfgEls.track.setAttribute('aria-valuenow', String(idx));
+        cfgEls.track.setAttribute('aria-valuenow', String(nearest));
         cfgEls.track.setAttribute('aria-valuetext', lv?.full ?? '');
-        cfgEls.desc.textContent = lv === null
-            // ⚠️ 两种"空"必须分开说(实测冤枉过对端):**还没建会话**时状态里根本没有
-            //    configOptions(正常启动时它会由主进程在 ready 那一刻自动建出来,见 noSessionText)
-            //    —— 那不是"对端没给";只有会话已经建好、而对端那份里确实没有这一条,
-            //    才该说"没有广告"。
-            ? (state.sessionId === null
-                ? noSessionText('档位与模型都是对端在 session/new 里给的,发一条消息之后才会出现。')
-                : '这条连接没有广告思考强度(当前模型没声明 reasoning 档位)。')
-            : `${lv.full} · ${lv.name}${lv.description === '' ? '' : ` —— ${lv.description}`}`;
         if (typeof cfgEls.stops.querySelectorAll === 'function') {
             for (const s of cfgEls.stops.querySelectorAll('span')) {
                 const i = Number(s.dataset?.i ?? -1);
-                s.classList.toggle('on', i === idx);
+                s.classList.toggle('on', i === nearest);
             }
         }
     }
@@ -3658,14 +3620,13 @@ export function createAgentPanel({
      * ⚠️ 失败时**抖动 + 把原因写在浮层脚下**,并且把档位显示退回对端那一份
      *    (state.configOptions 没变,所以 cfgPaint 自然画回旧值)—— 绝不假装改成了。
      */
-    async function commitConfig(configId, value, { label = '' } = {}) {
+    async function commitConfig(configId, value) {
         if (cfgDisabled()) return;
         try {
             await calls('agent:setConfig', { configId, value });
             if (configBtn !== null) {
                 configBtn.classList.remove('pulse'); void configBtn.offsetWidth; configBtn.classList.add('pulse');
             }
-            if (cfgEls !== null) cfgEls.footText.textContent = `已切到「${label}」`;
             // ⚠️ 换了模型就要**重新问一次图片能力**:
             //   · 先把已知能力清成"还不知道" —— 否则界面会拿**旧模型**的能力继续拦
             //     (实测:换到视觉模型之后,发图仍被自己的 pre-flight 挡住);
@@ -3685,7 +3646,6 @@ export function createAgentPanel({
             if (configBtn !== null) {
                 configBtn.classList.remove('shake'); void configBtn.offsetWidth; configBtn.classList.add('shake');
             }
-            if (cfgEls !== null) cfgEls.footText.textContent = `没改成:${why}`;
             cfgPaint(true);
         }
     }
@@ -4311,6 +4271,9 @@ export function createAgentPanel({
         /** 外壳在笔记打开/切换时调一次,刷新"这次会带上哪篇笔记"。 */
         syncNote: () => { renderContext(); },
         dispose() {
+            disposed = true;
+            renderQueued = false;
+            clearReplyViews();
             if (typeof unsubscribe === 'function') safe(unsubscribe, log);
             unsubscribe = null;
             if (typeof videoProgressUnsub === 'function') safe(videoProgressUnsub, log);

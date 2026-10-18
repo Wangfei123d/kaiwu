@@ -12,6 +12,7 @@ import {
     DEFAULT_NAV_W, DEFAULT_SIDE_W, MIN_NAV_W, MAX_NAV_W, MIN_SIDE_W, MAX_SIDE_W,
 } from './shell/column-resizer.js';
 import { createPanelWorkspace, GUTTER_PX } from './shell/panel-workspace.js';
+import { createApplicationMenu } from './shell/application-menu.js';
 import { createPaneLifecycle } from './lib/pane-lifecycle.js';
 import { treeFromWidths, adoptPanes, addPane, viewsOpenIn } from './lib/panel-tree.js';
 // 「窗口」菜单那份面板表(已知视图 × 现在开着没有)——纯函数,带回归单测(用户档里"开着却没勾"那一条)。
@@ -350,7 +351,8 @@ async function setupPanelWorkspace() {
             if (tab?.view === 'doc' && typeof tab.doc === 'string' && tab.doc !== '') {
                 const hit = (notesApi?.index?.notes ?? []).find((n) => n.path === tab.doc);
                 const title = hit?.title;
-                return (typeof title === 'string' && title.trim() !== '') ? title.trim() : tab.doc;
+                return (typeof title === 'string' && title.trim() !== '')
+                    ? title.trim() : (tab.doc.split('/').at(-1) ?? tab.doc);
             }
             return panes[tab?.view]?.title ?? tab?.view ?? '';
         },
@@ -471,6 +473,7 @@ async function setupPanelWorkspace() {
 
 async function boot() {
     stage('boot:进入');
+    createApplicationMenu();
     startStarfield($('starfield'));
     stage('boot:星空已启动');
 
@@ -527,6 +530,16 @@ async function boot() {
         onOpenNote: (path, info) => {
             if (info?.source !== 'tabs') workspaceApi?.openView('doc', path);
             agent.syncNote();
+        },
+        onCloseDocx: (path) => {
+            for (const pane of workspaceApi?.allTabs?.() ?? []) {
+                const index = pane.tabs?.findIndex((tab) => tab.view === 'doc' && tab.doc === path) ?? -1;
+                if (index >= 0) {
+                    workspaceApi.closeTab(pane.paneId, index);
+                    return true;
+                }
+            }
+            return false;
         },
     });
     stage('boot:笔记视图已建');
@@ -586,7 +599,7 @@ async function boot() {
         autoStart: !isSelftest,
         getNote: () => {
             const path = notes.currentPath;
-            if (!path) return null;
+            if (!path || /\.docx$/i.test(path)) return null;
             const meta = (notes.index?.notes ?? []).find(n => n.path === path);
             return {
                 path,

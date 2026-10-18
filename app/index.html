@@ -52,22 +52,26 @@
         </div>
 
         <div class="shell" id="shell" hidden>
-            <!-- 顶栏:品牌与窗口拖动区 -->
+            <!-- 顶栏:合并品牌、应用菜单与 Windows 原生窗口控制区 -->
             <header class="topbar">
-                <!-- 品牌:RB1 线形标记 + 「开物」字标。
-                     标记只用 currentColor 与 --accent,不写死颜色 ——
-                     以后做浅色主题时它自动跟着走,不用回来改这里。 -->
-                <div class="topbar-brand">
-                    <svg class="brand-mark" viewBox="0 0 100 100"
-                         aria-hidden="true" focusable="false">
-                        <g fill="none" stroke="currentColor" stroke-width="16"
-                           stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M28 20 V80"/>
-                            <path d="M28 50 L72 21"/>
-                            <path d="M28 50 L72 79"/>
-                        </g>
-                        <circle cx="28" cy="50" r="14" fill="var(--accent)"/>
-                    </svg>开物
+                <!-- 图形标记也是 Windows 合并标题栏后的菜单入口。 -->
+                <div class="topbar-menu" id="applicationMenu">
+                    <button class="topbar-brand" id="topbarBrand" type="button"
+                            aria-label="开物菜单" aria-haspopup="menu" aria-expanded="false"
+                            title="开物菜单">
+                        <svg class="brand-mark" viewBox="0 0 100 100"
+                             aria-hidden="true" focusable="false">
+                            <g fill="none" stroke="currentColor" stroke-width="16"
+                               stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M28 20 V80"/>
+                                <path d="M28 50 L72 21"/>
+                                <path d="M28 50 L72 79"/>
+                            </g>
+                            <circle cx="28" cy="50" r="14" fill="var(--accent)"/>
+                        </svg>
+                    </button>
+                    <div class="app-menu-popup" id="applicationMenuPopup" role="menu"
+                         aria-label="应用菜单" hidden></div>
                 </div>
 
                 <!-- 库路径与更换入口在「编辑 → 首选项…」的独立窗口里。 -->
