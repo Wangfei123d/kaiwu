@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>日程循环日历 · 交互预览</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101112;
+      --panel: #17191b;
+      --raised: #1d2022;
+      --input: #111315;
+      --line: #303538;
+      --line-soft: #262a2d;
+      --text: #e8eaec;
+      --muted: #a8adb1;
+      --dim: #7e878c;
+      --faint: #626a70;
+      --blue: #83c7fa;
+      --blue-soft: #83c7fa18;
+      --green: #7fc99d;
+      --purple: #b89bfa;
+      font: 13px/1.5 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 48% -24%, #29465d2e, transparent 47%), var(--bg); }
+    button, input { color: inherit; font: inherit; }
+    button { cursor: pointer; }
+    .page { width: min(1180px, 100%); margin: 0 auto; padding: 28px clamp(14px, 3vw, 42px) 42px; }
+    .topline { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; color: var(--dim); font-size: 11px; letter-spacing: .04em; }
+    .brand { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #83c7fa40; border-radius: 6px; color: var(--blue); background: #83c7fa0c; }
+    .brand svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .spacer { flex: 1; }
+    .preview-tag { padding: 4px 8px; border: 1px solid #3b4e5a; border-radius: 999px; color: #b9e3ff; background: #83c7fa0d; font-size: 10px; letter-spacing: 0; }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 32px); font-weight: 650; letter-spacing: -.035em; }
+    .lead { max-width: 820px; margin: 8px 0 19px; color: var(--dim); font-size: 12px; }
+
+    .flow { display: flex; align-items: center; gap: 8px; margin-bottom: 17px; padding: 9px 11px; overflow: auto; border: 1px solid #2a3034; border-radius: 8px; background: #ffffff03; white-space: nowrap; }
+    .flow-step { display: flex; align-items: center; gap: 7px; color: var(--faint); font-size: 10px; }
+    .flow-step.current { color: #c9e9fc; }
+    .flow-num { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border: 1px solid #343b3f; border-radius: 50%; color: var(--dim); font: 9px Consolas, monospace; }
+    .flow-step.current .flow-num { border-color: #5c92b2; color: var(--blue); background: #83c7fa12; }
+    .flow-arrow { color: #4c555a; font-size: 13px; }
+
+    .layout { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(260px, .82fr); gap: 15px; align-items: start; }
+    .card { min-width: 0; overflow: hidden; border: 1px solid #303538; border-radius: 11px; background: linear-gradient(145deg, #1a1c1e, #141618); box-shadow: 0 12px 30px #0004; }
+    .card-head { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 13px; border-bottom: 1px solid var(--line-soft); background: #191c1e; }
+    .calendar-icon { display: grid; place-items: center; width: 19px; height: 19px; color: var(--blue); }
+    .calendar-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .card-head strong { font-size: 12px; font-weight: 620; }
+    .local-status { margin-left: auto; color: var(--faint); font-size: 9px; }
+    .form { padding: 14px; }
+    .form-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 11px; }
+    .form-title-row h2 { margin: 0; font-size: 13px; font-weight: 620; }
+    .sample-tag { padding: 3px 7px; border: 1px solid #30373b; border-radius: 999px; color: var(--faint); font-size: 8px; }
+    .field { display: block; min-width: 0; margin-top: 9px; color: var(--muted); font-size: 9px; }
+    .field-label { display: block; margin-bottom: 5px; }
+    .input { width: 100%; min-width: 0; height: 33px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; outline: none; background: var(--input); color: var(--text); font-size: 10px; }
+    .input:focus { border-color: #68a8d1; box-shadow: 0 0 0 2px #83c7fa16; }
+    .field-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(125px, .72fr); gap: 9px; }
+
+    .step-block { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+    .step-label { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; color: var(--muted); font-size: 10px; }
+    .step-badge { display: grid; place-items: center; flex: none; width: 17px; height: 17px; border: 1px solid #39434a; border-radius: 50%; color: var(--blue); font: 8px Consolas, monospace; }
+    .segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; border: 1px solid var(--line-soft); border-radius: 7px; background: #101214; }
+    .segment { min-height: 30px; border: 0; border-radius: 5px; background: transparent; color: var(--dim); font-size: 10px; transition: color .15s, background .15s, box-shadow .15s; }
+    .segment.active { color: #cceaff; background: #83c7fa17; box-shadow: inset 0 0 0 1px #83c7fa48; }
+    .repeat-options { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .repeat-option { display: flex; align-items: center; gap: 8px; min-height: 39px; padding: 7px 9px; border: 1px solid #32383c; border-radius: 7px; background: #ffffff03; color: var(--muted); text-align: left; font-size: 10px; transition: border-color .15s, background .15s, color .15s; }
+    .repeat-option:hover { border-color: #536a79; color: var(--text); }
+    .repeat-option.active { border-color: #5a91b1; color: #cceaff; background: #83c7fa10; }
+    .repeat-option svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .repeat-option small { display: block; margin-top: 1px; color: var(--faint); font-size: 8px; }
+
+    .calendar-box { margin-top: 10px; overflow: hidden; border: 1px solid #30373b; border-radius: 8px; background: #111416; }
+    .calendar-toolbar { display: flex; align-items: center; justify-content: space-between; min-height: 38px; padding: 0 8px; border-bottom: 1px solid #272c2f; background: #171a1c; }
+    .calendar-toolbar strong { font-size: 10px; font-weight: 600; }
+    .calendar-toolbar span { margin-left: 7px; color: var(--faint); font-size: 8px; font-weight: 400; }
+    .calendar-nav { display: flex; gap: 3px; }
+    .nav-button { display: grid; place-items: center; width: 23px; height: 23px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--dim); font-size: 14px; }
+    .nav-button:hover { border-color: var(--line); color: var(--text); background: #ffffff06; }
+    .calendar-content { padding: 9px; }
+    .calendar-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-bottom: 5px; text-align: center; }
+    .calendar-weekdays span { padding: 4px 0; color: var(--faint); font-size: 8px; }
+    .month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+    .month-cell { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; min-height: 40px; padding: 3px 1px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted); font-size: 9px; transition: border-color .12s, background .12s, color .12s; }
+    .month-cell:hover { border-color: #44535c; background: #ffffff08; }
+    .month-cell.outside { color: #485056; }
+    .month-cell.single-selected { border-color: #68a6ce; color: #10171c; background: var(--blue); font-weight: 700; }
+    .month-cell.repeat-selected { border-color: #5c94b7; color: #d7f0ff; background: #83c7fa20; box-shadow: inset 0 0 0 1px #83c7fa20; }
+    .month-cell.repeat-selected::after { content: ""; width: 4px; height: 4px; margin-top: 2px; border-radius: 50%; background: var(--blue); }
+    .month-cell.outside.repeat-selected { color: #d7f0ff; }
+
+    .week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+    .week-day { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0; min-height: 70px; padding: 7px 3px; border: 1px solid #30373b; border-radius: 7px; background: #ffffff02; color: var(--dim); transition: border-color .14s, background .14s, transform .14s; }
+    .week-day:hover { transform: translateY(-1px); border-color: #52636d; color: var(--text); }
+    .week-day .weekday { color: var(--faint); font-size: 8px; }
+    .week-day .date-num { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 10px; }
+    .week-day.outside .date-num { color: #4c555a; }
+    .week-day.selected { border-color: #6198b9; color: #d7f0ff; background: #83c7fa14; }
+    .week-day.selected .weekday { color: #a8d9f6; }
+    .week-day.selected .date-num { color: #10171c; background: var(--blue); font-weight: 700; }
+    .selection-hint { margin: 7px 0 0; color: var(--faint); font-size: 8px; }
+    .summary { display: flex; align-items: flex-start; gap: 7px; margin-top: 9px; padding: 8px 9px; border: 1px solid #2a3338; border-radius: 6px; background: #83c7fa08; color: #bdddf2; font-size: 9px; }
+    .summary-dot { flex: none; width: 6px; height: 6px; margin-top: 4px; border-radius: 50%; background: var(--blue); }
+    .summary small { display: block; margin-top: 2px; color: var(--faint); font-size: 8px; }
+    .form-actions { display: flex; align-items: center; gap: 7px; margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+    .form-actions .spacer { flex: 1; }
+    .cancel { padding: 6px 9px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--dim); font-size: 9px; }
+    .save { padding: 6px 10px; border: 1px solid #4d8ab0; border-radius: 5px; background: #83c7fa19; color: #b9e3ff; font-size: 9px; }
+    .save:disabled { opacity: .45; cursor: default; }
+
+    .side { display: grid; gap: 12px; }
+    .side-card { padding: 13px; border: 1px solid #2e3438; border-radius: 9px; background: #17191bdb; }
+    .side-card h3 { margin: 0 0 9px; font-size: 11px; font-weight: 620; }
+    .flow-row { display: grid; grid-template-columns: 25px minmax(0, 1fr); gap: 8px; align-items: start; margin: 9px 0; }
+    .flow-index { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #39434a; border-radius: 50%; color: var(--blue); font: 9px Consolas, monospace; }
+    .flow-copy strong { display: block; font-size: 9px; font-weight: 550; }
+    .flow-copy span { display: block; margin-top: 2px; color: var(--faint); font-size: 8px; }
+    .keyline { height: 1px; margin: 11px 0; background: var(--line-soft); }
+    .current-rule { color: var(--blue); font-size: 11px; line-height: 1.55; }
+    .current-rule small { display: block; margin-top: 4px; color: var(--faint); font-size: 8px; }
+    .next-title { margin-bottom: 7px; color: var(--faint); font-size: 8px; }
+    .next-list { display: grid; gap: 6px; }
+    .next-item { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 8px; }
+    .next-item i { width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
+    .toast { position: fixed; right: 20px; bottom: 18px; z-index: 5; padding: 9px 12px; border: 1px solid #354c5a; border-radius: 7px; background: #1b252b; color: #c5e7fc; font-size: 10px; opacity: 0; transform: translateY(5px); transition: opacity .18s, transform .18s; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .hidden { display: none !important; }
+    @media (max-width: 800px) { .layout { grid-template-columns: minmax(0, 1fr); } .side { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 520px) { .page { padding: 18px 10px 30px; } .flow { gap: 5px; } .flow-step { font-size: 9px; } .form { padding: 10px; } .field-row { grid-template-columns: minmax(0, 1fr) minmax(105px, .72fr); gap: 6px; } .calendar-content { padding: 6px; } .month-grid { gap: 2px; } .month-cell { min-height: 35px; } .week-grid { gap: 3px; } .week-day { min-height: 62px; padding: 5px 1px; } .side { grid-template-columns: minmax(0, 1fr); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="topline">
+      <span class="brand" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16M8 13h.01M12 13h.01M16 13h.01"/></svg></span>
+      <span>KAIWU · 日程面板</span><span class="spacer"></span><span class="preview-tag">分步选择 · 可交互预览</span>
+    </div>
+    <h1>按日历选择循环日期</h1>
+    <p class="lead">先确定日程是单次还是循环。循环日程再选择按周或按月，随后直接在对应日历中点选一个或多个重复日期。</p>
+
+    <div class="flow" aria-label="创建流程">
+      <div class="flow-step current" data-flow-step="mode"><span class="flow-num">1</span><span>单次或循环</span></div><span class="flow-arrow">›</span>
+      <div class="flow-step" data-flow-step="period"><span class="flow-num">2</span><span>按周或按月</span></div><span class="flow-arrow">›</span>
+      <div class="flow-step" data-flow-step="date"><span class="flow-num">3</span><span>点选日历日期</span></div>
+    </div>
+
+    <div class="layout">
+      <section class="card" aria-label="新建日程表单">
+        <header class="card-head">
+          <span class="calendar-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16"/></svg></span>
+          <strong>日程</strong><span class="local-status">本地</span>
+        </header>
+        <form class="form" data-form>
+          <div class="form-title-row"><h2>新建日程</h2><span class="sample-tag">交互示例</span></div>
+          <label class="field"><span class="field-label">事项</span><input class="input" id="event-name" value="晨间运动" aria-label="事项名称"></label>
+          <div class="field-row">
+            <label class="field"><span class="field-label">开始日期</span><input class="input" type="date" value="2026-10-26" data-start-date aria-label="开始日期"></label>
+            <label class="field"><span class="field-label">时间</span><input class="input" type="time" value="08:30" aria-label="开始时间"></label>
+          </div>
+
+          <div class="step-block">
+            <div class="step-label"><span class="step-badge">1</span><span>选择日程类型</span></div>
+            <div class="segmented" role="group" aria-label="单次或循环">
+              <button class="segment active" type="button" data-mode="once">单次</button>
+              <button class="segment" type="button" data-mode="repeat">循环</button>
+            </div>
+          </div>
+
+          <div data-period-section class="step-block hidden">
+            <div class="step-label"><span class="step-badge">2</span><span>选择循环周期</span></div>
+            <div class="repeat-options" role="group" aria-label="循环周期">
+              <button class="repeat-option active" type="button" data-period="weekly">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M7 2.5v4M17 2.5v4M3.5 9h17M7 13h2M12 13h2M7 17h2"/></svg>
+                <span>按周<small>选择每周重复的日期</small></span>
+              </button>
+              <button class="repeat-option" type="button" data-period="monthly">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M7 2.5v4M17 2.5v4M3.5 9h17M7 13h.01M12 13h.01M17 13h.01M7 17h.01M12 17h.01"/></svg>
+                <span>按月<small>选择每月重复的日期</small></span>
+              </button>
+            </div>
+          </div>
+
+          <div data-calendar-section class="step-block">
+            <div class="step-label"><span class="step-badge" data-calendar-step>2</span><span data-calendar-label>选择这次日程日期</span></div>
+            <div class="calendar-box">
+              <div class="calendar-toolbar">
+                <div><strong data-calendar-title></strong><span data-calendar-caption></span></div>
+                <div class="calendar-nav"><button class="nav-button" type="button" data-calendar-nav="-1" aria-label="上一个">‹</button><button class="nav-button" type="button" data-calendar-nav="1" aria-label="下一个">›</button></div>
+              </div>
+              <div class="calendar-content">
+                <div class="calendar-weekdays" data-weekday-labels></div>
+                <div class="month-grid" data-month-grid></div>
+                <div class="week-grid hidden" data-week-grid></div>
+                <p class="selection-hint" data-selection-hint></p>
+              </div>
+            </div>
+            <div class="summary"><span class="summary-dot"></span><div><span data-summary-text>单次 · 2026年10月26日</span><small data-summary-sub>仅在所选日期安排一次</small></div></div>
+          </div>
+
+          <div class="form-actions"><button class="cancel" type="button">取消</button><span class="spacer"></span><button class="save" type="submit" data-save>保存日程</button></div>
+        </form>
+      </section>
+
+      <aside class="side">
+        <section class="side-card">
+          <h3>创建流程</h3>
+          <div class="flow-row"><span class="flow-index">1</span><div class="flow-copy"><strong>先选单次或循环</strong><span>单次直接选一个日期；循环进入周期设置。</span></div></div>
+          <div class="flow-row"><span class="flow-index">2</span><div class="flow-copy"><strong>循环再选按周或按月</strong><span>按周显示一周七天；按月显示整月日期。</span></div></div>
+          <div class="flow-row"><span class="flow-index">3</span><div class="flow-copy"><strong>点选重复日期</strong><span>可多选；选中的日期会持续作为循环规则。</span></div></div>
+        </section>
+        <section class="side-card">
+          <h3>当前规则</h3>
+          <div class="current-rule" data-current-rule>单次日程<small>尚未选择重复周期</small></div>
+          <div class="keyline"></div>
+          <div class="next-title">接下来发生</div>
+          <div class="next-list" data-next-list><div class="next-item"><i></i><span>10月26日 · 晨间运动</span></div></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+  <div class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const mondayNames = ['一', '二', '三', '四', '五', '六', '日'];
+      const state = {
+        mode: 'once',
+        period: '',
+        monthCursor: new Date(2026, 9, 1),
+        weekCursor: new Date(2026, 9, 26),
+        onceDate: '2026-10-26',
+        weekdays: new Set(),
+        monthdays: new Set(),
+      };
+      const $ = (selector) => document.querySelector(selector);
+      const elements = {
+        periodSection: $('[data-period-section]'),
+        calendarStep: $('[data-calendar-step]'),
+        calendarLabel: $('[data-calendar-label]'),
+        calendarTitle: $('[data-calendar-title]'),
+        calendarCaption: $('[data-calendar-caption]'),
+        weekdayLabels: $('[data-weekday-labels]'),
+        monthGrid: $('[data-month-grid]'),
+        weekGrid: $('[data-week-grid]'),
+        hint: $('[data-selection-hint]'),
+        summary: $('[data-summary-text]'),
+        summarySub: $('[data-summary-sub]'),
+        currentRule: $('[data-current-rule]'),
+        nextList: $('[data-next-list]'),
+        save: $('[data-save]'),
+        toast: $('.toast'),
+      };
+      let toastTimer;
+
+      function keyFor(date) {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      }
+      function parseKey(key) {
+        const [year, month, day] = key.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      }
+      function dateLabel(date) { return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`; }
+      function sortedWeekdays() { return [...state.weekdays].map(Number).sort((a, b) => a - b); }
+      function sortedMonthdays() { return [...state.monthdays].map(Number).sort((a, b) => a - b); }
+      function ruleText() {
+        if (state.mode === 'once') return `单次 · ${dateLabel(parseKey(state.onceDate))}`;
+        if (!state.period) return '请选择循环周期';
+        if (state.period === 'weekly') {
+          const days = sortedWeekdays().map((day) => weekdayNames[day]);
+          return days.length ? `每周 · ${days.join('、')}` : '请选择周日历日期';
+        }
+        const days = sortedMonthdays();
+        return days.length ? `每月 · ${days.map((day) => `${day}日`).join('、')}` : '请选择月日历日期';
+      }
+      function selectedCount() {
+        if (state.period === 'weekly') return state.weekdays.size;
+        if (state.period === 'monthly') return state.monthdays.size;
+        return 0;
+      }
+      function updateRightPanel() {
+        const current = ruleText();
+        elements.currentRule.textContent = current;
+        const sub = document.createElement('small');
+        if (state.mode === 'once') sub.textContent = '仅在所选日期安排一次';
+        else if (!selectedCount()) sub.textContent = '点击下方日历选择一个或多个循环日期';
+        else if (state.period === 'weekly') sub.textContent = `已选 ${state.weekdays.size} 个星期，按周重复`;
+        else sub.textContent = `已选 ${state.monthdays.size} 个日期，每月重复`;
+        elements.currentRule.append(sub);
+
+        elements.nextList.replaceChildren();
+        const dates = upcomingDates();
+        for (const date of dates) {
+          const row = document.createElement('div');
+          row.className = 'next-item';
+          const dot = document.createElement('i');
+          const label = document.createElement('span');
+          label.textContent = `${date.getMonth() + 1}月${date.getDate()}日 · ${$('#event-name').value || '新日程'}`;
+          row.append(dot, label);
+          elements.nextList.append(row);
+        }
+        if (!dates.length) {
+          const empty = document.createElement('div');
+          empty.className = 'next-item';
+          empty.textContent = state.mode === 'once' ? '尚未安排日期' : '选择循环日期后预览';
+          elements.nextList.append(empty);
+        }
+      }
+      function upcomingDates() {
+        if (state.mode === 'once') return [parseKey(state.onceDate)];
+        const start = parseKey($('[data-start-date]').value || state.onceDate);
+        const result = [];
+        for (let offset = 0; offset < 100 && result.length < 3; offset += 1) {
+          const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + offset);
+          const matches = state.period === 'weekly'
+            ? state.weekdays.has(String(date.getDay()))
+            : state.monthdays.has(String(date.getDate()));
+          if (matches) result.push(date);
+        }
+        return result;
+      }
+      function renderMonthCalendar() {
+        const year = state.monthCursor.getFullYear();
+        const month = state.monthCursor.getMonth();
+        elements.calendarTitle.textContent = `${year}年${month + 1}月`;
+        elements.calendarCaption.textContent = state.mode === 'once' ? '选择一个日期' : '点击日期选择每月循环日';
+        elements.weekdayLabels.classList.remove('hidden');
+        elements.monthGrid.classList.remove('hidden');
+        elements.weekGrid.classList.add('hidden');
+        elements.weekdayLabels.replaceChildren(...mondayNames.map((name) => {
+          const label = document.createElement('span'); label.textContent = name; return label;
+        }));
+        elements.monthGrid.replaceChildren();
+        const first = new Date(year, month, 1);
+        const offset = (first.getDay() + 6) % 7;
+        const count = new Date(year, month + 1, 0).getDate();
+        const total = Math.ceil((offset + count) / 7) * 7;
+        const start = new Date(year, month, 1 - offset);
+        for (let index = 0; index < total; index += 1) {
+          const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
+          const key = keyFor(date);
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'month-cell';
+          button.textContent = String(date.getDate());
+          button.dataset.date = key;
+          if (date.getMonth() !== month) button.classList.add('outside');
+          if (state.mode === 'once' && key === state.onceDate) button.classList.add('single-selected');
+          if (state.mode === 'repeat' && state.period === 'monthly' && state.monthdays.has(String(date.getDate()))) button.classList.add('repeat-selected');
+          button.setAttribute('aria-pressed', String(state.mode === 'once' ? key === state.onceDate : state.monthdays.has(String(date.getDate()))));
+          elements.monthGrid.append(button);
+        }
+        elements.hint.textContent = state.mode === 'once'
+          ? '单次日程只会保存一个日期。'
+          : '每月选择的是“几号”；月份天数不足时，该次会跳过。';
+      }
+      function renderWeekCalendar() {
+        const monday = new Date(state.weekCursor.getFullYear(), state.weekCursor.getMonth(), state.weekCursor.getDate());
+        const dayOffset = (monday.getDay() + 6) % 7;
+        monday.setDate(monday.getDate() - dayOffset);
+        const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+        elements.calendarTitle.textContent = `${monday.getMonth() + 1}月${monday.getDate()}日 — ${sunday.getMonth() + 1}月${sunday.getDate()}日`;
+        elements.calendarCaption.textContent = '点击日期选择每周循环日';
+        elements.weekdayLabels.classList.add('hidden');
+        elements.monthGrid.classList.add('hidden');
+        elements.weekGrid.classList.remove('hidden');
+        elements.weekGrid.replaceChildren();
+        for (let index = 0; index < 7; index += 1) {
+          const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index);
+          const weekday = String(date.getDay());
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = `week-day${state.weekdays.has(weekday) ? ' selected' : ''}`;
+          if (date.getMonth() !== monday.getMonth()) button.classList.add('outside');
+          button.dataset.weekday = weekday;
+          button.dataset.date = keyFor(date);
+          button.setAttribute('aria-pressed', String(state.weekdays.has(weekday)));
+          button.innerHTML = `<span class="weekday">周${mondayNames[index]}</span><span class="date-num">${date.getDate()}</span>`;
+          elements.weekGrid.append(button);
+        }
+        elements.hint.textContent = '点选日期后，将按对应星期每周重复；可多选。';
+      }
+      function render() {
+        const repeating = state.mode === 'repeat';
+        elements.periodSection.classList.toggle('hidden', !repeating);
+        elements.calendarStep.textContent = repeating ? '3' : '2';
+        elements.calendarLabel.textContent = repeating
+          ? (state.period === 'weekly' ? '选择每周重复的日期' : state.period === 'monthly' ? '选择每月重复的日期' : '先选择按周或按月')
+          : '选择这次日程日期';
+        const hasPeriod = repeating && Boolean(state.period);
+        $('[data-calendar-section]').classList.toggle('hidden', repeating && !hasPeriod);
+        document.querySelectorAll('[data-mode]').forEach((button) => button.classList.toggle('active', button.dataset.mode === state.mode));
+        document.querySelectorAll('[data-period]').forEach((button) => button.classList.toggle('active', button.dataset.period === state.period));
+        document.querySelectorAll('[data-flow-step]').forEach((step) => {
+          const currentStep = !repeating ? 'mode' : hasPeriod ? 'date' : 'period';
+          const current = step.dataset.flowStep === currentStep;
+          step.classList.toggle('current', current);
+        });
+        if (!repeating || state.period === 'monthly') renderMonthCalendar();
+        else if (state.period === 'weekly') renderWeekCalendar();
+        const summary = ruleText();
+        elements.summary.textContent = summary;
+        elements.summarySub.textContent = repeating
+          ? (selectedCount() ? '选中日期构成循环规则，可继续多选。' : '请选择至少一个日历日期后保存。')
+          : '仅在所选日期安排一次';
+        elements.save.disabled = repeating && (!hasPeriod || selectedCount() === 0);
+        updateRightPanel();
+      }
+      function toast(message) {
+        elements.toast.textContent = message;
+        elements.toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => elements.toast.classList.remove('show'), 1800);
+      }
+
+      document.querySelectorAll('[data-mode]').forEach((button) => button.addEventListener('click', () => {
+        state.mode = button.dataset.mode;
+        render();
+      }));
+      document.querySelectorAll('[data-period]').forEach((button) => button.addEventListener('click', () => {
+        state.period = button.dataset.period;
+        render();
+      }));
+      document.querySelectorAll('[data-calendar-nav]').forEach((button) => button.addEventListener('click', () => {
+        const delta = Number(button.dataset.calendarNav);
+        if (state.mode === 'repeat' && state.period === 'weekly') state.weekCursor.setDate(state.weekCursor.getDate() + delta * 7);
+        else state.monthCursor = new Date(state.monthCursor.getFullYear(), state.monthCursor.getMonth() + delta, 1);
+        render();
+      }));
+      elements.monthGrid.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-date]');
+        if (!button) return;
+        const date = parseKey(button.dataset.date);
+        if (state.mode === 'once') {
+          state.onceDate = button.dataset.date;
+          $('[data-start-date]').value = state.onceDate;
+        } else if (state.period === 'monthly') {
+          const day = String(date.getDate());
+          state.monthdays.has(day) ? state.monthdays.delete(day) : state.monthdays.add(day);
+        }
+        render();
+      });
+      elements.weekGrid.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-weekday]');
+        if (!button) return;
+        const weekday = button.dataset.weekday;
+        state.weekdays.has(weekday) ? state.weekdays.delete(weekday) : state.weekdays.add(weekday);
+        render();
+      });
+      $('[data-start-date]').addEventListener('change', (event) => {
+        const date = parseKey(event.target.value);
+        state.onceDate = event.target.value;
+        state.monthCursor = new Date(date.getFullYear(), date.getMonth(), 1);
+        state.weekCursor = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        render();
+      });
+      $('[data-form]').addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (elements.save.disabled) return;
+        toast(`预览规则：${ruleText()}`);
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>
