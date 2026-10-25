@@ -1,0 +1,109 @@
+<main class="schedule-panel" data-schedule-panel aria-busy="true">
+  <header class="schedule-header">
+    <h2>日程</h2>
+    <span class="schedule-save-status" data-save-status role="status" aria-live="polite">读取中</span>
+    <button class="schedule-primary" type="button" data-add-entry disabled>＋ 新建</button>
+  </header>
+
+  <div class="schedule-layout" data-schedule-layout>
+    <section class="schedule-calendar" aria-label="月历">
+      <div class="calendar-toolbar">
+        <button class="calendar-nav" type="button" data-month-step="-1" aria-label="上个月">‹</button>
+        <strong data-month-label></strong>
+        <button class="calendar-nav" type="button" data-month-step="1" aria-label="下个月">›</button>
+        <button class="calendar-today" type="button" data-today>今天</button>
+      </div>
+      <div class="calendar-weekdays" aria-hidden="true">
+        <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+      </div>
+      <div class="calendar-grid" data-calendar-grid role="grid" aria-label="日期"></div>
+    </section>
+
+    <section class="schedule-day" aria-label="当天安排">
+      <header class="day-header">
+        <div>
+          <div class="day-eyebrow">当天安排</div>
+          <h3 data-day-label></h3>
+        </div>
+        <span class="day-count" data-day-count></span>
+      </header>
+
+      <form class="entry-form" data-entry-form hidden>
+        <div class="form-heading">
+          <strong data-form-title>新建事项</strong>
+          <button class="icon-close" type="button" data-cancel aria-label="关闭">×</button>
+        </div>
+        <label class="form-field">
+          <span>事项</span>
+          <input type="text" name="title" maxlength="120" placeholder="输入日程或待办" required>
+        </label>
+        <div class="form-row">
+          <label class="form-field">
+            <span>类型</span>
+            <select name="kind">
+              <option value="event">日程</option>
+              <option value="task">待办</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>日期</span>
+            <input type="date" name="date" required>
+          </label>
+        </div>
+        <section class="recurrence-section" data-recurrence-section aria-label="重复设置">
+          <div class="recurrence-mode-row">
+            <span class="recurrence-title">重复</span>
+            <div class="recurrence-segmented" role="group" aria-label="单次或循环">
+              <button class="recurrence-mode is-active" type="button" data-repeat-mode="once" aria-pressed="true">单次</button>
+              <button class="recurrence-mode" type="button" data-repeat-mode="repeat" aria-pressed="false">循环</button>
+            </div>
+          </div>
+          <div class="recurrence-options" data-repeat-options hidden>
+            <div class="recurrence-period-row">
+              <span class="recurrence-subtitle">循环周期</span>
+              <div class="recurrence-periods" role="group" aria-label="循环周期">
+                <button class="recurrence-period" type="button" data-repeat-period="weekly" aria-pressed="false">按周</button>
+                <button class="recurrence-period" type="button" data-repeat-period="monthly" aria-pressed="false">按月</button>
+              </div>
+            </div>
+            <div class="recurrence-calendar" data-repeat-calendar hidden>
+              <div class="recurrence-calendar-toolbar">
+                <button class="calendar-nav" type="button" data-repeat-calendar-step="-1" aria-label="上一个周期">‹</button>
+                <strong data-repeat-calendar-label></strong>
+                <button class="calendar-nav" type="button" data-repeat-calendar-step="1" aria-label="下一个周期">›</button>
+              </div>
+              <div class="recurrence-weekdays" data-repeat-weekdays hidden aria-hidden="true">
+                <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+              </div>
+              <div class="recurrence-grid" data-repeat-grid role="group" aria-label="选择循环日期"></div>
+            </div>
+            <p class="recurrence-summary" data-repeat-summary aria-live="polite">先选择按周或按月</p>
+          </div>
+        </section>
+        <div class="form-row" data-time-fields>
+          <label class="form-field">
+            <span>开始</span>
+            <input type="time" name="start" value="09:00">
+          </label>
+          <label class="form-field">
+            <span>结束</span>
+            <input type="time" name="end" value="09:30">
+          </label>
+        </div>
+        <label class="form-field">
+          <span>备注</span>
+          <textarea name="note" rows="2" maxlength="500" placeholder="可选"></textarea>
+        </label>
+        <p class="form-error" data-form-error role="alert" hidden></p>
+        <footer class="form-actions">
+          <button class="schedule-delete" type="button" data-delete hidden>删除</button>
+          <span class="form-spacer"></span>
+          <button class="schedule-secondary" type="button" data-cancel>取消</button>
+          <button class="schedule-primary" type="submit">保存</button>
+        </footer>
+      </form>
+
+      <div class="day-list" data-day-list aria-live="polite"></div>
+    </section>
+  </div>
+</main>
