@@ -103,6 +103,7 @@ export default {
     setup(el, ctx) {
         const doc = el.ownerDocument;
         const panel = el.querySelector('[data-schedule-panel]');
+        const layout = el.querySelector('[data-schedule-layout]');
         const monthLabel = el.querySelector('[data-month-label]');
         const calendarGrid = el.querySelector('[data-calendar-grid]');
         const dayLabel = el.querySelector('[data-day-label]');
@@ -519,6 +520,34 @@ export default {
         }
 
         listen(addButton, 'click', () => showForm());
+        const dragScroll = { pointerId: null, startY: 0, startScrollTop: 0, moved: false };
+        listen(layout, 'pointerdown', (event) => {
+            if (event.pointerType !== 'mouse' || event.button !== 0) return;
+            if (event.target === layout && event.offsetX >= layout.clientWidth) return;
+            if (event.target.closest('button,input,select,textarea,a,[contenteditable="true"],.entry-card')) return;
+            dragScroll.pointerId = event.pointerId;
+            dragScroll.startY = event.clientY;
+            dragScroll.startScrollTop = layout.scrollTop;
+            dragScroll.moved = false;
+            layout.setPointerCapture?.(event.pointerId);
+        });
+        listen(layout, 'pointermove', (event) => {
+            if (dragScroll.pointerId !== event.pointerId) return;
+            const deltaY = event.clientY - dragScroll.startY;
+            if (!dragScroll.moved && Math.abs(deltaY) < 4) return;
+            dragScroll.moved = true;
+            layout.classList.add('is-dragging');
+            event.preventDefault();
+            layout.scrollTop = dragScroll.startScrollTop - deltaY;
+        });
+        const finishDragScroll = (event) => {
+            if (dragScroll.pointerId !== event.pointerId) return;
+            dragScroll.pointerId = null;
+            layout.classList.remove('is-dragging');
+            if (layout.hasPointerCapture?.(event.pointerId)) layout.releasePointerCapture(event.pointerId);
+        };
+        listen(layout, 'pointerup', finishDragScroll);
+        listen(layout, 'pointercancel', finishDragScroll);
         listen(el.querySelectorAll('[data-cancel]'), 'click', (event) => {
             event.preventDefault();
             hideForm();

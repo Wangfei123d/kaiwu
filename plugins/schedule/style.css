@@ -58,10 +58,26 @@
 
 .schedule-layout {
     display: grid;
+    flex: 1 1 auto;
     grid-template-columns: minmax(245px, .84fr) minmax(310px, 1.16fr);
     align-items: start;
     gap: 15px;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-color: rgba(126,200,255,.38) rgba(255,255,255,.025);
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    cursor: grab;
 }
+
+.schedule-layout.is-dragging { cursor: grabbing; user-select: none; }
+.schedule-layout::-webkit-scrollbar { width: 8px; }
+.schedule-layout::-webkit-scrollbar-track { background: rgba(255,255,255,.025); border-radius: 8px; }
+.schedule-layout::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 8px; background: rgba(126,200,255,.32); background-clip: padding-box; }
+.schedule-layout::-webkit-scrollbar-thumb:hover { background: rgba(126,200,255,.52); background-clip: padding-box; }
 
 .schedule-calendar,
 .schedule-day {
