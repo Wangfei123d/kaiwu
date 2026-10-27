@@ -1,9 +1,5 @@
 <main class="schedule-panel" data-schedule-panel aria-busy="true">
-  <header class="schedule-header">
-    <h2>日程</h2>
-    <span class="schedule-save-status" data-save-status role="status" aria-live="polite">读取中</span>
-    <button class="schedule-primary" type="button" data-add-entry disabled>＋ 新建</button>
-  </header>
+  <span class="schedule-sr-only" data-save-status role="status" aria-live="polite"></span>
 
   <div class="schedule-layout" data-schedule-layout role="region" aria-label="日历与日程，可上下滚动" tabindex="0">
     <section class="schedule-calendar" aria-label="月历">
@@ -11,7 +7,6 @@
         <button class="calendar-nav" type="button" data-month-step="-1" aria-label="上个月">‹</button>
         <strong data-month-label></strong>
         <button class="calendar-nav" type="button" data-month-step="1" aria-label="下个月">›</button>
-        <button class="calendar-today" type="button" data-today>今天</button>
       </div>
       <div class="calendar-weekdays" aria-hidden="true">
         <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
@@ -19,13 +14,9 @@
       <div class="calendar-grid" data-calendar-grid role="grid" aria-label="日期"></div>
     </section>
 
-    <section class="schedule-day" aria-label="当天安排">
+    <section class="schedule-day" aria-label="所选日期安排">
       <header class="day-header">
-        <div>
-          <div class="day-eyebrow">当天安排</div>
-          <h3 data-day-label></h3>
-        </div>
-        <span class="day-count" data-day-count></span>
+        <h3 data-day-label></h3>
       </header>
 
       <form class="entry-form" data-entry-form hidden>
@@ -105,5 +96,10 @@
 
       <div class="day-list" data-day-list aria-live="polite"></div>
     </section>
+  </div>
+
+  <div class="schedule-context-menu" data-context-menu role="menu" aria-label="日程操作" hidden>
+    <button type="button" role="menuitem" data-context-add>＋ 新建日程</button>
+    <button type="button" role="menuitem" data-context-edit hidden>编辑日程</button>
   </div>
 </main>

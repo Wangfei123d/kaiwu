@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日程时间悬停显示 · 三种效果预览</title>
+<style>
+:root {
+  color-scheme: dark;
+  font: 14px/1.5 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  color: #e8eaec;
+  background: #111213;
+  --surface: #1c1f20;
+  --surface-hover: #222729;
+  --line: #303538;
+  --muted: #8d9499;
+  --blue: #7ec8ff;
+  --blue-soft: rgba(126, 200, 255, .14);
+}
+* { box-sizing: border-box; }
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 8% 22%, rgba(126,200,255,.3) 0 2px, transparent 4px),
+    radial-gradient(circle at 85% 65%, rgba(126,200,255,.2) 0 2px, transparent 4px),
+    radial-gradient(ellipse at 50% -10%, rgba(41,72,94,.25), transparent 55%),
+    #111213;
+}
+button { color: inherit; font: inherit; }
+.page { width: min(1400px, 100%); margin: 0 auto; padding: 30px clamp(16px, 3vw, 40px) 44px; }
+.eyebrow { margin: 0 0 7px; color: #8fb9d4; font-size: 11px; letter-spacing: .08em; }
+h1 { margin: 0; font-size: clamp(23px, 3vw, 32px); line-height: 1.2; letter-spacing: -.025em; }
+.intro { max-width: 800px; margin-bottom: 22px; }
+.intro p { margin: 9px 0 0; color: var(--muted); font-size: 13px; }
+.hint { display: inline-flex; align-items: center; gap: 7px; margin-top: 13px; padding: 6px 10px; border: 1px solid #34444e; border-radius: 7px; color: #b7d9ef; background: rgba(126,200,255,.055); font-size: 11px; }
+.hint i { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 9px rgba(126,200,255,.7); }
+.options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.option { min-width: 0; overflow: hidden; border: 1px solid #2d3235; border-radius: 11px; background: linear-gradient(145deg, rgba(255,255,255,.035), rgba(255,255,255,.008)); box-shadow: 0 9px 28px rgba(0,0,0,.24); }
+.option-head { display: flex; align-items: flex-start; gap: 10px; padding: 13px 14px 11px; }
+.letter { display: grid; flex: none; place-items: center; width: 25px; height: 25px; border: 1px solid rgba(126,200,255,.32); border-radius: 7px; color: var(--blue); background: rgba(126,200,255,.07); font-size: 11px; font-weight: 600; }
+.option-copy { min-width: 0; }
+.option-copy h2 { margin: 0; font-size: 13px; font-weight: 630; }
+.option-copy p { margin: 3px 0 0; color: var(--muted); font-size: 10px; }
+.demo { position: relative; margin: 0 8px 8px; overflow: hidden; border: 1px solid #303538; border-radius: 8px; background: #17191a; }
+.demo::before, .demo::after { position: absolute; z-index: 0; content: ""; pointer-events: none; }
+.demo::before { inset: 0; background: radial-gradient(circle at 15% 28%, rgba(126,200,255,.08), transparent 22%), radial-gradient(circle at 84% 82%, rgba(126,200,255,.055), transparent 25%); }
+.demo-head { position: relative; z-index: 1; display: flex; align-items: center; min-height: 43px; padding: 0 13px; border-bottom: 1px solid #292e30; color: #dadde0; font-size: 11px; font-weight: 600; }
+.demo-head span:last-child { margin-left: auto; color: #747b80; font-size: 9px; font-weight: 400; }
+.day-title { position: relative; z-index: 1; margin: 12px 12px 8px; color: #e2e4e6; font-size: 13px; font-weight: 650; }
+.entries { position: relative; z-index: 1; display: grid; gap: 6px; padding: 0 9px 10px; }
+.entry {
+  position: relative;
+  min-width: 0;
+  min-height: 47px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.055);
+  border-left: 2px solid var(--blue);
+  border-radius: 0 7px 7px 0;
+  background: var(--surface);
+  cursor: default;
+  outline: none;
+}
+.entry:focus-visible { box-shadow: 0 0 0 2px rgba(126,200,255,.55); }
+.entry-copy { min-width: 0; color: #e4e6e8; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.entry-time { color: #a5aaae; font-size: 10px; line-height: 1.55; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.entry-time span { display: block; }
+
+/* A · 两列平滑展开：时间列从 0 宽展开，事项跟着网格自然右移。 */
+.scheme-a .entry { display: grid; grid-template-columns: 0 minmax(0, 1fr); align-items: center; gap: 0; padding: 8px 10px; transition: grid-template-columns .3s cubic-bezier(.2,.75,.25,1), gap .3s ease, background .2s ease, border-color .2s ease; }
+.scheme-a .entry-time { min-width: 0; overflow: hidden; opacity: 0; transform: translateX(-7px); transition: opacity .18s ease, transform .3s ease; }
+.scheme-a .entry:hover, .scheme-a .entry:focus-visible { grid-template-columns: 67px minmax(0,1fr); gap: 9px; background: var(--surface-hover); border-left-color: #a6ddff; }
+.scheme-a .entry:hover .entry-time, .scheme-a .entry:focus-visible .entry-time { opacity: 1; transform: translateX(0); }
+
+/* B · 遮罩揭示：事项做短距离位移，时间在左侧由遮罩展开，卡片本身不变宽。 */
+.scheme-b .entry { display: flex; align-items: center; padding: 8px 12px; transition: background .2s ease, border-color .2s ease; }
+.scheme-b .entry-time { position: absolute; left: 12px; top: 50%; width: 68px; overflow: hidden; opacity: 0; clip-path: inset(0 100% 0 0); transform: translateY(-50%); transition: clip-path .28s ease, opacity .16s ease .04s; }
+.scheme-b .entry-copy { transform: translateX(0); transition: transform .32s cubic-bezier(.2,.75,.25,1); }
+.scheme-b .entry:hover, .scheme-b .entry:focus-visible { background: #202426; border-left-color: #99d8ff; }
+.scheme-b .entry:hover .entry-time, .scheme-b .entry:focus-visible .entry-time { opacity: 1; clip-path: inset(0); }
+.scheme-b .entry:hover .entry-copy, .scheme-b .entry:focus-visible .entry-copy { transform: translateX(76px); }
+
+/* C · 左缘时间槽：左侧底色轻轻展开，时间先显现，文字随后平移并高亮。 */
+.scheme-c .entry { display: flex; align-items: center; padding: 8px 12px; transition: background .22s ease, border-color .22s ease, box-shadow .22s ease; }
+.scheme-c .entry::before { position: absolute; inset: 0 auto 0 0; z-index: 0; width: 0; background: linear-gradient(90deg, rgba(126,200,255,.14), rgba(126,200,255,.035)); content: ""; transition: width .34s cubic-bezier(.18,.8,.22,1); }
+.scheme-c .entry-time { position: absolute; z-index: 1; left: 13px; top: 50%; opacity: 0; transform: translate(-9px,-50%); transition: opacity .2s ease, transform .32s cubic-bezier(.18,.8,.22,1); }
+.scheme-c .entry-copy { position: relative; z-index: 1; transform: translateX(0); transition: transform .36s cubic-bezier(.18,.8,.22,1), color .2s ease; }
+.scheme-c .entry:hover, .scheme-c .entry:focus-visible { border-left-color: #b2e1ff; background: #202527; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+.scheme-c .entry:hover::before, .scheme-c .entry:focus-visible::before { width: 100%; }
+.scheme-c .entry:hover .entry-time, .scheme-c .entry:focus-visible .entry-time { opacity: 1; transform: translate(0,-50%); }
+.scheme-c .entry:hover .entry-copy, .scheme-c .entry:focus-visible .entry-copy { transform: translateX(76px); color: #f1f4f5; }
+
+.footer { margin: 15px 2px 0; color: #70777b; font-size: 10px; }
+@media (max-width: 940px) { .options { grid-template-columns: 1fr; max-width: 620px; margin: 0 auto; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="intro">
+    <p class="eyebrow">日程交互 · 效果预览</p>
+    <h1>悬停时显示日程时间</h1>
+    <p>默认只显示事项内容并靠左排列；鼠标移到某条日程上时，时间从内容左侧出现，内容平滑向右移开。</p>
+    <div class="hint"><i></i>将鼠标移到任意日程上，或用 Tab 键聚焦查看动效</div>
+  </header>
+
+  <section class="options" aria-label="三种日程时间显示效果">
+    <article class="option scheme-a">
+      <header class="option-head"><span class="letter">A</span><div class="option-copy"><h2>平滑推移</h2><p>时间列与内容同步展开，动作连贯、明确。</p></div></header>
+      <div class="demo">
+        <div class="demo-head">日程<span>悬停预览</span></div>
+        <div class="day-title">10月27日 · 周二</div>
+        <div class="entries">
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">7:00起床</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">整理床铺</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">刷牙</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">洗脸</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">爽肤水</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">水杨酸凝胶</div></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="option scheme-b">
+      <header class="option-head"><span class="letter">B</span><div class="option-copy"><h2>遮罩揭示</h2><p>时间像被轻轻揭开，内容柔和让位。</p></div></header>
+      <div class="demo">
+        <div class="demo-head">日程<span>悬停预览</span></div>
+        <div class="day-title">10月27日 · 周二</div>
+        <div class="entries">
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">7:00起床</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">整理床铺</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">刷牙</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">洗脸</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">爽肤水</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">水杨酸凝胶</div></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="option scheme-c">
+      <header class="option-head"><span class="letter">C</span><div class="option-copy"><h2>左缘光带</h2><p>时间出现时带出淡蓝光带，反馈更鲜明。</p></div></header>
+      <div class="demo">
+        <div class="demo-head">日程<span>悬停预览</span></div>
+        <div class="day-title">10月27日 · 周二</div>
+        <div class="entries">
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">7:00起床</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">整理床铺</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">刷牙</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">洗脸</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">爽肤水</div></div>
+          <div class="entry" tabindex="0"><div class="entry-time"><span>09:00—</span><span>09:30</span></div><div class="entry-copy">水杨酸凝胶</div></div>
+        </div>
+      </div>
+    </article>
+  </section>
+  <p class="footer">时间始终保留在日程数据中；这里只比较默认态与悬停态的展示动画。</p>
+</main>
+</body>
+</html>

@@ -22,7 +22,7 @@ import {
 import {
     formatTree, listPaneIds, defaultTree, pane, split, adoptPanes, DEFAULT_ADOPTION, tabKeysOf,
 } from '../app/lib/panel-tree.js';
-// 「停止进程」的显隐要在真窗口里量:自检不拉起真的 dsh,所以用**这条推送频道**推一条
+// Agent 状态提示要在真窗口里量:自检不拉起真的 dsh,所以用**这条推送频道**推一条
 // 合成状态事件(渲染进程收到的东西与真机上完全一样)。频道常量只有一处定义,导入它,
 // 别在这里再写一遍字符串 —— 写岔了会静默推到一个没人听的频道上。
 import { AGENT_EVENT_CHANNEL } from './agent/agent-ipc.js';
@@ -5058,24 +5058,18 @@ export async function runSelftest({
         //
         // 状态文字仍然写进 live 区给读屏用,但**视觉上必须看不见**;
         // 机器可读的那一份是 #agentPanel[data-agent-state](上面已经用过好几条断言)。
-        // 另外:「停止进程」留在**同一行**(位置不变),但改成**出事才出现** ——
-        // 平时它 hidden,有东西可停时才亮(判据见 panel.js renderStatus,下面用真事件量)。
+        // AI 输入卡片不再显示「停止进程」按钮；停止入口保留在设置页。
         const chrome = await win.webContents.executeJavaScript(`(() => {
             const panel = document.getElementById('agentPanel');
             const status = document.getElementById('agentStatus');
             const sr = status.getBoundingClientRect();
-            const kill = document.getElementById('agentKill');
-            const kr = kill ? kill.getBoundingClientRect() : null;
+            const stopButton = document.getElementById('agentKill');
             const row = panel.querySelector('.agent-ctx-row');
             const footer = panel.querySelector('.agent-footer');
             const input = document.getElementById('agentInput');
-            // ⚠️ 现在那一行**默认整行 hidden**(不在布局里,高度与间距都是 0)。
-            // 这里要量两件事:①不出现时是不是真的不占位;②出现时是不是还是 20px。
-            // 所以先把整行亮出来(按钮也亮),量完再**逐样还原**(注意把 row.hidden 也还原 ——
-            // 只还原按钮会留下一条 20px 的空行,后面的量测全被它带偏)。
+            // 连接提示行默认不在布局里。临时显示它，确认行高和间距，再还原。
             const h0 = row ? Math.round(row.getBoundingClientRect().height) : -1;
             const rowWasHidden = row ? row.hidden : null;
-            const killWasHidden = kill ? kill.hidden : null;
             const gap0 = (() => {
                 if (row === null || input === null) return null;
                 // 卡片顶边 → 输入框顶边:那一行不在时应当只剩卡片自己的 padding-top
@@ -5083,16 +5077,13 @@ export async function runSelftest({
                 return Math.round(input.getBoundingClientRect().top - fr.top);
             })();
             if (row) row.hidden = false;
-            if (kill) kill.hidden = false;
             const h1 = row ? Math.round(row.getBoundingClientRect().height) : -1;
-            const killH = kill ? Math.round(kill.getBoundingClientRect().height) : -1;
             const gap1 = (() => {
                 if (row === null || input === null) return null;
                 const fr = footer.getBoundingClientRect();
                 return Math.round(input.getBoundingClientRect().top - fr.top);
             })();
             if (row) row.hidden = rowWasHidden;
-            if (kill) kill.hidden = killWasHidden;
             const visibleText = (() => {
                 const all = panel.textContent ?? '';
                 return all.split(status.textContent ?? '').join('');   // 去掉 live 区那段
@@ -5102,14 +5093,10 @@ export async function runSelftest({
                 srClip: getComputedStyle(status).clipPath,
                 ariaLive: status.getAttribute('aria-live'),
                 visibleHasConnected: /已连接|Agent:/.test(visibleText),
-                killInCard: kill !== null && kill.closest('.agent-footer') !== null,
-                killInRow: kill !== null && kill.closest('.agent-ctx-row') === row,
-                killVisible: kr !== null && kr.height > 0,
-                killHidden: kill ? kill.hidden : null,
-                killH,
+                stopButtonAbsent: stopButton === null,
                 rowHidden: row ? row.hidden : null,
                 rowH: h0,
-                rowHWithKill: h1,
+                rowHWhenShown: h1,
                 gapWithoutRow: gap0,
                 gapWithRow: gap1,
                 ctx: footer ? footer.getAttribute('data-ctx') : null,
@@ -5127,15 +5114,14 @@ export async function runSelftest({
             JSON.stringify(chrome));
         r.ok('live 区仍然是 aria-live(读屏照样能听到状态变化,只是看不见)',
             chrome.ariaLive === 'polite', String(chrome.ariaLive));
-        r.ok('「停止进程」还在**原来那一行**(位置没变),但平时整行与按钮都是隐藏的(不占高度、不留下间距)',
-            chrome.killInCard === true && chrome.killInRow === true && chrome.killHidden === true
-            && chrome.killVisible === false && chrome.rowHidden === true
+        r.ok('AI 输入卡片已移除「停止进程」按钮，默认连接提示行不占位',
+            chrome.stopButtonAbsent === true && chrome.rowHidden === true
             && chrome.rowH === 0 && chrome.gapWithoutRow <= 10,
-            JSON.stringify({ inCard: chrome.killInCard, inRow: chrome.killInRow, hidden: chrome.killHidden, rowHidden: chrome.rowHidden, rowH: chrome.rowH, gap: chrome.gapWithoutRow }));
-        r.ok('那一行出现时仍然是 20px,而且它把输入框往下推了正好"20px + 6px 间距"(不会挤在一起)',
-            chrome.rowHWithKill === 20 && chrome.killH > 0 && chrome.killH <= 20
+            JSON.stringify({ stopButtonAbsent: chrome.stopButtonAbsent, rowHidden: chrome.rowHidden, rowH: chrome.rowH, gap: chrome.gapWithoutRow }));
+        r.ok('连接提示行显示时高 20px,输入框与它保持 6px 间距',
+            chrome.rowHWhenShown === 20
             && chrome.gapWithRow - chrome.gapWithoutRow === 26,
-            `rowH=${chrome.rowHWithKill} buttonH=${chrome.killH} gap ${chrome.gapWithoutRow}→${chrome.gapWithRow}`);
+            `rowH=${chrome.rowHWhenShown} gap ${chrome.gapWithoutRow}→${chrome.gapWithRow}`);
         r.ok('状态点、「密钥」按钮与那行上下文文字都已从输入卡片上删掉(不是藏起来)',
             chrome.dotGone === true && chrome.keyBtnGone === true && chrome.ctxTextGone === true,
             JSON.stringify({ dotGone: chrome.dotGone, keyBtnGone: chrome.keyBtnGone, ctxTextGone: chrome.ctxTextGone }));
@@ -5153,15 +5139,12 @@ export async function runSelftest({
         r.ok('正常连接下没有任何"关于连接"的提示卡(连上了就不该占视觉)',
             chrome.notice === 0, `notice=${chrome.notice}`);
 
-        // ---- 「正在连接…」+「停止进程」:推**真的** agent:event 状态事件量一遍 ----
+        // ---- 连接提示:推**真的** agent:event 状态事件量一遍 ----
         //
-        // 用户要求那一行平时是空的(连状态点也删掉),而"卡住了往哪儿按"这件事不能
-        // 因此变得找不到。做法:按钮**留在原位**,只在"有东西可停"时出现
-        // (starting / 正在跑 / 坏了),而且**整行的显隐跟着它走** —— 按钮不在场时那一行
-        // 也不在布局里(否则会留一条空行)。
+        // AI 输入卡片不再提供停止按钮；进程停止操作可从设置页进入。
         // ⚠️ 另加一句可读提示「正在连接 Agent…」:握手超时是 35 秒(见 agent-runtime 的
-        // DEFAULT_HANDSHAKE_TIMEOUT_MS),那段时间面板**不能一片静止** —— 否则用户只会看到
-        // 一个没头没尾的「停止进程」按钮。只说正在做什么,**不写数字、不画进度**。
+        // DEFAULT_HANDSHAKE_TIMEOUT_MS),那段时间面板**不能一片静止**。只说正在做什么,
+        // **不写数字、不画进度**。
         // 自检不能真去拉起一个 dsh 子进程,所以从主进程 `webContents.send` 推状态事件 ——
         // 渲染进程收到的是它在真机上收到的那一条(主进程 → preload → 面板),只是内容由我们给。
         // ⚠️ 量完必须把面板还原成**真实**状态(自检里是 stopped),否则后面
@@ -5169,24 +5152,20 @@ export async function runSelftest({
         const sendAgentState = (state) => win.webContents.send(AGENT_EVENT_CHANNEL, {
             kind: 'state', status: { state, pid: null, error: null, restarts: 0, since: 1 },
         });
-        const killProbe = async (state) => {
+        const connectionProbe = async (state) => {
             sendAgentState(state);
             await new Promise((res) => { setTimeout(res, 120); });
             return await win.webContents.executeJavaScript(`(() => {
-                const kill = document.getElementById('agentKill');
                 const panel = document.getElementById('agentPanel');
                 const row = panel.querySelector('.agent-ctx-row');
                 const hint = panel.querySelector('.agent-ctx-hint');
                 const input = document.getElementById('agentInput');
                 const footer = panel.querySelector('.agent-footer');
-                const r = kill.getBoundingClientRect();
                 const hr = hint ? hint.getBoundingClientRect() : null;
                 const fr = footer.getBoundingClientRect();
                 return {
                     state: panel.dataset.agentState,
-                    hidden: kill.hidden,
-                    disabled: kill.disabled,
-                    h: Math.round(r.height),
+                    stopButtonAbsent: document.getElementById('agentKill') === null,
                     rowHidden: row.hidden,
                     rowH: Math.round(row.getBoundingClientRect().height),
                     hintFound: hint !== null,
@@ -5199,39 +5178,36 @@ export async function runSelftest({
                 };
             })()`);
         };
-        const killBefore = await win.webContents.executeJavaScript(
+        const stateBefore = await win.webContents.executeJavaScript(
             `document.getElementById('agentPanel').dataset.agentState`);
-        const killStarting = await killProbe('starting');
-        const killReady = await killProbe('ready');
-        const killCrashed = await killProbe('crashed');
-        const killRestored = await killProbe(killBefore);
-        r.ok('「停止进程」在**正在起**的时候出现且可点(卡住的那一刻它就在原位,不用去别处找)',
-            killStarting.state === 'starting' && killStarting.hidden === false
-            && killStarting.disabled === false && killStarting.h > 0
-            && killStarting.rowHidden === false && killStarting.rowH === 20,
-            JSON.stringify(killStarting));
+        const inputConnectingState = await connectionProbe('starting');
+        const inputReadyState = await connectionProbe('ready');
+        const inputCrashedState = await connectionProbe('crashed');
+        const inputRestoredState = await connectionProbe(stateBefore);
+        r.ok('AI 输入卡片始终没有「停止进程」按钮',
+            inputConnectingState.stopButtonAbsent === true && inputReadyState.stopButtonAbsent === true
+            && inputCrashedState.stopButtonAbsent === true && inputRestoredState.stopButtonAbsent === true,
+            JSON.stringify({ connecting: inputConnectingState.stopButtonAbsent, ready: inputReadyState.stopButtonAbsent,
+                crashed: inputCrashedState.stopButtonAbsent, restored: inputRestoredState.stopButtonAbsent }));
         r.ok('连接中那 35 秒**不是一片静止**:那一行写着「正在连接 Agent…」,而且**不写数字、不画进度**',
-            killStarting.hintFound === true && killStarting.hintHidden === false
-            && killStarting.hintH > 0
-            && /正在连接 Agent/.test(String(killStarting.hintText ?? ''))
-            && /\d|%|进度/.test(String(killStarting.hintText ?? '')) === false,
-            JSON.stringify({ text: killStarting.hintText, hidden: killStarting.hintHidden, h: killStarting.hintH }));
-        r.ok('连上之后(ready 且没在跑)按钮与**整行**一起收起来 —— 聊天框上面一点空位都不留',
-            killReady.state === 'ready' && killReady.hidden === true && killReady.disabled === true
-            && killReady.rowHidden === true && killReady.rowH === 0
-            && killStarting.gap - killReady.gap === 26,
-            JSON.stringify({ ready: killReady, startingGap: killStarting.gap }));
-        r.ok('已经坏了(crashed)也亮着:进程可能还在,得能收尸',
-            killCrashed.state === 'crashed' && killCrashed.hidden === false
-            && killCrashed.disabled === false && killCrashed.rowHidden === false,
-            JSON.stringify(killCrashed));
+            inputConnectingState.hintFound === true && inputConnectingState.hintHidden === false
+            && inputConnectingState.hintH > 0
+            && /正在连接 Agent/.test(String(inputConnectingState.hintText ?? ''))
+            && /\d|%|进度/.test(String(inputConnectingState.hintText ?? '')) === false,
+            JSON.stringify({ text: inputConnectingState.hintText, hidden: inputConnectingState.hintHidden, h: inputConnectingState.hintH }));
+        r.ok('ready 与 crashed 状态不显示连接行，不额外占位',
+            inputReadyState.rowHidden === true && inputReadyState.rowH === 0
+            && inputCrashedState.rowHidden === true && inputCrashedState.rowH === 0,
+            JSON.stringify({ ready: { hidden: inputReadyState.rowHidden, h: inputReadyState.rowH },
+                crashed: { hidden: inputCrashedState.rowHidden, h: inputCrashedState.rowH } }));
         r.ok('「正在连接…」只在 connecting 时在:连上之后跟着整行一起收掉(不留一句常驻的状态文案)',
-            killReady.hintHidden === true && killCrashed.hintHidden === true
-            && killRestored.hintHidden === true,
-            JSON.stringify({ ready: killReady.hintHidden, crashed: killCrashed.hintHidden, restored: killRestored.hintHidden }));
+            inputReadyState.hintHidden === true && inputCrashedState.hintHidden === true
+            && inputRestoredState.hintHidden === true,
+            JSON.stringify({ ready: inputReadyState.hintHidden, crashed: inputCrashedState.hintHidden,
+                restored: inputRestoredState.hintHidden }));
         r.ok('量完还原:面板回到**真实**状态,而且这条路上不会凭空多出一张提示卡',
-            killRestored.state === killBefore && killRestored.notice === 0,
-            JSON.stringify({ before: killBefore, after: killRestored }));
+            inputRestoredState.state === stateBefore && inputRestoredState.notice === 0,
+            JSON.stringify({ before: stateBefore, after: inputRestoredState }));
 
         // ---- 黏贴截图:剪贴板图片 → 缩略图 chip(可删)----
         //
@@ -6499,9 +6475,9 @@ export async function runSelftest({
             r.ok('验收A2:思考收成**一条**可折叠的细条(两条增量要拼起来,不是两条)',
                 think !== null && think.blocks === 1 && think.body.length > 10,
                 JSON.stringify(think));
-            r.ok('验收A2:正文一到就自动收起,标签变「已思考」并带字数',
+            r.ok('验收A2:正文一到就自动收起,标签变「已思考」且不显示字数',
                 think !== null && think.live === 'false' && think.open === false
-                && /已思考/.test(think.label ?? '') && /\d+ 字/.test(think.count ?? ''),
+                && /已思考/.test(think.label ?? '') && think.count === null,
                 JSON.stringify(think));
 
             // ---- 思考耗时(用户要的"思考过程中显示思考时间")----
@@ -6635,17 +6611,19 @@ export async function runSelftest({
                 cfgClosed !== null && cfgClosed.expanded === 'false' && cfgClosed.text === '高',
                 JSON.stringify(cfgClosed));
 
-            // ---- 按需翻译:思考条上的「译」 ----
+            // ---- 按需翻译:思考条上的双向换译矢量图标 ----
             //
             // 模型偶尔会用英文思考(人设已经改成中文,但那不是保证)。于是给思考条一个「译」:
             // 点了才让桥用 ctx.llm 翻一次。这里端到端验三件事:收尾的思考条上有这个 chip、
             // 点了真的会换成译文(夹具回一条一眼能认出来的假译文)、译文会**自动展开**。
             const translateChip = await win.webContents.executeJavaScript(`(() => {
                 const el = document.querySelector('#agentMessages .agent-think [data-act]');
-                return el ? { act: el.dataset.act, label: el.textContent.trim() } : null;
+                return el ? { act: el.dataset.act, label: el.textContent.trim(),
+                    svg: Boolean(el.querySelector('svg')), aria: el.getAttribute('aria-label') } : null;
             })()`);
-            r.ok('翻译:收尾的思考条上有「译」', translateChip !== null
-                && translateChip.act === 'translate' && translateChip.label === '译',
+            r.ok('翻译:收尾的思考条上有可访问的单一 SVG 图标', translateChip !== null
+                && translateChip.act === 'translate' && translateChip.label === ''
+                && translateChip.svg === true && translateChip.aria === '翻译为中文',
                 JSON.stringify(translateChip));
 
             await win.webContents.executeJavaScript(
@@ -7248,7 +7226,7 @@ export async function runSelftest({
             };
         })()`);
         const killItem = await killItemProbe();
-        r.ok('设置页有「停止 Agent 进程」这一项(常驻入口,与输入卡片上那个按钮同一件事)',
+        r.ok('设置页有「停止 Agent 进程」这一项(常驻入口)',
             killItem.rowFound === true && killItem.btnFound === true
             && /停止 Agent 进程/.test(String(killItem.title ?? '')),
             JSON.stringify(killItem));

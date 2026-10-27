@@ -174,7 +174,7 @@ function codeSweeps(doc, node, overlay) {
 }
 
 /** 一条实时回复的稳定 DOM 与帧任务，历史消息不经过播放器。 */
-export function createReplyPlayback({ doc, onPaint = () => {} }) {
+export function createReplyPlayback({ doc, onPaint = () => {}, renderMarkdown = renderMarkdownNodes, getRenderKey = () => '' }) {
     const view = doc.defaultView;
     const requestFrame = view?.requestAnimationFrame?.bind(view);
     const cancelFrame = view?.cancelAnimationFrame?.bind(view);
@@ -192,19 +192,22 @@ export function createReplyPlayback({ doc, onPaint = () => {} }) {
     let disposed = false;
     let paintedText = null;
     let paintedActive = null;
+    let paintedRenderKey = null;
 
     function paint() {
-        const changed = paintedText !== buffer.text;
+        const renderKey = getRenderKey();
+        const changed = paintedText !== buffer.text || paintedRenderKey !== renderKey;
         const activeChanged = paintedActive !== buffer.active;
         if (changed) {
-            const nodes = renderMarkdownNodes(doc, buffer.text, { tables: true });
+            const nodes = renderMarkdown(doc, buffer.text, { tables: true });
             nodes.forEach(node => { codeSweeps(doc, node, false); textRuns(doc, node); });
             reconcile(doc, base, nodes, animate);
             // 副本也只来自显示游标，永远拿不到缓冲区里的未来文字。
-            const overlay = renderMarkdownNodes(doc, buffer.text, { tables: true });
+            const overlay = renderMarkdown(doc, buffer.text, { tables: true });
             overlay.forEach(node => { codeSweeps(doc, node, true); textRuns(doc, node); });
             reconcile(doc, sweep, overlay, false);
             paintedText = buffer.text;
+            paintedRenderKey = renderKey;
         }
         if (buffer.active && sweep.parentNode !== root) root.appendChild(sweep);
         else if (!buffer.active && sweep.parentNode === root) root.removeChild(sweep);

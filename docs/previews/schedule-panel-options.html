@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>日程与日历面板 · 四种方案</title>
+<style>
+:root{color-scheme:dark;--bg:#101113;--surface:#17191b;--surface-2:#1d2022;--surface-3:#25292c;--line:#303538;--line-soft:#272b2e;--text:#e8eaec;--muted:#a8adb1;--dim:#81888d;--faint:#626a70;--blue:#83c7fa;--blue-soft:#83c7fa1b;--purple:#b89bfa;--green:#7fc99d;--amber:#e4b973;--red:#e98a8a;--mono:"Cascadia Code",Consolas,"Microsoft YaHei UI",monospace;font:13px/1.45 "Segoe UI","Microsoft YaHei UI",sans-serif;color:var(--text);background:var(--bg)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(ellipse at 50% -20%,#25415a33,transparent 50%),var(--bg)}button{font:inherit;color:inherit;cursor:pointer}.page{max-width:1480px;margin:auto;padding:27px clamp(14px,3vw,42px) 42px}.topline{display:flex;align-items:center;gap:10px;margin-bottom:13px;color:var(--dim);font-size:11px;letter-spacing:.04em}.brandmark{display:grid;place-items:center;width:21px;height:21px;border:1px solid #83c7fa38;border-radius:6px;color:var(--blue);background:#83c7fa0c}.brandmark svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.topline .spacer{flex:1}.preview-tag{padding:4px 8px;border:1px solid #3b4e5b;border-radius:99px;color:#a9d9f8;background:#83c7fa0d;font-size:10px}h1{margin:0;font-size:clamp(23px,3vw,31px);font-weight:640;letter-spacing:-.035em}.lead{max-width:780px;margin:7px 0 15px;color:var(--dim);font-size:12px}.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:17px}.toolbar-note{margin-right:auto;color:var(--faint);font-size:10px}.reset{padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#ffffff04;color:var(--muted);font-size:10px}.reset:hover{border-color:#52616b;color:var(--text)}.chosen-label{min-width:85px;color:var(--blue);font-size:10px;text-align:right}
+.options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.option{min-width:0;overflow:hidden;border:1px solid #2b3033;border-radius:11px;background:linear-gradient(145deg,#ffffff06,#ffffff01);box-shadow:0 8px 24px #0002;transition:border-color .18s,transform .18s,box-shadow .18s}.option:hover{transform:translateY(-1px);border-color:#414a50}.option.is-selected{border-color:#83c7fa7e;box-shadow:0 0 0 1px #83c7fa18,0 12px 34px #0004}.option-head{display:flex;align-items:flex-start;gap:10px;padding:12px 13px 10px}.letter{display:grid;place-items:center;flex:none;width:25px;height:25px;border:1px solid #83c7fa39;border-radius:7px;color:var(--blue);background:#83c7fa0d;font:11px var(--mono)}.option-copy{min-width:0;flex:1}.option-copy h2{margin:0;font-size:13px;font-weight:630}.option-copy p{margin:3px 0 0;color:var(--faint);font-size:10px}.option-actions{display:flex;gap:5px}.small-action{padding:4px 7px;border:1px solid #343a3e;border-radius:5px;background:transparent;color:var(--dim);font-size:9px;white-space:nowrap}.small-action:hover,.is-selected .choose{border-color:#83c7fa70;color:var(--blue);background:#83c7fa0a}.choose{padding:4px 8px;border:1px solid #343a3e;border-radius:5px;background:#ffffff04;color:var(--dim);font-size:9px;white-space:nowrap}.is-selected .choose{color:var(--blue);border-color:#83c7fa70}.preview-shell{margin:0 9px 9px;overflow:hidden;border:1px solid #303538;border-radius:8px;background:#131618;box-shadow:0 6px 18px #0003}.panel-head{height:35px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--line-soft);background:#191c1e}.panel-glyph{display:grid;place-items:center;width:17px;height:17px;color:var(--blue)}.panel-glyph svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.45;stroke-linecap:round;stroke-linejoin:round}.panel-title{font-size:11px;font-weight:600}.panel-head .spacer{flex:1}.panel-date{color:var(--faint);font-size:9px}.new-event{display:flex;align-items:center;gap:4px;padding:4px 7px;border:1px solid #3c5362;border-radius:5px;color:#b9e3ff;background:#83c7fa0b;font-size:9px}.new-event:hover{background:#83c7fa19}.new-event b{font-size:13px;line-height:10px;font-weight:400}.panel-tools{display:flex;align-items:center;gap:3px;padding:7px 9px;border-bottom:1px solid #272b2d;background:#16191a}.tool{width:21px;height:20px;border:0;border-radius:4px;background:transparent;color:var(--dim);font-size:13px}.tool:hover{background:#ffffff0a;color:var(--text)}.month-name{min-width:68px;color:#d2d6d8;font-size:10px;font-weight:600;text-align:center}.today-btn{margin-left:3px;padding:3px 7px;border:1px solid #30373b;border-radius:4px;background:#ffffff04;color:var(--dim);font-size:8px}.mock-content{height:297px;min-height:270px;padding:9px;background:#121516}.eyebrow{color:#747d82;font-size:8px;letter-spacing:.07em;text-transform:uppercase}.date-heading{margin:3px 0 8px;color:#e2e6e8;font-size:12px;font-weight:600}.subline{color:#737c82;font-size:8px}.calendar{min-width:0}.calendar-toolbar{height:22px;display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}.cal-title{color:#d0d5d7;font-size:10px;font-weight:600}.cal-nav{display:flex;align-items:center;gap:4px}.cal-nav button{width:18px;height:18px;border:0;border-radius:4px;background:transparent;color:#889197;font-size:13px}.cal-nav button:hover{background:#ffffff0b;color:var(--text)}.weekdays,.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center}.weekdays{margin-bottom:3px;color:#626c71;font-size:8px}.weekdays span{padding:2px 0}.cal-day{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;min-height:25px;padding:1px;border:0;border-radius:5px;background:transparent;color:#afb6ba;font-size:9px}.cal-day:hover{background:#ffffff0b}.cal-day.outside{color:#495156}.cal-day.today::before{content:"";position:absolute;inset:2px;border:1px solid #83c7fa88;border-radius:5px}.cal-day.selected{color:#101417;background:var(--blue);font-weight:700}.cal-day.has-events:not(.selected){color:#e1e5e7}.cal-day .dots{display:flex;gap:2px;height:3px;align-items:center}.cal-day .dots i{width:3px;height:3px;border-radius:50%;background:var(--blue)}.cal-day .dots i:nth-child(2){background:var(--purple)}.cal-day .dots i:nth-child(3){background:var(--amber)}.cal-day.selected .dots i{background:#335b73}.cal-day.muted .dots{opacity:.25}.calendar[data-mode="month"] .cal-day{min-height:36px;align-items:flex-start;justify-content:flex-start;padding:4px 5px;font-size:9px}.calendar[data-mode="month"] .cal-day .dots{margin-top:3px}.month-event{display:block;max-width:100%;overflow:hidden;color:#8ba6b7;font-size:7px;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}.month-event.purple{color:#b7a4ec}.month-event.amber{color:#c8a973}
+/* A · 月历和日内时间轴各占一栏。 */
+.a-layout{display:grid;grid-template-columns:minmax(150px,.86fr) minmax(0,1.15fr);gap:10px;height:100%}.a-calendar{padding:5px 6px;border:1px solid #262c2f;border-radius:7px;background:#161a1b}.a-calendar .cal-day{min-height:27px}.day-agenda{min-width:0;padding:1px 2px}.agenda-date-row{display:flex;align-items:flex-end;justify-content:space-between;gap:4px;margin-bottom:9px}.agenda-count{color:#7a858b;font:9px var(--mono)}.timeline{position:relative;display:grid;gap:6px}.timeline-row{position:relative;display:grid;grid-template-columns:35px minmax(0,1fr);gap:7px;min-height:43px}.time-label{padding-top:5px;color:#727d82;font:8px var(--mono);text-align:right}.timeline-event{position:relative;min-width:0;padding:5px 7px 5px 9px;border-left:2px solid var(--blue);border-radius:0 5px 5px 0;background:#83c7fa0d}.timeline-event.purple{border-color:var(--purple);background:#b89bfa0d}.timeline-event.amber{border-color:var(--amber);background:#e4b9730c}.timeline-event.green{border-color:var(--green);background:#7fc99d0d}.event-name{overflow:hidden;color:#cdd3d6;font-size:9px;text-overflow:ellipsis;white-space:nowrap}.event-meta{margin-top:2px;color:#7e888d;font-size:7px}.event-state{float:right;color:#91c9eb;font-size:7px}.event-state.todo{color:#d3b67b}
+/* B · 左侧迷你月历，右侧按工作周铺开时间刻度。 */
+.b-layout{display:grid;grid-template-columns:145px minmax(0,1fr);gap:10px;height:100%}.b-mini{padding:5px;border:1px solid #262c2f;border-radius:7px;background:#161a1b}.b-mini .cal-day{min-height:25px;font-size:8px}.week-area{min-width:0;display:grid;grid-template-rows:auto 1fr}.week-head{display:flex;align-items:center;justify-content:space-between;margin:1px 0 8px}.week-head strong{font-size:10px;font-weight:600}.week-head span{color:#727d82;font-size:8px}.week-grid{position:relative;display:grid;grid-template-columns:29px repeat(5,minmax(0,1fr));grid-template-rows:28px repeat(4,minmax(42px,1fr));min-height:226px;border-top:1px solid #292e31;border-left:1px solid #292e31;border-radius:4px 0 0}.week-corner,.week-day-head,.week-time,.week-cell{min-width:0;border-right:1px solid #292e31;border-bottom:1px solid #292e31}.week-corner{background:#171a1b}.week-day-head{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#808a8f;font-size:7px}.week-day-head strong{color:#c5cbce;font-size:9px}.week-day-head.current strong{display:grid;place-items:center;width:16px;height:16px;border-radius:50%;color:#11171a;background:var(--blue)}.week-time{padding:6px 3px 0 0;color:#687278;font:7px var(--mono);text-align:right}.week-cell{position:relative;background:linear-gradient(to bottom,transparent calc(100% - 1px),#ffffff03 0)}.week-event{position:absolute;left:2px;right:2px;top:var(--top);min-height:25px;padding:4px 3px;border-left:2px solid var(--blue);border-radius:0 4px 4px 0;background:#83c7fa18;color:#c3e4f8;font-size:7px;line-height:1.25;overflow:hidden}.week-event.purple{border-color:var(--purple);background:#b89bfa19;color:#d0c2f4}.week-event.green{border-color:var(--green);background:#7fc99d18;color:#bde1c9}.week-event.amber{border-color:var(--amber);background:#e4b97317;color:#e0c894}
+/* C · 月视图占主区域，所选日期的行程固定在右栏。 */
+.c-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(155px,.85fr);gap:10px;height:100%}.c-month{min-width:0;padding:5px 6px;border:1px solid #262c2f;border-radius:7px;background:#161a1b}.c-month .cal-day{min-height:37px}.c-agenda{min-width:0;padding:3px 3px 0}.c-agenda .timeline-row{grid-template-columns:31px minmax(0,1fr);gap:5px;min-height:45px}.c-agenda .timeline-event{padding:5px 5px 5px 7px}.c-agenda .subline{margin:0 0 5px}
+/* D · 表格为主，右侧日历提供跳转与事项密度。 */
+.d-layout{display:grid;grid-template-columns:minmax(0,1.42fr) minmax(145px,.78fr);gap:10px;height:100%}.agenda-table-wrap{min-width:0;overflow:hidden;border:1px solid #292f32;border-radius:7px;background:#161a1b}.table-title{display:flex;align-items:center;justify-content:space-between;padding:7px 8px;border-bottom:1px solid #2a3033;color:#d0d5d7;font-size:9px;font-weight:600}.table-title span{color:#747f84;font-weight:400}.agenda-table{width:100%;border-collapse:collapse;table-layout:fixed}.agenda-table th{height:24px;padding:0 5px;border-bottom:1px solid #272d30;color:#687379;font-size:7px;font-weight:500;text-align:left}.agenda-table td{height:43px;padding:4px 5px;border-bottom:1px solid #252a2d;color:#b8c0c3;font-size:8px;vertical-align:middle}.agenda-table tr:last-child td{border-bottom:0}.agenda-table .col-time{width:42px;color:#7b878d;font:8px var(--mono)}.agenda-table .col-type{width:47px}.agenda-table .col-state{width:48px}.table-event{overflow:hidden;color:#d1d6d8;text-overflow:ellipsis;white-space:nowrap}.table-sub{overflow:hidden;margin-top:2px;color:#687379;font-size:7px;text-overflow:ellipsis;white-space:nowrap}.type-pill{display:inline-block;padding:2px 4px;border-radius:3px;color:#9fcfee;background:#83c7fa12;font-size:7px}.type-pill.todo{color:#d8bf8b;background:#e4b97312}.type-pill.review{color:#c4b2eb;background:#b89bfa14}.state-check{color:#82c69a}.d-calendar{padding:5px;border:1px solid #262c2f;border-radius:7px;background:#161a1b}.d-calendar .cal-day{min-height:25px;font-size:8px}.up-next{margin-top:9px;padding-top:7px;border-top:1px solid #292f32}.up-next-title{margin-bottom:5px;color:#737e83;font-size:8px}.up-next-item{display:flex;gap:5px;align-items:center;margin:4px 0;color:#aeb7bb;font-size:7px}.up-next-item i{width:5px;height:5px;flex:none;border-radius:50%;background:var(--blue)}.up-next-item i.todo{background:var(--amber)}
+.toast{position:fixed;left:50%;bottom:20px;z-index:5;padding:8px 12px;border:1px solid #3e6278;border-radius:7px;background:#1a2932;color:#c6e9fd;font-size:11px;box-shadow:0 10px 30px #0007;opacity:0;transform:translate(-50%,8px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}.options.has-expanded{grid-template-columns:minmax(0,1fr)}.options.has-expanded .option:not(.expanded){display:none}.option.expanded .preview-shell{max-width:920px;margin-inline:auto}.option.expanded .mock-content{height:370px}.option.expanded .cal-day{min-height:31px}.option.expanded .calendar[data-mode="month"] .cal-day{min-height:48px}.option.expanded .week-grid{min-height:280px}
+@media(max-width:940px){.options{grid-template-columns:1fr}.option.expanded .preview-shell{max-width:none}}
+@media(max-width:560px){.page{padding:17px 10px 30px}.topline{margin-bottom:9px}.lead{font-size:11px}.toolbar{flex-wrap:wrap}.toolbar-note{width:100%;margin:0}.option-head{padding:10px 9px 8px;gap:7px}.option-copy h2{font-size:12px}.option-copy p{font-size:9px}.option-actions{gap:3px}.small-action,.choose{padding:4px 5px;font-size:8px}.preview-shell{margin:0 6px 6px}.mock-content{height:285px;padding:7px}.a-layout{grid-template-columns:minmax(132px,.88fr) minmax(0,1.12fr);gap:6px}.a-calendar{padding:4px}.a-calendar .cal-day{min-height:25px}.b-layout{grid-template-columns:120px minmax(0,1fr);gap:6px}.b-mini{padding:4px}.b-mini .cal-day{min-height:22px}.week-grid{grid-template-columns:24px repeat(5,minmax(0,1fr));grid-template-rows:26px repeat(4,minmax(38px,1fr));min-height:215px}.week-event{font-size:6px;padding:3px 2px}.c-layout{grid-template-columns:minmax(0,1.35fr) minmax(128px,.85fr);gap:6px}.c-month{padding:4px}.c-month .cal-day{min-height:31px;padding:3px}.d-layout{grid-template-columns:minmax(0,1.3fr) minmax(127px,.8fr);gap:6px}.d-calendar{padding:4px}.agenda-table th,.agenda-table td{padding-left:3px;padding-right:3px}.agenda-table .col-time{width:36px}.agenda-table .col-type{width:40px}.agenda-table .col-state{width:42px}.option.expanded .mock-content{height:330px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="topline">
+    <span class="brandmark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16M8 13h3M8 16.5h3M14 13h2.5"/></svg></span>
+    <span>KAIWU · 面板概念预览</span><span class="spacer"></span><span class="preview-tag">交互式 HTML</span>
+  </div>
+  <h1>日程与日历面板</h1>
+  <p class="lead">四种布局方向，共用同一组日程数据。选择日期查看状态，放大单个面板细看；方案选择仅保存在当前预览页。</p>
+  <div class="toolbar"><span class="toolbar-note">四案对照 · 时间安排 + 待办混合 · 示例日期：2026 年 10 月</span><button class="reset" data-reset>恢复四案对照</button><span class="chosen-label" aria-live="polite">尚未选择方案</span></div>
+
+  <section class="options" aria-label="四种日程面板方案">
+    <article class="option" data-option="a">
+      <header class="option-head"><span class="letter">A</span><div class="option-copy"><h2>月历 + 当日日程</h2><p>月历选日期，右侧按时间浏览当天安排</p></div><div class="option-actions"><button class="small-action" data-expand>放大</button><button class="choose" data-choose>选择方案</button></div></header>
+      <div class="preview-shell">
+        <div class="panel-head"><span class="panel-glyph"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16"/></svg></span><span class="panel-title">日程</span><span class="spacer"></span><span class="panel-date">个人日历</span><button class="new-event"><b>＋</b> 新建</button></div>
+        <div class="panel-tools"><button class="tool" aria-label="上个月">‹</button><span class="month-name">2026年10月</span><button class="tool" aria-label="下个月">›</button><button class="today-btn">今天</button><span class="spacer"></span><span class="panel-date">月 · 日</span></div>
+        <div class="mock-content"><div class="a-layout">
+          <div class="a-calendar"><div class="calendar" data-calendar data-mode="mini"></div></div>
+          <section class="day-agenda"><div class="agenda-date-row"><div><div class="eyebrow">选中日期</div><div class="date-heading" data-date-label>10月23日 · 周五</div></div><span class="agenda-count">4 项</span></div>
+            <div class="timeline">
+              <div class="timeline-row"><span class="time-label">09:30</span><div class="timeline-event"><div class="event-name">周会 · 产品进度</div><div class="event-meta">会议 · 30 分钟</div></div></div>
+              <div class="timeline-row"><span class="time-label">11:00</span><div class="timeline-event purple"><div class="event-name">画布面板评审</div><div class="event-meta">项目 · 1 小时</div></div></div>
+              <div class="timeline-row"><span class="time-label">14:30</span><div class="timeline-event amber"><div class="event-name">整理本周待办 <span class="event-state todo">待完成</span></div><div class="event-meta">任务 · 截止今天</div></div></div>
+              <div class="timeline-row"><span class="time-label">16:00</span><div class="timeline-event green"><div class="event-name">提交预览稿</div><div class="event-meta">个人 · 预计 45 分钟</div></div></div>
+            </div>
+          </section>
+        </div></div>
+      </div>
+    </article>
+
+    <article class="option" data-option="b">
+      <header class="option-head"><span class="letter">B</span><div class="option-copy"><h2>周时间轴 + 迷你月历</h2><p>按工作周排时间，适合会议和连续安排</p></div><div class="option-actions"><button class="small-action" data-expand>放大</button><button class="choose" data-choose>选择方案</button></div></header>
+      <div class="preview-shell">
+        <div class="panel-head"><span class="panel-glyph"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01"/></svg></span><span class="panel-title">日程</span><span class="spacer"></span><button class="new-event"><b>＋</b> 新建</button></div>
+        <div class="panel-tools"><button class="tool" aria-label="上一周">‹</button><span class="month-name">10月19日 — 23日</span><button class="tool" aria-label="下一周">›</button><button class="today-btn">本周</button><span class="spacer"></span><span class="panel-date">周视图</span></div>
+        <div class="mock-content"><div class="b-layout">
+          <div class="b-mini"><div class="calendar" data-calendar data-mode="mini"></div></div>
+          <section class="week-area"><div class="week-head"><strong>本周安排</strong><span>10.19 — 10.23</span></div><div class="week-grid" aria-label="工作周时间轴">
+            <div class="week-corner"></div><div class="week-day-head"><span>一</span><strong>19</strong></div><div class="week-day-head"><span>二</span><strong>20</strong></div><div class="week-day-head"><span>三</span><strong>21</strong></div><div class="week-day-head"><span>四</span><strong>22</strong></div><div class="week-day-head current"><span>五</span><strong>23</strong></div>
+            <div class="week-time">09:00</div><div class="week-cell"></div><div class="week-cell"><div class="week-event" style="--top:5px">晨会</div></div><div class="week-cell"></div><div class="week-cell"></div><div class="week-cell"><div class="week-event" style="--top:3px">周会</div></div>
+            <div class="week-time">11:00</div><div class="week-cell"></div><div class="week-cell"></div><div class="week-cell"><div class="week-event purple" style="--top:4px">方案评审</div></div><div class="week-cell"></div><div class="week-cell"><div class="week-event purple" style="--top:3px">画布评审</div></div>
+            <div class="week-time">14:00</div><div class="week-cell"><div class="week-event green" style="--top:3px">写作</div></div><div class="week-cell"></div><div class="week-cell"></div><div class="week-cell"><div class="week-event amber" style="--top:4px">待办整理</div></div><div class="week-cell"><div class="week-event amber" style="--top:3px">待办整理</div></div>
+            <div class="week-time">16:00</div><div class="week-cell"></div><div class="week-cell"><div class="week-event green" style="--top:3px">提交预览</div></div><div class="week-cell"></div><div class="week-cell"></div><div class="week-cell"><div class="week-event green" style="--top:3px">交付预览稿</div></div>
+          </div></section>
+        </div></div>
+      </div>
+    </article>
+
+    <article class="option" data-option="c">
+      <header class="option-head"><span class="letter">C</span><div class="option-copy"><h2>月视图 + 右侧日程</h2><p>月历占据主区域，选中日期展开事项详情</p></div><div class="option-actions"><button class="small-action" data-expand>放大</button><button class="choose" data-choose>选择方案</button></div></header>
+      <div class="preview-shell">
+        <div class="panel-head"><span class="panel-glyph"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16M8 13h3M8 16.5h2M14 13h3M14 16.5h2"/></svg></span><span class="panel-title">日程</span><span class="spacer"></span><button class="new-event"><b>＋</b> 新建日程</button></div>
+        <div class="panel-tools"><button class="tool" aria-label="上个月">‹</button><span class="month-name">2026年10月</span><button class="tool" aria-label="下个月">›</button><button class="today-btn">今天</button><span class="spacer"></span><span class="panel-date">月份总览</span></div>
+        <div class="mock-content"><div class="c-layout">
+          <div class="c-month"><div class="calendar" data-calendar data-mode="month"></div></div>
+          <section class="c-agenda"><div class="eyebrow">当日安排</div><div class="date-heading" data-date-label>10月23日 · 周五</div><div class="subline">4 项 · 2 个待办</div>
+            <div class="timeline" style="margin-top:8px">
+              <div class="timeline-row"><span class="time-label">09:30</span><div class="timeline-event"><div class="event-name">产品周会</div><div class="event-meta">会议 · 30 分钟</div></div></div>
+              <div class="timeline-row"><span class="time-label">11:00</span><div class="timeline-event purple"><div class="event-name">画布评审</div><div class="event-meta">项目 · 1 小时</div></div></div>
+              <div class="timeline-row"><span class="time-label">14:30</span><div class="timeline-event amber"><div class="event-name">整理待办</div><div class="event-meta">待办 · 今天</div></div></div>
+              <div class="timeline-row"><span class="time-label">16:00</span><div class="timeline-event green"><div class="event-name">交付预览稿</div><div class="event-meta">个人 · 45 分钟</div></div></div>
+            </div>
+          </section>
+        </div></div>
+      </div>
+    </article>
+
+    <article class="option" data-option="d">
+      <header class="option-head"><span class="letter">D</span><div class="option-copy"><h2>日程表 + 月历侧栏</h2><p>表格快速扫读事项，日历显示每日安排密度</p></div><div class="option-actions"><button class="small-action" data-expand>放大</button><button class="choose" data-choose>选择方案</button></div></header>
+      <div class="preview-shell">
+        <div class="panel-head"><span class="panel-glyph"><svg viewBox="0 0 24 24"><path d="M4 5.5h16M4 10h16M4 14.5h16M4 19h16M8 4v16M16 4v16"/></svg></span><span class="panel-title">日程</span><span class="spacer"></span><span class="panel-date">共 4 项</span><button class="new-event"><b>＋</b> 新建</button></div>
+        <div class="panel-tools"><button class="tool" aria-label="前一天">‹</button><span class="month-name">2026年10月23日 · 周五</span><button class="tool" aria-label="后一天">›</button><button class="today-btn">今天</button><span class="spacer"></span><span class="panel-date">日视图</span></div>
+        <div class="mock-content"><div class="d-layout">
+          <div class="agenda-table-wrap"><div class="table-title">今日事项 <span>按开始时间排序</span></div><table class="agenda-table"><thead><tr><th class="col-time">时间</th><th>事项</th><th class="col-type">类型</th><th class="col-state">状态</th></tr></thead><tbody>
+            <tr><td class="col-time">09:30</td><td><div class="table-event">产品进度周会</div><div class="table-sub">会议室 · 30 分钟</div></td><td><span class="type-pill">会议</span></td><td>已确认</td></tr>
+            <tr><td class="col-time">11:00</td><td><div class="table-event">画布面板评审</div><div class="table-sub">设计讨论 · 1 小时</div></td><td><span class="type-pill review">项目</span></td><td>进行中</td></tr>
+            <tr><td class="col-time">14:30</td><td><div class="table-event">整理本周待办</div><div class="table-sub">截止今天</div></td><td><span class="type-pill todo">任务</span></td><td>待完成</td></tr>
+            <tr><td class="col-time">16:00</td><td><div class="table-event">提交预览稿</div><div class="table-sub">预计 45 分钟</div></td><td><span class="type-pill">个人</span></td><td><span class="state-check">●</span> 待开始</td></tr>
+          </tbody></table></div>
+          <div class="d-calendar"><div class="calendar" data-calendar data-mode="mini"></div><div class="up-next"><div class="up-next-title">接下来</div><div class="up-next-item"><i></i><span>11:00 画布评审</span></div><div class="up-next-item"><i class="todo"></i><span>14:30 整理待办</span></div><div class="up-next-item"><i></i><span>16:00 提交预览稿</span></div></div></div>
+        </div></div>
+      </div>
+    </article>
+  </section>
+</main>
+<div class="toast" role="status" aria-live="polite"></div>
+<script>
+(() => {
+  const EVENT_DAYS = {
+    '2026-10-02':['blue'], '2026-10-05':['green'], '2026-10-07':['purple'],
+    '2026-10-09':['blue','amber'], '2026-10-12':['green'], '2026-10-14':['purple'],
+    '2026-10-16':['blue'], '2026-10-19':['green'], '2026-10-20':['blue','purple'],
+    '2026-10-21':['purple'], '2026-10-22':['amber'], '2026-10-23':['blue','purple','amber'],
+    '2026-10-26':['green'], '2026-10-28':['blue'], '2026-10-30':['purple','amber']
+  };
+  const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const WEEKDAYS = ['日','一','二','三','四','五','六'];
+  const optionState = new WeakMap();
+  const toast = document.querySelector('.toast');
+  let toastTimer;
+
+  function keyOf(date) {
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  }
+  function formatDate(key) {
+    const [year, month, day] = key.split('-').map(Number);
+    const date = new Date(year, month-1, day);
+    return `${month}月${day}日 · 周${WEEKDAYS[date.getDay()]}`;
+  }
+  function makeCalendar(container, state) {
+    const year = state.month.getFullYear();
+    const month = state.month.getMonth();
+    const first = new Date(year, month, 1);
+    const offset = (first.getDay()+6)%7;
+    const count = new Date(year, month+1, 0).getDate();
+    const total = Math.ceil((offset+count)/7)*7;
+    container.innerHTML = `<div class="calendar-toolbar"><strong class="cal-title">${year}年${MONTHS[month]}</strong><div class="cal-nav"><button data-month-shift="-1" aria-label="上个月">‹</button><button data-month-shift="1" aria-label="下个月">›</button></div></div><div class="weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div><div class="cal-grid"></div>`;
+    const grid = container.querySelector('.cal-grid');
+    for (let i=0; i<total; i++) {
+      const date = new Date(year, month, i-offset+1);
+      const key = keyOf(date);
+      const inMonth = date.getMonth()===month;
+      const events = EVENT_DAYS[key] ?? [];
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `cal-day${inMonth?'':' outside'}${key===state.selected?' selected':''}${key==='2026-10-23'?' today':''}${events.length?' has-events':''}`;
+      button.dataset.date = key;
+      button.setAttribute('aria-label', `${key}${events.length?`，${events.length}项安排`:''}`);
+      button.setAttribute('aria-pressed', String(key===state.selected));
+      button.innerHTML = `<span>${date.getDate()}</span><span class="dots">${container.dataset.mode==='month' && events.length?`<span class="month-events">${events.slice(0,2).map((color,index)=>`<span class="month-event ${index?'purple':''}">${key==='2026-10-23'?(index?'画布评审':'周会'):'日程'}</span>`).join('')}</span>`:events.slice(0,3).map(color=>`<i class="${color}"></i>`).join('')}</span>`;
+      grid.appendChild(button);
+    }
+  }
+  function renderOption(option) {
+    const state = optionState.get(option);
+    option.querySelectorAll('[data-calendar]').forEach(calendar=>makeCalendar(calendar,state));
+    option.querySelectorAll('[data-date-label]').forEach(label=>label.textContent=formatDate(state.selected));
+  }
+  function showToast(message) {
+    toast.textContent=message;toast.classList.add('show');clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>toast.classList.remove('show'),1800);
+  }
+  document.querySelectorAll('.option').forEach(option=>{
+    optionState.set(option,{selected:'2026-10-23',month:new Date(2026,9,1)});
+    renderOption(option);
+    option.addEventListener('click',event=>{
+      const day=event.target.closest('[data-date]');
+      if(day){const state=optionState.get(option);state.selected=day.dataset.date;renderOption(option);return;}
+      const shift=event.target.closest('[data-month-shift]');
+      if(shift){event.preventDefault();const state=optionState.get(option);state.month.setMonth(state.month.getMonth()+Number(shift.dataset.monthShift));renderOption(option);return;}
+      const expand=event.target.closest('[data-expand]');
+      if(expand){const opening=!option.classList.contains('expanded');document.querySelectorAll('.option.expanded').forEach(item=>item.classList.remove('expanded'));document.querySelector('.options').classList.toggle('has-expanded',opening);option.classList.toggle('expanded',opening);expand.textContent=opening?'收起':'放大';return;}
+      const choose=event.target.closest('[data-choose]');
+      if(choose){document.querySelectorAll('.option').forEach(item=>item.classList.toggle('is-selected',item===option));document.querySelector('.chosen-label').textContent=`已选择方案 ${option.dataset.option.toUpperCase()}`;showToast(`已在预览中选择方案 ${option.dataset.option.toUpperCase()}`);}
+    });
+  });
+  document.querySelector('[data-reset]').addEventListener('click',()=>{
+    document.querySelector('.options').classList.remove('has-expanded');
+    document.querySelectorAll('.option').forEach(option=>{option.classList.remove('expanded','is-selected');option.querySelector('[data-expand]').textContent='放大';const state=optionState.get(option);state.selected='2026-10-23';state.month=new Date(2026,9,1);renderOption(option);});
+    document.querySelector('.chosen-label').textContent='尚未选择方案';showToast('已恢复四案对照');
+  });
+})();
+</script>
+</body>
+</html>

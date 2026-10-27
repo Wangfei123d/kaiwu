@@ -9,6 +9,8 @@
 // 另一个必须记住的点:**这里的所有字符串都来自对端**(Agent / 插件),
 // 一律当纯文本。归约阶段原样保留,渲染阶段一律走 textContent。
 
+import { imageAspectRatioFromInput, isImageGenerationTitle } from './image-aspect-ratio.js';
+
 /** 笔记正文送进提示词的上限(UTF-16 码元)。超出要**明说**被截断了。 */
 export const MAX_NOTE_CHARS = 8000;
 
@@ -517,6 +519,11 @@ function reduceUpdate(state, update) {
             status: pickString(update.status),
             kind: pickString(update.kind),
         };
+        const imageTool = isImageGenerationTitle(fields.title);
+        const recordedRatio = typeof update.aspectRatio === 'number' && Number.isFinite(update.aspectRatio)
+            && update.aspectRatio >= 0.1 && update.aspectRatio <= 10 ? update.aspectRatio : null;
+        const requestedAspectRatio = imageTool
+            ? imageAspectRatioFromInput(update.rawInput) ?? recordedRatio : null;
 
         const tools = state.tools.slice();
         const at = tools.findIndex(t => t.toolCallId === toolCallId);
@@ -526,21 +533,25 @@ function reduceUpdate(state, update) {
             // 文本"),于是它在界面上被排到工具**前面** —— 而它其实是工具之后才发生的。
             // 位置不实,正是这次要修的那类毛病;一次工具更新不重复收尾(已经收过了)。
             const settled = finishThoughts(state);
-            tools.push({
+            const tool = {
                 toolCallId,
                 title: fields.title || '工具调用',
                 status: fields.status || 'pending',
                 kind: fields.kind || 'other',
-            });
+            };
+            if (requestedAspectRatio !== null) tool.aspectRatio = requestedAspectRatio;
+            tools.push(tool);
             return withOrder({ ...settled, tools }, `tool:${toolCallId}`);
         }
         const prev = tools[at];
-        tools[at] = {
+        const next = {
             ...prev,
             title: fields.title || prev.title,
             status: fields.status || prev.status,
             kind: fields.kind || prev.kind,
         };
+        if (requestedAspectRatio !== null) next.aspectRatio = requestedAspectRatio;
+        tools[at] = next;
         return { ...state, tools };
     }
 

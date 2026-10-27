@@ -54,6 +54,7 @@ function sanitizeEntries(value) {
         const kind = entry.kind === 'task' ? 'task' : entry.kind === 'event' ? 'event' : null;
         const title = typeof entry.title === 'string' ? entry.title.trim().slice(0, 120) : '';
         if (!date || !kind || !title) return [];
+        const completedDate = parseDate(entry.doneDate);
         return [{
             id: typeof entry.id === 'string' && entry.id ? entry.id.slice(0, 100) : createId(),
             date: dateKey(date),
@@ -62,10 +63,14 @@ function sanitizeEntries(value) {
             start: kind === 'event' && isTime(entry.start) ? entry.start : '',
             end: kind === 'event' && isTime(entry.end) ? entry.end : '',
             note: typeof entry.note === 'string' ? entry.note.slice(0, 500) : '',
-            done: kind === 'task' && entry.done === true,
+            doneDate: completedDate ? dateKey(completedDate) : (kind === 'task' && entry.done === true ? dateKey(date) : ''),
             recurrence: sanitizeRecurrence(entry.recurrence, kind),
         }];
     });
+}
+
+function entryIsDoneOn(entry, value) {
+    return entry?.doneDate === value;
 }
 
 function entryOccursOn(entry, value) {
@@ -104,13 +109,15 @@ export default {
         const doc = el.ownerDocument;
         const panel = el.querySelector('[data-schedule-panel]');
         const layout = el.querySelector('[data-schedule-layout]');
+        const dayPane = el.querySelector('.schedule-day');
         const monthLabel = el.querySelector('[data-month-label]');
         const calendarGrid = el.querySelector('[data-calendar-grid]');
         const dayLabel = el.querySelector('[data-day-label]');
-        const dayCount = el.querySelector('[data-day-count]');
         const dayList = el.querySelector('[data-day-list]');
         const saveStatus = el.querySelector('[data-save-status]');
-        const addButton = el.querySelector('[data-add-entry]');
+        const contextMenu = el.querySelector('[data-context-menu]');
+        const contextAddButton = contextMenu?.querySelector('[data-context-add]');
+        const contextEditButton = contextMenu?.querySelector('[data-context-edit]');
         const form = el.querySelector('[data-entry-form]');
         const formTitle = el.querySelector('[data-form-title]');
         const timeFields = el.querySelector('[data-time-fields]');
@@ -134,11 +141,13 @@ export default {
         let selectedDate = dateKey(new Date());
         let monthCursor = parseDate(selectedDate);
         let editingId = null;
+        let contextEntryId = null;
         let repeatMode = 'once';
         let repeatFrequency = '';
         let repeatCalendarCursor = parseDate(selectedDate);
         let selectedWeekdays = new Set();
         let selectedMonthdays = new Set();
+        let animateCompletionId = null;
         let disposed = false;
         let writeChain = Promise.resolve();
 
@@ -176,7 +185,7 @@ export default {
             return entries.filter((entry) => entryOccursOn(entry, value)).sort((a, b) => {
                 if (a.kind !== b.kind) return a.kind === 'event' ? -1 : 1;
                 if (a.kind === 'event') return (a.start || '99:99').localeCompare(b.start || '99:99');
-                return Number(a.done) - Number(b.done) || a.title.localeCompare(b.title, 'zh-CN');
+                return Number(entryIsDoneOn(a, value)) - Number(entryIsDoneOn(b, value)) || a.title.localeCompare(b.title, 'zh-CN');
             });
         }
 
@@ -328,40 +337,48 @@ export default {
         }
 
         function makeEntryCard(entry) {
-            const article = node(doc, 'article', `entry-card${entry.done ? ' is-done' : ''}`);
+            const isDone = entryIsDoneOn(entry, selectedDate);
+            const article = node(doc, 'article', `entry-card${isDone ? ' is-done' : ''}`);
             article.dataset.kind = entry.kind;
+            article.dataset.entryId = entry.id;
             if (entry.kind === 'event') {
-                const time = entry.start ? `${entry.start}${entry.end ? `–${entry.end}` : ''}` : '全天';
-                article.appendChild(node(doc, 'div', 'entry-time', time));
+                article.tabIndex = 0;
+                article.dataset.toggleEvent = entry.id;
+                article.setAttribute('role', 'button');
+                article.setAttribute('aria-pressed', String(isDone));
+                article.setAttribute('aria-label', `${entry.title}，${isDone ? '已完成' : '未完成'}`);
+                if (isDone && animateCompletionId === entry.id) article.classList.add('is-completion-animating');
+                const time = node(doc, 'div', 'entry-time');
+                if (entry.start) {
+                    time.appendChild(node(doc, 'span', '', entry.end ? `${entry.start}–` : entry.start));
+                    if (entry.end) time.appendChild(node(doc, 'span', '', entry.end));
+                } else {
+                    time.textContent = '全天';
+                }
+                article.appendChild(time);
+                const doneMark = node(doc, 'span', 'entry-done-mark');
+                doneMark.setAttribute('aria-hidden', 'true');
+                doneMark.innerHTML = '<svg viewBox="0 0 16 16"><path d="m3 8 3.1 3.2L13 4.5"></path></svg>';
+                article.appendChild(doneMark);
             } else {
                 const check = node(doc, 'input', 'task-check');
                 check.type = 'checkbox';
-                check.checked = entry.done;
+                check.checked = isDone;
                 check.dataset.toggleTask = entry.id;
-                check.setAttribute('aria-label', `${entry.done ? '取消完成' : '完成'}：${entry.title}`);
+                check.setAttribute('aria-label', `${isDone ? '取消完成' : '完成'}：${entry.title}`);
                 article.appendChild(check);
             }
 
             const main = node(doc, 'div', 'entry-main');
             main.appendChild(node(doc, 'div', 'entry-title', entry.title));
-            if (entry.recurrence) main.appendChild(node(doc, 'div', 'entry-repeat', recurrenceLabel(entry.recurrence)));
             if (entry.note) main.appendChild(node(doc, 'div', 'entry-note', entry.note));
             article.appendChild(main);
-
-            const edit = node(doc, 'button', 'entry-edit', '编辑');
-            edit.type = 'button';
-            edit.dataset.editEntry = entry.id;
-            edit.setAttribute('aria-label', `编辑：${entry.title}`);
-            article.appendChild(edit);
             return article;
         }
 
         function renderDay() {
             dayLabel.textContent = formatDay(selectedDate);
             const list = entriesForDate(selectedDate);
-            const eventCount = list.filter((entry) => entry.kind === 'event').length;
-            const taskCount = list.length - eventCount;
-            dayCount.textContent = `${list.length} 项${taskCount ? ` · ${taskCount} 个待办` : ''}`;
             dayList.replaceChildren();
 
             if (list.length === 0) {
@@ -384,9 +401,19 @@ export default {
         function render() {
             renderCalendar();
             renderDay();
+            animateCompletionId = null;
+        }
+
+        function toggleEventCompletion(entry) {
+            const willComplete = !entryIsDoneOn(entry, selectedDate);
+            entry.doneDate = willComplete ? selectedDate : '';
+            animateCompletionId = willComplete ? entry.id : null;
+            render();
+            save();
         }
 
         function hideForm() {
+            contextMenu.hidden = true;
             form.hidden = true;
             form.reset();
             editingId = null;
@@ -495,7 +522,9 @@ export default {
                 start: kind === 'event' ? startInput.value : '',
                 end: kind === 'event' ? endInput.value : '',
                 note: noteInput.value.trim(),
-                done: kind === 'task' && entries.find((item) => item.id === editingId)?.done === true,
+                doneDate: entries.find((item) => item.id === editingId)?.doneDate === dateKey(date)
+                    ? dateKey(date)
+                    : '',
                 recurrence,
             };
             const existingIndex = entries.findIndex((item) => item.id === editingId);
@@ -519,7 +548,54 @@ export default {
             save();
         }
 
-        listen(addButton, 'click', () => showForm());
+        const view = doc.defaultView;
+        let todayDate = selectedDate;
+        const dayRolloverTimer = view.setInterval(() => {
+            const today = dateKey(new Date());
+            if (today === todayDate) return;
+            const wasFollowingToday = selectedDate === todayDate;
+            todayDate = today;
+            if (!wasFollowingToday) return;
+            selectedDate = today;
+            monthCursor = parseDate(today);
+            render();
+        }, 60_000);
+        listen(dayPane, 'contextmenu', (event) => {
+            event.preventDefault();
+            const entryCard = event.target.closest('.entry-card');
+            contextEntryId = entryCard?.dataset.entryId || null;
+            contextAddButton.hidden = Boolean(contextEntryId);
+            contextEditButton.hidden = !contextEntryId;
+            contextMenu.hidden = false;
+            const bounds = contextMenu.getBoundingClientRect();
+            const panelBounds = panel.getBoundingClientRect();
+            const maxLeft = Math.max(8, panel.clientWidth - bounds.width - 8);
+            const maxTop = Math.max(8, panel.clientHeight - bounds.height - 8);
+            contextMenu.style.left = `${Math.min(Math.max(8, event.clientX - panelBounds.left), maxLeft)}px`;
+            contextMenu.style.top = `${Math.min(Math.max(8, event.clientY - panelBounds.top), maxTop)}px`;
+            (contextEntryId ? contextEditButton : contextAddButton).focus();
+        });
+        listen(contextAddButton, 'click', () => {
+            contextMenu.hidden = true;
+            contextEntryId = null;
+            kindInput.value = 'event';
+            showForm();
+        });
+        listen(contextEditButton, 'click', () => {
+            contextMenu.hidden = true;
+            const entry = entries.find((item) => item.id === contextEntryId);
+            contextEntryId = null;
+            if (entry) showForm(entry);
+        });
+        listen(doc, 'pointerdown', (event) => {
+            if (!contextMenu.hidden && !contextMenu.contains(event.target)) contextMenu.hidden = true;
+        });
+        listen(doc, 'keydown', (event) => {
+            if (event.key !== 'Escape' || contextMenu.hidden) return;
+            contextMenu.hidden = true;
+            layout.focus();
+        });
+        listen(view, 'blur', () => { contextMenu.hidden = true; });
         const dragScroll = { pointerId: null, startY: 0, startScrollTop: 0, moved: false };
         listen(layout, 'pointerdown', (event) => {
             if (event.pointerType !== 'mouse' || event.button !== 0) return;
@@ -628,41 +704,46 @@ export default {
                 shiftMonth(Number(monthButton.dataset.monthStep));
                 return;
             }
-            if (event.target.closest('[data-today]')) {
-                selectedDate = dateKey(new Date());
-                monthCursor = parseDate(selectedDate);
-                hideForm();
-                render();
-                return;
-            }
-            const editButton = event.target.closest('[data-edit-entry]');
-            if (editButton) {
-                const entry = entries.find((item) => item.id === editButton.dataset.editEntry);
-                if (entry) showForm(entry);
+            const eventCard = event.target.closest('[data-toggle-event]');
+            if (eventCard) {
+                const entry = entries.find((item) => item.id === eventCard.dataset.toggleEvent);
+                if (!entry) return;
+                toggleEventCompletion(entry);
                 return;
             }
             const checkbox = event.target.closest('[data-toggle-task]');
             if (checkbox) {
                 const entry = entries.find((item) => item.id === checkbox.dataset.toggleTask);
                 if (!entry) return;
-                entry.done = checkbox.checked;
+                entry.doneDate = checkbox.checked ? selectedDate : '';
                 render();
                 save();
             }
         });
+        listen(dayList, 'keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            const eventCard = event.target.closest('[data-toggle-event]');
+            if (!eventCard) return;
+            event.preventDefault();
+            const entry = entries.find((item) => item.id === eventCard.dataset.toggleEvent);
+            if (!entry) return;
+            toggleEventCompletion(entry);
+        });
 
         cleanupsByElement.set(el, () => {
             disposed = true;
+            view.clearInterval(dayRolloverTimer);
             listeners.splice(0).forEach((off) => off());
+            contextMenu.hidden = true;
         });
 
         void (async () => {
             try {
-                entries = sanitizeEntries(await ctx.settings.get(STORAGE_KEY, []));
+                const storedEntries = await ctx.settings.get(STORAGE_KEY, []);
+                entries = sanitizeEntries(storedEntries);
                 if (disposed) return;
-                addButton.disabled = false;
                 panel.setAttribute('aria-busy', 'false');
-                setStatus('本地', 'saved');
+                setStatus('已保存', 'saved');
                 render();
             } catch {
                 if (disposed) return;

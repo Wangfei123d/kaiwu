@@ -21,6 +21,8 @@ import {
 // 黏贴截图:判据(类型白名单 / 单张与总量上限 / 那一句中文原因)只有一份 ——
 // 渲染层用同一份做**即时反馈**,主进程用同一份做**权威校验**。
 import { validateImageCandidate, imagePromptFailureHint, imageCapabilityRefusal, stripIpcWrapper } from '../lib/agent-image.js';
+import { createImageGenerationPreview, disposeImageGenerationViewer, showGeneratedImages } from './image-generation-preview.js';
+import { failedImageTool, planGeneratedImages } from '../lib/agent-generated-images.js';
 import {
     MODEL_CONFIG_ID, REASONING_CONFIG_ID, chipLabel, configOptionOf, effortIndexOf,
     effortLevels, modelGroups,
@@ -400,9 +402,9 @@ export function createAgentPanel({
 } = {}) {
     const doc = els.panel?.ownerDocument ?? globalThis.document;
     const {
-        panel, statusEl, retryBtn, messagesEl, inputEl, sendBtn, credentialEl, killBtn = null,
+        panel, statusEl, retryBtn, messagesEl, inputEl, sendBtn, credentialEl,
         // 思考强度 / 模型那枚胶囊(与它外面那层锚点)。**可选**:旧外壳/测试替身没有它时,
-        // 面板照常工作 —— 只是没有这一枚控件(与 killBtn 同一条规矩)。
+        // 面板照常工作。
         configBtn = null, configWrap = null,
     } = els;
 
@@ -412,7 +414,7 @@ export function createAgentPanel({
     let credentials = null;
     let started = false;              // 挂载时自动 start 只做一次(重试走按钮)
     let starting = false;             // start() 在飞,防连点
-    let killRequested = false;        // 刚按过「停止进程」:提示卡要留一个「重试」出口(见 killProcess)
+    let killRequested = false;        // 进程被用户停止后:提示卡要留一个「重试」出口
     let footerEl = null;              // 输入区那张卡片(机器可读的 data-ctx 挂在它上面)
     let noticeEl = null;              // 连接失败时对话里那张提示卡(懒建)
     // 思考条与工具摘要行的"用户展开过"状态按 id / 组键记(不再是一个全局布尔:现在
@@ -491,7 +493,7 @@ export function createAgentPanel({
 
     // ---------- 骨架:状态区 / 消息流 / 权限卡 / 凭证卡 / 输入区 ----------
     //
-    // 状态区与输入区在 index.html 里已经带了按钮(#agentRetry / #agentKill /
+    // 状态区与输入区在 index.html 里已经带了按钮(#agentRetry /
     // #agentInput / #agentSend —— 发送与取消已经合成**一颗球**,见下面的 ensureOrb),
     // 所以这里只**补齐**缺的部分:
     // 状态文字插在最前面(按钮留在后面),输入框与球若已经存在就不再造一个。
@@ -560,9 +562,7 @@ export function createAgentPanel({
     }
     // ⚠️ 这里**不再补任何 placeholder**(用户要求输入区没有任何可见引导文字)。
 
-    // ⚠️ 卡片顶端那一行现在**什么都不常驻**(用户要求:密钥按钮、停止按钮、上下文文字、
-    // 最后连那个状态点也删掉了)。这一行只剩一个用途:Agent 不正常时「停止进程」的落点 ——
-    // 平时整行 `hidden`(不占高度、不占间距),所以聊天框上面是干净的。
+    // 卡片顶端只在连接中显示提示，其余状态整行 `hidden`(不占高度、不占间距)。
     // 上下文信息不丢,改挂在**输入框**上(placeholder 短句 + title 全句,见 renderContext)。
     // 所以这里不再建任何节点,只在渲染时把那一行按需显隐(见 renderStatus)。
 
@@ -608,13 +608,6 @@ export function createAgentPanel({
         }
         if (retryBtn.textContent === '') retryBtn.textContent = '重试';
     }
-    if (killBtn) {
-        if (typeof killBtn.getAttribute === 'function' && killBtn.getAttribute('aria-label') === null) {
-            setAria(killBtn, 'aria-label', '停止 Agent 进程');
-        }
-        if (killBtn.textContent === '') killBtn.textContent = '停止进程';
-    }
-
     const inputRow = el(doc, 'div', 'agent-input-row');
     if (input.parentNode === null) inputRow.appendChild(input);
     for (const b of [sendBtn]) {
@@ -657,11 +650,10 @@ export function createAgentPanel({
         const existingFooter = (input.parentNode !== null) ? findFooter(input) : null;
         const footer = existingFooter ?? el(doc, 'footer', 'agent-footer');
         if (existingFooter === null) {
-            // 现场造一个空的骨架时也要有那一行:它是「正在连接…」与「停止进程」的落点(平时 hidden)
+            // 现场造一个空的骨架时也要有连接提示行(平时 hidden)
             const row = el(doc, 'div', 'agent-ctx-row');
             row.hidden = true;
             row.appendChild(el(doc, 'span', 'agent-ctx-hint', ''));
-            row.appendChild(el(doc, 'button', 'agent-ctx-stop', '停止进程'));
             footer.appendChild(row);
             footer.appendChild(inputRow);
             footer.appendChild(el(doc, 'div', 'agent-act-row'));
@@ -1768,8 +1760,44 @@ export function createAgentPanel({
 
     // 每条消息的显示游标独立于归约状态，结构重画、收尾都不重置播放器。
     const replyViews = new Map();
+    const imageGenerationViews = new Map();
+    let imageGenerationPlan = { generations: [], omittedByMessage: new Map(), currentTurn: 0 };
+    let imageGenerationShape = '';
+
+    function toolsOfUnit(unit) {
+        return unit.kind === 'group' ? unit.tools : unit.kind === 'tool' ? [unit.tool] : [];
+    }
+
+    function clearImageGenerationViews() {
+        for (const view of imageGenerationViews.values()) view.parentNode?.removeChild(view);
+        imageGenerationViews.clear();
+    }
+
+    function syncImageGenerationViews() {
+        const running = state.busy === true && (state.status.state === 'ready' || state.status.state === 'starting');
+        const active = imageGenerationPlan.generations.filter(call => call.images.length > 0
+            || (running && call.turn === imageGenerationPlan.currentTurn && !failedImageTool(call.tool)));
+        const ids = new Set(active.map(call => call.toolCallId));
+        for (const [id, view] of imageGenerationViews) {
+            if (ids.has(id)) continue;
+            view.parentNode?.removeChild(view);
+            imageGenerationViews.delete(id);
+        }
+        for (const call of active) {
+            if (!imageGenerationViews.has(call.toolCallId)) {
+                imageGenerationViews.set(call.toolCallId, createImageGenerationPreview({ doc, toolCallId: call.toolCallId }));
+            }
+            showGeneratedImages({ doc, preview: imageGenerationViews.get(call.toolCallId), images: call.images, aspectRatio: call.aspectRatio });
+        }
+        imageGenerationShape = JSON.stringify(active.map(call => [call.toolCallId, call.aspectRatio ?? null, call.images.map(image => image.url)]));
+    }
+
+    function imageViewsOfUnit(unit) {
+        return toolsOfUnit(unit).map(tool => imageGenerationViews.get(tool.toolCallId)).filter(Boolean);
+    }
     function paintReplyEntry(entry) {
         if (entry.textEl) entry.textEl.hidden = entry.player.text === '';
+        if (entry.copyButton) entry.copyButton.hidden = entry.player.active;
         if (entry.bubble) {
             if (entry.player.active) entry.bubble.setAttribute('data-streaming', 'true');
             else entry.bubble.removeAttribute?.('data-streaming');
@@ -1780,6 +1808,7 @@ export function createAgentPanel({
         replyViews.clear();
     }
     function syncReplyViews() {
+        imageGenerationPlan = planGeneratedImages(timelineOf(state));
         const ids = new Set(asArray(state.messages).map(message => message.id));
         for (const [id, entry] of replyViews) {
             if (!ids.has(id)) { entry.player.dispose(); replyViews.delete(id); }
@@ -1794,7 +1823,9 @@ export function createAgentPanel({
                     paintReplyEntry(entry);
                     scrollToBottom();
                     scheduleRailFrame();
-                } });
+                }, renderMarkdown: (targetDoc, text, options) => renderMarkdownNodes(targetDoc, text, {
+                    ...options, omitImageUrls: imageGenerationPlan.omittedByMessage.get(message.id),
+                }), getRenderKey: () => JSON.stringify([...(imageGenerationPlan.omittedByMessage.get(message.id) ?? [])]) });
                 replyViews.set(message.id, entry);
             }
             entry.player.update(message.text, message.done);
@@ -1882,8 +1913,7 @@ export function createAgentPanel({
 
     /** 快速通道:结构没变,只把变了的文本写进去(节点不动 → 动画不会重来)。 */
     function paintLive(live) {
-        if (liveNodes.thinkCount !== null && live.thought !== null) {
-            liveNodes.thinkCount.textContent = `${live.thought.text.length} 字`;
+        if (liveNodes.thinkBody !== null && live.thought !== null) {
             liveNodes.thinkBody.textContent = live.thought.text;
         }
         // 秒数由计时器驱动重画(见 syncThinkTicker),所以这里每次都要按**当前时刻**重算
@@ -1990,10 +2020,8 @@ export function createAgentPanel({
         //    所以这里只负责把它画出来,不按下秒表。
         const timeEl = el(doc, 'span', 'agent-think-time', thinkElapsedText(thought));
         sum.appendChild(timeEl);
-        // 「译」只给**收尾**的思考条:还在流的那条翻了也是白翻(后面还会变长)。
-        if (!live) sum.appendChild(translationChips(thought, translation, lang));
-        const countEl = el(doc, 'span', 'agent-think-count', `${bodyText.length} 字`);
-        sum.appendChild(countEl);
+        // 翻译入口只给收尾的思考；一个图标同时承担翻译和原文/中文切换。
+        if (!live) sum.appendChild(translationIcon(thought, translation, lang));
         box.appendChild(sum);
         // ⚠️ 按**换行**把正文切成一行一枚 .agent-think-line:只有切成独立元素,
         //    才可能做到"逐行 + 每行从左到右"(一行一枚才有各自的擦除边)。
@@ -2014,9 +2042,8 @@ export function createAgentPanel({
         const grow = el(doc, 'div', 'agent-think-grow');
         grow.appendChild(bodyEl);
         box.appendChild(grow);
-        // 字数、正文与秒数会随增量/时间变:交给快速通道原地改(见 paintLive)
+        // 正文与秒数随增量/时间原地更新，右侧不显示字数。
         if (live) {
-            liveNodes.thinkCount = countEl;
             liveNodes.thinkBody = bodyEl;
             liveNodes.thinkTime = timeEl;
         }
@@ -2054,51 +2081,215 @@ export function createAgentPanel({
         return box;
     }
 
-    /**
-     * 思考条上的翻译控件:未译 → 「译」;译中 → 「翻译中…」;译好 → 「中文 / 原文」;
-     * 失败 → 「重译」(点一次就是重来)。全是叶子字段的展示,不在这里做协议判断。
-     */
-    function translationChips(thought, translation, lang) {
+    /** 双向换译：纯 SVG 笔画，不使用字体图标或不可信 HTML。 */
+    function translationSvg() {
+        const svg = svgEl('svg');
+        attr(svg, 'viewBox', '0 0 32 32');
+        attr(svg, 'aria-hidden', 'true');
+        attr(svg, 'focusable', 'false');
+        const group = (name, paths) => {
+            const node = svgEl('g');
+            setClass(node, name, true);
+            for (const [className, d] of paths) {
+                const path = svgEl('path');
+                if (className) setClass(path, className, true);
+                attr(path, 'd', d);
+                node.appendChild(path);
+            }
+            svg.appendChild(node);
+        };
+        group('agent-translate-cn', [['', 'M4.5 11h11m-5.5-3v3m-3 0c.3 4.8 3.4 8.2 8.2 10M13 11c-.8 4.7-3.6 8-8 10']]);
+        group('agent-translate-en', [['', 'm17 23 4-11 4 11m-6.6-3.7h5.2']]);
+        group('agent-translate-arrows', [
+            ['agent-translate-upper', 'M17 5h9l-2.7-2.5'],
+            ['agent-translate-lower', 'M15 27H6l2.7 2.5'],
+        ]);
+        return svg;
+    }
+
+    /** 复制图标：纸页描边，复制成功时路径逐笔收成勾。 */
+    function copySvg() {
+        const svg = svgEl('svg');
+        attr(svg, 'viewBox', '0 0 28 28');
+        attr(svg, 'aria-hidden', 'true');
+        attr(svg, 'focusable', 'false');
+        const mark = svgEl('g');
+        setClass(mark, 'agent-copy-mark', true);
+        const back = svgEl('path');
+        setClass(back, 'agent-copy-back', true);
+        attr(back, 'd', 'M17 6V5.5A1.5 1.5 0 0 0 15.5 4h-9A1.5 1.5 0 0 0 5 5.5v12A1.5 1.5 0 0 0 6.5 19H8');
+        mark.appendChild(back);
+        const outline = svgEl('path');
+        setClass(outline, 'agent-copy-outline', true);
+        attr(outline, 'pathLength', '1');
+        attr(outline, 'd', 'M10.5 8H19a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-8.5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2Z');
+        mark.appendChild(outline);
+        const lines = svgEl('path');
+        setClass(lines, 'agent-copy-lines', true);
+        attr(lines, 'd', 'M12 13h6m-6 4h6');
+        mark.appendChild(lines);
+        svg.appendChild(mark);
+        const check = svgEl('path');
+        setClass(check, 'agent-copy-check', true);
+        attr(check, 'pathLength', '1');
+        attr(check, 'd', 'm6.5 14.5 4.2 4.1 10-10');
+        svg.appendChild(check);
+        return svg;
+    }
+
+    function copyBySelection(text) {
+        if (!doc.body || typeof doc.execCommand !== 'function') return false;
+        const focused = doc.activeElement;
+        const selection = typeof doc.getSelection === 'function' ? doc.getSelection() : null;
+        const ranges = [];
+        if (selection) {
+            for (let i = 0; i < selection.rangeCount; i++) ranges.push(selection.getRangeAt(i).cloneRange());
+        }
+        const field = doc.createElement('textarea');
+        field.value = text;
+        field.readOnly = true;
+        attr(field, 'aria-hidden', 'true');
+        attr(field, 'tabindex', '-1');
+        field.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;';
+        doc.body.appendChild(field);
+        let copied = false;
+        try {
+            field.focus({ preventScroll: true });
+            field.select();
+            copied = doc.execCommand('copy') === true;
+        } catch {
+            copied = false;
+        } finally {
+            field.remove();
+            if (selection) {
+                try {
+                    selection.removeAllRanges();
+                    for (const range of ranges) selection.addRange(range);
+                } catch { /* 剪贴板结果不应被选区恢复失败覆盖。 */ }
+            }
+            try { focused?.focus?.({ preventScroll: true }); } catch { /* 尽量恢复焦点。 */ }
+        }
+        return copied;
+    }
+
+    async function copyAssistantReply(button, text) {
+        if (button.disabled) return;
+        if (button.copyResetTimer !== undefined) clearTimeout(button.copyResetTimer);
+        button.disabled = true;
+        button.dataset.state = 'copying';
+        attr(button, 'aria-busy', 'true');
+        attr(button, 'aria-label', '正在复制 AI 回复');
+        attr(button, 'title', '正在复制 AI 回复');
+        attr(button, 'data-tooltip', '正在复制');
+        const startedAt = globalThis.performance?.now?.() ?? Date.now();
+        let copied = false;
+        try {
+            const clipboard = globalThis.navigator?.clipboard;
+            if (typeof clipboard?.writeText === 'function') {
+                try {
+                    await clipboard.writeText(text);
+                    copied = true;
+                } catch {
+                    copied = copyBySelection(text);
+                }
+            } else copied = copyBySelection(text);
+        } catch {
+            copied = false;
+        }
+        const elapsed = (globalThis.performance?.now?.() ?? Date.now()) - startedAt;
+        if (elapsed < 200) await new Promise(resolve => setTimeout(resolve, 200 - elapsed));
+        if (button.isConnected === false) return;
+        const state = copied ? 'copied' : 'error';
+        const label = copied ? '已复制 AI 回复' : '复制失败，请重试';
+        button.disabled = false;
+        button.dataset.state = state;
+        attr(button, 'aria-busy', 'false');
+        attr(button, 'aria-label', label);
+        attr(button, 'title', label);
+        attr(button, 'data-tooltip', copied ? '已复制' : '复制失败，请重试');
+        button.copyResetTimer = setTimeout(() => {
+            if (button.isConnected === false) return;
+            button.dataset.state = 'idle';
+            attr(button, 'aria-label', '复制 AI 回复');
+            attr(button, 'title', '复制 AI 回复');
+            attr(button, 'data-tooltip', '复制 AI 回复');
+            delete button.copyResetTimer;
+        }, copied ? 1600 : 4200);
+    }
+
+    function renderCopyButton(text) {
+        const row = el(doc, 'div', 'agent-msg-copy-row');
+        const button = el(doc, 'button', 'agent-msg-copy');
+        button.type = 'button';
+        button.dataset.state = 'idle';
+        attr(button, 'aria-label', '复制 AI 回复');
+        attr(button, 'title', '复制 AI 回复');
+        attr(button, 'data-tooltip', '复制 AI 回复');
+        attr(button, 'aria-busy', 'false');
+        button.appendChild(copySvg());
+        button.addEventListener('click', () => { void copyAssistantReply(button, text); });
+        row.appendChild(button);
+        return { row, button };
+    }
+
+    /** 一个入口：首次翻译、忙态、切换缓存语言和失败重试。 */
+    function translationIcon(thought, translation, lang) {
         const wrap = el(doc, 'span', 'agent-think-actions');
         const status = translation?.status ?? 'none';
-
-        const chip = (act, label, on) => {
-            const btn = el(doc, 'button', on ? 'agent-think-chip on' : 'agent-think-chip', label);
-            btn.type = 'button';
-            if (typeof btn.setAttribute === 'function') btn.setAttribute('data-act', act);
-            btn.addEventListener('click', (event) => {
-                // ⚠️ 它在 <summary> 里:不拦住的话点一下会**顺带把这条折叠块开合一次**。
-                event?.preventDefault?.();
-                event?.stopPropagation?.();
-                if (act === 'translate') translate(thought);
-                else {
-                    if (act === 'src') showSourceIds.add(thought.id);
-                    else showSourceIds.delete(thought.id);
-                    render();
-                }
-            });
-            return btn;
-        };
-
-        if (status === 'pending') {
-            wrap.appendChild(el(doc, 'span', 'agent-think-chip busy', '翻译中…'));
-            return wrap;
-        }
-        if (status === 'done') {
-            wrap.appendChild(chip('zh', '中文', lang === 'zh'));
-            wrap.appendChild(chip('src', '原文', lang === 'src'));
-            return wrap;
-        }
-        wrap.appendChild(chip('translate', status === 'error' ? '重译' : '译', false));
+        const busy = status === 'pending';
+        const done = status === 'done';
+        const act = done ? (lang === 'zh' ? 'src' : 'zh') : 'translate';
+        const iconState = busy ? 'busy' : status === 'error' ? 'error' : done && lang === 'zh' ? 'zh' : 'source';
+        const label = busy ? '正在翻译为中文' : status === 'error'
+            ? `翻译失败：${translation.error || '原因未知'}。点击重试`
+            : done ? (lang === 'zh' ? '当前为中文，点击查看原文' : '当前为原文，点击查看中文') : '翻译为中文';
+        const btn = el(doc, 'button', 'agent-think-translate');
+        btn.type = 'button';
+        btn.disabled = busy;
+        attr(btn, 'data-act', act);
+        attr(btn, 'data-state', iconState);
+        attr(btn, 'data-thought-id', thought.id);
+        attr(btn, 'aria-label', label);
+        attr(btn, 'title', label);
+        attr(btn, 'aria-busy', String(busy));
+        attr(btn, 'aria-pressed', String(done && lang === 'zh'));
+        btn.appendChild(translationSvg());
+        btn.addEventListener('click', (event) => {
+            // 控件位于 summary 内，点击图标不能同时开合思考块。
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            if (busy) return;
+            if (act === 'translate') { void translate(thought); return; }
+            const focused = doc.activeElement === btn;
+            if (act === 'src') showSourceIds.add(thought.id);
+            else showSourceIds.delete(thought.id);
+            render();
+            if (focused) {
+                const next = Array.from(messagesEl.querySelectorAll?.('.agent-think-translate') ?? [])
+                    .find(button => button.getAttribute('data-thought-id') === thought.id);
+                next?.focus?.();
+            }
+        });
+        wrap.appendChild(btn);
         return wrap;
     }
 
-    /** 点「译」:把这一条交给主进程(它再请桥翻一次)。失败不抛,状态由事件回填。 */
+    /** 先进入忙态防止重复请求；翻译结果由主进程事件回填。 */
     async function translate(thought) {
+        const status = state.translations?.[thought.id]?.status;
+        if (status === 'pending' || status === 'done') return;
+        const session = state.sessionId;
+        state = reduceAgentEvent(state, { kind: 'translation', thoughtId: thought.id, status: 'pending' });
+        render();
         try {
             await calls('agent:translate', { thoughtId: thought.id, text: thought.text });
         } catch (err) {
             log.warn?.('[agent] 翻译失败', err);
+            if (disposed || state.sessionId !== session || !asArray(state.thoughts).includes(thought)
+                || state.translations?.[thought.id]?.status !== 'pending') return;
+            state = reduceAgentEvent(state, { kind: 'translation', thoughtId: thought.id, status: 'error',
+                error: stripIpcWrapper(String(err?.message ?? err)) });
+            render();
         }
     }
 
@@ -2342,17 +2533,22 @@ export function createAgentPanel({
             if (liveNodes !== null) liveNodes.stages = { stages, refs: rendered.refs };
         }
         const textEl = el(doc, 'div', 'agent-msg-text');
+        let replyEntry = null;
         if (msg.role === 'assistant') {
             textEl.className = 'agent-msg-text md';
             const entry = replyViews.get(msg.id);
             if (entry) {
+                replyEntry = entry;
+                entry.copyButton = null;
                 entry.bubble = bubble;
                 entry.textEl = textEl;
                 textEl.appendChild(entry.player.element);
                 paintReplyEntry(entry);
             } else {
                 // 历史回复直接显示；实时回复由播放器只解析已显示的前缀。
-                for (const node of renderMarkdownNodes(doc, msg.text, { tables: true })) textEl.appendChild(node);
+                for (const node of renderMarkdownNodes(doc, msg.text, {
+                    tables: true, omitImageUrls: imageGenerationPlan.omittedByMessage.get(msg.id),
+                })) textEl.appendChild(node);
             }
         } else {
             // 用户气泡**不排版**:那是用户自己说的话,而且自检夹具回显的那条带着
@@ -2364,6 +2560,14 @@ export function createAgentPanel({
         // 方案 C 的状态行占位同理(它此刻还没有正文)。
         // 纯文字那条路完全不变(没有图也没有状态行时这个条件恒真,与从前逐像素一致)。
         if (msg.text !== '' || (images.length === 0 && stages.length === 0)) bubble.appendChild(textEl);
+        if (msg.role === 'assistant' && msg.done === true && msg.text !== '') {
+            const renderedCopy = renderCopyButton(msg.text);
+            if (replyEntry !== null) {
+                replyEntry.copyButton = renderedCopy.button;
+                renderedCopy.button.hidden = replyEntry.player.active;
+            }
+            bubble.appendChild(renderedCopy.row);
+        }
         // 视频理解那一轮的成本读数(只有带 usage 的消息才有;其余消息形状不变)。
         if (msg.usage !== null && typeof msg.usage === 'object') {
             for (const node of renderMessageUsage(msg.usage, msg.timings ?? null)) bubble.appendChild(node);
@@ -2427,27 +2631,28 @@ export function createAgentPanel({
         syncReplyViews();
         // 快速通道:只有文本在长(结构一个字节都没变)时,别把 DOM 推倒重来。
         const units = planTimeline(state);
-        const shape = shapeOf(units);
+        syncImageGenerationViews();
+        const shape = `${shapeOf(units)}|${imageGenerationShape}`;
         if (shape === renderedShape && liveNodes !== null) {
             paintLive(liveOf(units));
             return;
         }
-        liveNodes = { thinkCount: null, thinkBody: null, thinkTime: null, stages: null };
+        liveNodes = { thinkBody: null, thinkTime: null, stages: null };
         // 按**有序时间线**画:思考内联在它那段输出前面、工具与中间回复折成一行。
         // ⚠️ 外面还要按**轮**包一层 `.agent-turn`:轮次轨要拿每一轮的盒子算 offset
         // 与跳转,没有这一层就只能按"第几条消息"猜边界。分包是纯函数(groupTurns)。
         const parts = [];
         const { pre, turns } = groupTurns(units);
-        for (const unit of pre) parts.push(renderUnit(unit));
+        for (const unit of pre) parts.push(renderUnit(unit), ...imageViewsOfUnit(unit));
         turns.forEach((turn, i) => {
             const box = el(doc, 'div', 'agent-turn');
             if (typeof box.setAttribute === 'function') box.setAttribute('data-turn', String(i));
-            for (const unit of turn) box.appendChild(renderUnit(unit));
+            for (const unit of turn) {
+                box.appendChild(renderUnit(unit));
+                for (const view of imageViewsOfUnit(unit)) box.appendChild(view);
+            }
             parts.push(box);
         });
-        if (parts.length === 0) {
-            parts.push(el(doc, 'p', 'hint', '还没有对话。直接问吧 —— 问题会带上当前打开的笔记。'));
-        }
         replaceChildren(streamEl, parts);
         // 记下这一版的结构:下一次只有文本变长时就不再重建(见函数开头的快速通道)
         renderedShape = shape;
@@ -2717,7 +2922,7 @@ export function createAgentPanel({
         // 重试按钮是"把人接上"的入口,所以三种情形都得可用:
         //   自动连过(autoStart=true)—— 只有出了错才需要它(连上了再点没有意义);
         //   不自动连(autoStart=false,自检走这条)—— 它**就是**唯一入口,一直可点;
-        //   刚按过「停止进程」—— 进程是自己停掉的,没有"失败"可看,但也得能再接上。
+        //   进程刚由用户停止——没有"失败"可看,但也得能再接上。
         const retryAvailable = autoStart ? (broken || starting || killRequested) : true;
         // ⚠️ 「发送」在**有视频草稿**时必须可点,哪怕 Agent 没连上:视频理解根本
         // 不经过 Agent(它由主进程直接 POST 给 DashScope)。照着"没连上就禁用"写,
@@ -2763,26 +2968,8 @@ export function createAgentPanel({
             growInput();                                    // 输入区高度永远跟着值走(清空就收回去)
         }
         setDisabled(retryBtn, !retryAvailable);
-        // ⚠️ 「停止进程」是**出事才出现**的按钮(用户要求:那一行平时是空的、连状态点都没有)。
-        // 判据是"现在有没有东西可停":
-        //   · 正在起(starting)—— 起的过程就可能卡住,这正是要停的时刻;
-        //   · 正在跑一次(state.busy)—— 正常从眼前消失;卡住时它就是唯一出路;
-        //   · 已经坏了(failed/crashed)—— 进程可能还在,得能收尸。
-        // 反过来,`ready` 且手上没活、以及用户自己停掉的 `stopped`,都**不显示** ——
-        // 那时点它没有任何意义。它出现的**位置不变**(还是输入卡片顶端那一行),
-        // 所以"卡住了去哪儿按"这件事不需要重新学。
-        // 另一条常驻入口在「设置 → AI 与 Agent → 停止 Agent 进程」(找不到这一行时用)。
-        //
-        // ⚠️ **整行的显隐跟着按钮走**:那一行平时只有这个按钮,按钮不在场时它必须 `hidden`
-        // (CSS 里是 display:none)—— 否则它会留一条 20px 空行加一段下间距,
-        // 而用户要的是"聊天框上面干净"。按钮在场时这一行才有 20px(上一轮钉的不变量:
-        // 出现时 20、不出现时不占位)。
-        const killNeeded = status.state === 'starting' || broken || (running && state.busy);
-        setHidden(killBtn, !killNeeded);
-        setDisabled(killBtn, !killNeeded);
         // ⚠️ 「正在连接 Agent…」:握手超时是 35 秒(见 agent-runtime 的
         // DEFAULT_HANDSHAKE_TIMEOUT_MS),那段时间里面板**不能是一片静止** ——
-        // 否则用户只会看见一个没头没尾的「停止进程」按钮,以为界面坏了。
         // 只说"正在连接",**不写数字也不画进度条**:分母(这一台机器这次要多久)
         // 根本不存在,写了就是把猜的数字当承诺(与项目里"没有真分母就不画"同一条规矩)。
         // 只在 `starting` 时出现:失败/崩了有对话里的提示卡说原因,那比这句更有信息。
@@ -2793,7 +2980,7 @@ export function createAgentPanel({
             }
             setHidden(ctxHintEl, !connecting);
         }
-        setHidden(ctxRowEl, !killNeeded);
+        setHidden(ctxRowEl, !connecting);
         // 提示卡两种来由:连不上(broken)或**用户自己刚把进程停掉**(killRequested)。
         // 后者不是错误,但同样"什么都不能做" —— 所以同样要在对话里给出「重试」。
         renderNotice(broken || killRequested, detail, killRequested && !broken);
@@ -3179,13 +3366,15 @@ export function createAgentPanel({
             && event.sessionId !== state.sessionId) return;
 
         // ⚠️ 判据取**这一次事件之前**的状态:进程从"在跑"掉到"没在跑"之后,
-        // 「发送」是灰的、「重试」本来也不出现 —— 那一行上的「停止进程」也不再显示
-        // (它只在有东西可停时出现)。所以这一刻必须在对话里留一个再连的出口。
-        // 不绑定到"谁按的按钮":面板那一行、设置页那一项、外部把进程干掉,都算。
+        // 「发送」是灰的、「重试」本来也不出现。设置页停止进程或外部停掉都要留一个再连出口。
         const wasRunning = state.status.state === 'ready' || state.status.state === 'starting';
         const previousSession = state.sessionId;
         state = reduceAgentEvent(state, event);
-        if (event.kind === 'session' && state.sessionId !== previousSession) clearReplyViews();
+        if (event.kind === 'session' && state.sessionId !== previousSession) {
+            clearReplyViews();
+            clearImageGenerationViews();
+            disposeImageGenerationViewer(doc);
+        }
         // 在事件边界收进缓冲：同一帧里连续收到 chunk 和 prompt-end 也不丢逐字进度。
         syncReplyViews();
         // 「接着聊」接回来的会话:对端不重放旧消息,历史得由**开物自己的台账**铺回来。
@@ -4149,7 +4338,6 @@ export function createAgentPanel({
     //    所以"busy 就取消"与旧行为一一对应。输入框的 Enter 那条路**不变**(见下面 keydown)。
     sendBtn?.addEventListener('click', () => (state.busy === true ? cancel() : send()));
     retryBtn?.addEventListener('click', () => start());
-    killBtn?.addEventListener('click', () => killProcess());
     /* ⚠️ 中文输入法(IME)组合态:多行输入里 Enter 有两个含义 —— **确认候选字** vs 发送。
        组合期间绝不能把"选字"当成发送。三重判据(缺一条都可能漏):
          e.isComposing === true   标准字段;
@@ -4274,6 +4462,8 @@ export function createAgentPanel({
             disposed = true;
             renderQueued = false;
             clearReplyViews();
+            clearImageGenerationViews();
+            disposeImageGenerationViewer(doc);
             if (typeof unsubscribe === 'function') safe(unsubscribe, log);
             unsubscribe = null;
             if (typeof videoProgressUnsub === 'function') safe(videoProgressUnsub, log);

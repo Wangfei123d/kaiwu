@@ -161,6 +161,11 @@ async function setupPanelWorkspace() {
     // 旧的两个像素宽度:既是默认树的权重,也是拖动后继续维护的那份读数(既有契约)。
     const navW = clampWidth(await read('ui.navWidth', DEFAULT_NAV_W), MIN_NAV_W, MAX_NAV_W, DEFAULT_NAV_W);
     const sideW = clampWidth(await read('ui.sideWidth', DEFAULT_SIDE_W), MIN_SIDE_W, MAX_SIDE_W, DEFAULT_SIDE_W);
+    const savedSidebarState = await read('ui.collapsedSidebars', {});
+    const sidebarState = {
+        left: savedSidebarState?.left === true,
+        right: savedSidebarState?.right === true,
+    };
     // 容器宽度 ≈ 视口宽度(笔记视图横跨整个 body)。拿不到就退回一个常见宽度 ——
     // 反正是**比例**,差几像素只影响默认树的权重,不影响窗口缩放。
     const viewportW = document.documentElement?.clientWidth || window.innerWidth || 1280;
@@ -342,8 +347,12 @@ async function setupPanelWorkspace() {
     const workspace = createPanelWorkspace({
         desk, stack,
         hintEl: $('panelHint'), bandEl: $('panelBand'),
-        treeEl: $('layoutTree'), resetBtn: $('layoutReset'),
         host, panes, store, initialTree,
+        sidebarState,
+        onSidebarStateChange: (state) => write('ui.collapsedSidebars', {
+            left: state?.left === true,
+            right: state?.right === true,
+        }),
         requiredIds,
         // 标签**全名**:笔记标签用笔记标题(「甲篇」而不是「笔记正文」),
         // 其它视图用登记的名字。找不到标题(索引还没载入)就退回文件名。
@@ -531,6 +540,15 @@ async function boot() {
             if (info?.source !== 'tabs') workspaceApi?.openView('doc', path);
             agent.syncNote();
         },
+        onOpenCanvas: (path) => {
+            const open = () => {
+                workspaceApi?.openView('note-canvas');
+                // 插件面板惰性挂载在 openView 的微任务中；等它注册事件监听后再发打开请求。
+                queueMicrotask(() => window.dispatchEvent(new CustomEvent('kaiwu:open-canvas', { detail: { path } })));
+            };
+            if (workspaceApi) open();
+            else void ensureWorkspace().then(open).catch((err) => console.error('[notes] 打开画布失败', err));
+        },
         onCloseDocx: (path) => {
             for (const pane of workspaceApi?.allTabs?.() ?? []) {
                 const index = pane.tabs?.findIndex((tab) => tab.view === 'doc' && tab.doc === path) ?? -1;
@@ -545,6 +563,15 @@ async function boot() {
     stage('boot:笔记视图已建');
     // 工作台要用它(标签全名 = 笔记标题;切 doc 标签 = 把编辑器切到那一篇)
     notesApi = notes;
+    window.addEventListener('kaiwu:canvas-opened', (event) => {
+        const path = event.detail?.path;
+        if (typeof path === 'string') notesApi?.selectCanvas(path);
+    });
+    window.addEventListener('kaiwu:canvas-list-changed', () => {
+        void notesApi?.refreshIndex({ keepSelection: true }).catch((err) => {
+            console.warn('[notes] 刷新画布文件列表失败', err);
+        });
+    });
 
     // 侧栏宽度可拖(左 + 右)/ 平铺工作台。放在这里:两条分隔条与 #paneNotes 都在骨架里,
     // 而宽度的读回要走设置通道 —— 失败也不该拦住后面的外壳启动。
@@ -560,7 +587,7 @@ async function boot() {
             .catch((err) => {
                 stageError('boot:工作台初始化失败,退回固定网格兜底', err);
                 // 退路:改动前的固定布局兜底(.pane-notes 的 grid,四格依次排开)。
-                // 工作台没挂上时 .pw-host 不会被加,.pw-desk / .pw-bar 保持 display:none,
+                // 工作台没挂上时 .pw-host 不会被加,.pw-desk 保持 display:none,
                 // 布局照旧走 shell.css 的 grid。
                 return setupColumnResizers().catch((e) => stageError('boot:侧栏宽度初始化失败', e));
             });
@@ -592,7 +619,6 @@ async function boot() {
             configBtn: $('agentCfg'),
             configWrap: $('agentCfgWrap'),
             credentialEl: $('agentCredential'),
-            killBtn: $('agentKill'),
         },
         bridge,
         log: console,
@@ -732,7 +758,7 @@ async function boot() {
         stage('boot:外壳已显示,准备进入笔记库');
         await enterVault(status);
         // ⚠️ 这一条路(`?testVault=`,自检走的就是它)也必须把工作台引用**存下来** ——
-        // 设置页的「布局」那一项读的就是它(读不到就会显示成空的布局树)。
+        // 设置页的「布局」那一项从这里读取当前布局。
         workspaceRef = await ensureWorkspace();   // 同上:必须等外壳可见
         stage('boot:进入笔记库完成');
     } else {

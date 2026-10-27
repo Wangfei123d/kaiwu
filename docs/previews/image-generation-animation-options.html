@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>画面生成动效方案 · 开物</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101113;
+      --surface: #191a1d;
+      --surface-2: #202226;
+      --glass: #1b1d20;
+      --border: #393c41;
+      --border-hi: #50545b;
+      --text: #e6e8eb;
+      --muted: #b6bbc3;
+      --dim: #8e949d;
+      --faint: #676d76;
+      --accent: #7ec8ff;
+      --accent-soft: rgba(126, 200, 255, .18);
+      --mono: "Cascadia Code", Consolas, "Microsoft YaHei UI", monospace;
+      font: 13px/1.5 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    * { box-sizing: border-box; }
+    body { min-width: 320px; min-height: 100vh; margin: 0; background:
+      radial-gradient(ellipse at 50% -18%, rgba(70, 116, 151, .15), transparent 58%), var(--bg); }
+    button { color: inherit; font: inherit; }
+    .page { max-width: 1440px; margin: 0 auto; padding: 30px clamp(16px, 4vw, 52px) 48px; }
+    .topline { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 25px; }
+    .brand { display: flex; align-items: center; gap: 9px; color: var(--dim); font-size: 12px; letter-spacing: .04em; }
+    .brand-mark { width: 17px; height: 17px; position: relative; display: inline-block; }
+    .brand-mark::before, .brand-mark::after { content: ""; position: absolute; left: 3px; width: 12px; height: 2px; border-radius: 2px; background: var(--accent); }
+    .brand-mark::before { top: 5px; transform: rotate(36deg); }
+    .brand-mark::after { top: 10px; transform: rotate(-36deg); }
+    .brand-mark i { position: absolute; left: 1px; top: 6px; width: 5px; height: 5px; border-radius: 50%; background: #eaf8ff; box-shadow: 0 0 8px var(--accent); }
+    .controls { display: flex; gap: 8px; }
+    .control { min-height: 32px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); background: rgba(255,255,255,.025); cursor: pointer; transition: color .16s, border-color .16s, background .16s; }
+    .control:hover { color: var(--text); border-color: var(--accent); background: rgba(126,200,255,.06); }
+    h1 { margin: 0; font-size: clamp(22px, 3vw, 30px); font-weight: 620; letter-spacing: -.025em; }
+    .intro { max-width: 760px; margin: 9px 0 20px; color: var(--dim); font-size: 13px; }
+    .principle { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 23px; padding: 7px 10px; border: 1px solid rgba(126,200,255,.16); border-radius: 7px; background: rgba(126,200,255,.045); color: #b5cde0; font-size: 11px; }
+    .principle b { color: var(--accent); font-weight: 600; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .option { min-width: 0; padding: 13px; border: 1px solid #2c2f34; border-radius: 11px; background: linear-gradient(145deg, rgba(255,255,255,.027), rgba(255,255,255,.008)); transition: border-color .2s, transform .2s, box-shadow .2s; }
+    .option:hover { border-color: #4c5660; transform: translateY(-1px); }
+    .option.selected { border-color: rgba(126,200,255,.58); box-shadow: 0 0 0 1px rgba(126,200,255,.12), 0 9px 28px rgba(0,0,0,.22); }
+    .option-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 11px; }
+    .letter { flex: none; display: grid; place-items: center; width: 25px; height: 25px; margin-top: 1px; border: 1px solid rgba(126,200,255,.24); border-radius: 7px; color: var(--accent); background: rgba(126,200,255,.06); font: 11px var(--mono); }
+    .option-title { min-width: 0; flex: 1; }
+    .option-title h2 { margin: 0; font-size: 13px; font-weight: 600; }
+    .option-title p { margin: 3px 0 0; color: var(--faint); font-size: 11px; }
+    .select { flex: none; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--dim); background: transparent; font-size: 10px; cursor: pointer; }
+    .select:hover, .option.selected .select { border-color: var(--accent); color: var(--accent); }
+
+    /* 节点结构参照短剧画布里的「画面生成」节点。 */
+    .node { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--glass); box-shadow: 0 5px 16px rgba(0,0,0,.25); }
+    .node-head { position: relative; z-index: 2; display: flex; align-items: center; gap: 7px; height: 31px; padding: 0 9px; border-bottom: 1px solid rgba(255,255,255,.07); color: var(--muted); font-size: 11px; }
+    .node-icon { width: 7px; height: 7px; flex: none; border-radius: 2px; background: #7ec8ff; box-shadow: 0 0 8px rgba(126,200,255,.6); }
+    .node-name { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
+    .status { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font: 10px var(--mono); white-space: nowrap; }
+    .status-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; animation: statusPulse 1.5s ease-in-out infinite; }
+    @keyframes statusPulse { 50% { opacity: .38; box-shadow: 0 0 0 4px rgba(126,200,255,.08); } }
+    .node-body { padding: 8px; }
+    .prompt { overflow: hidden; margin-bottom: 7px; color: var(--dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .prompt b { color: #b8c0ca; font-weight: 500; }
+    .art { position: relative; isolation: isolate; overflow: hidden; width: 100%; aspect-ratio: 16 / 8.1; border: 1px solid rgba(185,215,238,.1); border-radius: 5px; background: #151b23; }
+    .scene { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .38; transition: opacity .4s; }
+    .art::after { content: ""; position: absolute; z-index: 1; inset: 0; pointer-events: none; border: 1px solid rgba(226,245,255,.035); border-radius: inherit; }
+    .wait-label { position: absolute; z-index: 5; left: 50%; bottom: 9px; display: inline-flex; align-items: center; gap: 6px; transform: translateX(-50%); padding: 3px 7px; border: 1px solid rgba(210,232,247,.1); border-radius: 99px; color: rgba(223,235,244,.72); background: rgba(13,17,22,.58); backdrop-filter: blur(8px); font-size: 9px; white-space: nowrap; }
+    .wait-label i { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px var(--accent); }
+    .foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--faint); font-size: 10px; }
+    .foot strong { color: #a8b4c0; font-weight: 500; }
+
+    /* A：星点在画面中心附近缓慢聚散，持续表示任务仍在执行。 */
+    .spark-art { background: radial-gradient(ellipse at 50% 56%, rgba(84,167,223,.13), transparent 42%), #121821; }
+    .spark-art .scene { opacity: .16; animation: sceneWake 4s ease-in-out infinite alternate; }
+    @keyframes sceneWake { to { opacity: .35; } }
+    .spark { position: absolute; z-index: 3; left: var(--x); top: var(--y); width: var(--s, 3px); height: var(--s, 3px); border-radius: 50%; background: #c8edff; box-shadow: 0 0 7px 2px rgba(126,200,255,.6); opacity: .12; animation: sparkGather var(--dur, 2.8s) ease-in-out var(--delay, 0s) infinite alternate; }
+    @keyframes sparkGather { 0% { transform: translate(0,0) scale(.55); opacity: .12; } 55% { opacity: .9; } 100% { transform: translate(var(--dx),var(--dy)) scale(1.25); opacity: .72; } }
+    .core-glow { position: absolute; z-index: 2; left: 50%; top: 49%; width: 18px; height: 18px; border-radius: 50%; transform: translate(-50%,-50%); background: rgba(154,222,255,.12); box-shadow: 0 0 17px 8px rgba(103,190,240,.16); animation: coreBreath 2.2s ease-in-out infinite; }
+    @keyframes coreBreath { 50% { transform: translate(-50%,-50%) scale(1.65); opacity: .46; } }
+
+    /* B：低频横向扫光，强调正在生成，不伪装成百分比进度。 */
+    .scan-art .scene { opacity: .23; }
+    .scan-art::before { content: ""; position: absolute; z-index: 3; top: -30%; bottom: -30%; left: -38%; width: 26%; transform: skewX(-12deg); background: linear-gradient(90deg, transparent, rgba(154,224,255,.12) 26%, rgba(204,243,255,.78) 50%, rgba(103,190,240,.23) 68%, transparent); filter: blur(3px); animation: scanPass 3.2s cubic-bezier(.42,0,.58,1) infinite; }
+    .scan-art::after { box-shadow: inset 0 0 30px rgba(107,192,242,.08); }
+    @keyframes scanPass { 0% { left: -38%; opacity: 0; } 18% { opacity: .85; } 82% { opacity: .8; } 100% { left: 112%; opacity: 0; } }
+    .scan-line { position: absolute; z-index: 2; top: 0; bottom: 0; left: 0; width: 1px; background: rgba(196,238,255,.45); box-shadow: 0 0 8px rgba(126,200,255,.6); animation: linePass 3.2s cubic-bezier(.42,0,.58,1) infinite; }
+    @keyframes linePass { from { transform: translateX(-45px); opacity: 0; } 22% { opacity: .5; } 100% { transform: translateX(360px); opacity: 0; } }
+    .scan-art .wait-label { animation: labelShine 3.2s ease-in-out infinite; }
+    @keyframes labelShine { 50% { border-color: rgba(126,200,255,.32); color: #e4f5ff; } }
+
+    /* C：山脊线先被勾勒出来，随后淡淡填色；循环慢而克制。 */
+    .draw-art { background: radial-gradient(ellipse at 50% 50%, rgba(92,152,194,.12), transparent 60%), #141a22; }
+    .draw-art .scene { opacity: .12; }
+    .drawing { position: absolute; z-index: 3; inset: 8% 5% 14%; width: 90%; height: 78%; overflow: visible; }
+    .draw-path { fill: none; stroke: rgba(175,224,250,.9); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 520; stroke-dashoffset: 520; filter: drop-shadow(0 0 3px rgba(126,200,255,.7)); animation: pathDraw 4.6s ease-in-out infinite; }
+    .draw-path.secondary { stroke: rgba(136,194,225,.56); stroke-width: .8; animation-delay: .24s; }
+    .draw-fill { opacity: .08; animation: fillAppear 4.6s ease-in-out infinite; }
+    @keyframes pathDraw { 8% { stroke-dashoffset: 520; opacity: .2; } 65%,100% { stroke-dashoffset: 0; opacity: .9; } }
+    @keyframes fillAppear { 0%,42% { opacity: 0; } 75%,100% { opacity: .32; } }
+
+    /* D：不让画面“逐块完成”，只在边缘流动柔雾，适合长等待与低干扰。 */
+    .mist-art { background: #141922; }
+    .mist-art .scene { opacity: .25; animation: mistScene 6s ease-in-out infinite alternate; }
+    @keyframes mistScene { from { transform: scale(1.04); opacity: .17; filter: saturate(.8); } to { transform: scale(1.12); opacity: .42; filter: saturate(1.2); } }
+    .mist { position: absolute; z-index: 2; inset: -35%; pointer-events: none; filter: blur(22px); opacity: .56; background: radial-gradient(ellipse at 30% 45%, rgba(97,182,231,.21), transparent 38%), radial-gradient(ellipse at 72% 55%, rgba(157,131,219,.14), transparent 35%); animation: mistDrift 8s ease-in-out infinite alternate; }
+    @keyframes mistDrift { from { transform: translate(-4%,2%) rotate(-4deg); } to { transform: translate(5%,-3%) rotate(5deg); } }
+    .mist-ring { position: absolute; z-index: 3; inset: 9px; border: 1px solid transparent; border-radius: 3px; background: linear-gradient(110deg, transparent 10%, rgba(171,224,255,.36) 48%, transparent 66%) border-box; mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0); mask-composite: exclude; opacity: .46; animation: ringFlow 5s linear infinite; }
+    @keyframes ringFlow { to { background-position: 200% 0; } }
+
+    .notes { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-top: 18px; }
+    .note { padding: 10px 11px; border: 1px solid #292c31; border-radius: 8px; color: var(--dim); background: rgba(255,255,255,.014); font-size: 10.5px; line-height: 1.55; }
+    .note b { display: block; margin-bottom: 3px; color: #bec6ce; font-size: 10.5px; font-weight: 600; }
+    .footer-note { margin-top: 17px; color: var(--faint); font-size: 10px; }
+    .paused *, .paused *::before, .paused *::after { animation-play-state: paused !important; }
+    @media (max-width: 850px) { .grid { grid-template-columns: 1fr; } .notes { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+    @media (max-width: 500px) { .topline { align-items: flex-start; } .controls { flex-direction: column; } .notes { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="topline">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i></span><span>开物 · 短剧画布</span></div>
+      <div class="controls">
+        <button class="control" id="pause" type="button">暂停动效</button>
+        <button class="control" id="replay" type="button">重新播放</button>
+      </div>
+    </div>
+    <h1>画面生成动效方案</h1>
+    <p class="intro">以下预览沿用画布「画面生成」节点的深色样式。四种动效都表示“任务仍在运行”，生成结果返回后可直接淡入原图。</p>
+    <div class="principle"><b>动效原则</b><span>持续反馈，不伪造生成百分比；动效不遮挡节点内容，并遵循系统减少动态效果设置。</span></div>
+
+    <section class="grid" aria-label="画面生成动效方案">
+      <article class="option" data-option="spark">
+        <div class="option-top"><span class="letter">A</span><div class="option-title"><h2>星尘聚像</h2><p>细小光点向画面中心聚散，轻盈、有期待感。</p></div><button class="select" type="button">选择方案</button></div>
+        <div class="node">
+          <div class="node-head"><span class="node-icon"></span><span class="node-name">海边灯塔 · 画面生成</span><span class="status"><i class="status-dot"></i>生成中</span></div>
+          <div class="node-body"><div class="prompt"><b>提示词</b>　暴风雨后的海岸，灯塔亮起第一束光</div>
+            <div class="art spark-art">
+              <svg class="scene" viewBox="0 0 320 162" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><linearGradient id="skyA" x2="0" y2="1"><stop stop-color="#26384d"/><stop offset="1" stop-color="#111923"/></linearGradient><linearGradient id="seaA" x2="0" y2="1"><stop stop-color="#263c4d"/><stop offset="1" stop-color="#111820"/></linearGradient></defs><rect width="320" height="162" fill="url(#skyA)"/><circle cx="240" cy="43" r="20" fill="#d9ecf4" opacity=".7"/><path d="M0 105 Q52 94 102 108T210 102T320 109V162H0Z" fill="url(#seaA)"/><path d="M0 123 Q42 114 86 124T172 123T254 122T320 124" fill="none" stroke="#8db8d0" opacity=".5"/><path d="M223 104V61h23v45M219 61h31l-15-19z" fill="#899fac"/><path d="M228 61h13l35 20h-43z" fill="#a8dfff" opacity=".25"/><path d="M0 139q80-10 160 0t160 0" fill="none" stroke="#5486a1" opacity=".5"/></svg>
+              <i class="core-glow"></i>
+              <i class="spark" style="--x:13%;--y:26%;--dx:93px;--dy:36px;--delay:-.8s;--dur:3.1s"></i><i class="spark" style="--x:28%;--y:71%;--dx:61px;--dy:-39px;--delay:-1.7s"></i><i class="spark" style="--x:76%;--y:23%;--dx:-70px;--dy:29px;--delay:-.2s;--s:2px"></i><i class="spark" style="--x:88%;--y:67%;--dx:-104px;--dy:-28px;--delay:-1.1s"></i><i class="spark" style="--x:49%;--y:17%;--dx:0px;--dy:39px;--delay:-2.2s;--s:2px"></i><i class="spark" style="--x:8%;--y:57%;--dx:116px;--dy:-9px;--delay:-.4s"></i><i class="spark" style="--x:66%;--y:79%;--dx:-53px;--dy:-48px;--delay:-1.9s;--s:2px"></i><i class="spark" style="--x:91%;--y:42%;--dx:-128px;--dy:12px;--delay:-2.5s"></i>
+              <span class="wait-label"><i></i>光点正在汇聚</span>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><span><strong>节奏</strong> 缓慢聚散</span><span><strong>氛围</strong> 梦幻 · 安静</span></div>
+      </article>
+
+      <article class="option selected" data-option="scan">
+        <div class="option-top"><span class="letter">B</span><div class="option-title"><h2>横向流光</h2><p>柔和光束周期掠过预览区，反馈直接、辨识度高。</p></div><button class="select" type="button">当前预览</button></div>
+        <div class="node">
+          <div class="node-head"><span class="node-icon"></span><span class="node-name">海边灯塔 · 画面生成</span><span class="status"><i class="status-dot"></i>生成中</span></div>
+          <div class="node-body"><div class="prompt"><b>提示词</b>　暴风雨后的海岸，灯塔亮起第一束光</div>
+            <div class="art scan-art">
+              <svg class="scene" viewBox="0 0 320 162" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><linearGradient id="skyB" x2="0" y2="1"><stop stop-color="#26384d"/><stop offset="1" stop-color="#111923"/></linearGradient></defs><rect width="320" height="162" fill="url(#skyB)"/><circle cx="240" cy="43" r="20" fill="#d9ecf4" opacity=".7"/><path d="M0 105 Q52 94 102 108T210 102T320 109V162H0Z" fill="#1b3040"/><path d="M0 123 Q42 114 86 124T172 123T254 122T320 124" fill="none" stroke="#8db8d0"/><path d="M223 104V61h23v45M219 61h31l-15-19z" fill="#899fac"/><path d="M228 61h13l35 20h-43z" fill="#a8dfff" opacity=".45"/></svg>
+              <i class="scan-line"></i><span class="wait-label"><i></i>正在描绘画面</span>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><span><strong>节奏</strong> 每轮约 3 秒</span><span><strong>氛围</strong> 清晰 · 科技感</span></div>
+      </article>
+
+      <article class="option" data-option="draw">
+        <div class="option-top"><span class="letter">C</span><div class="option-title"><h2>线稿生长</h2><p>先描出轮廓，再出现浅色填充，像画面正在被绘制。</p></div><button class="select" type="button">选择方案</button></div>
+        <div class="node">
+          <div class="node-head"><span class="node-icon"></span><span class="node-name">海边灯塔 · 画面生成</span><span class="status"><i class="status-dot"></i>生成中</span></div>
+          <div class="node-body"><div class="prompt"><b>提示词</b>　暴风雨后的海岸，灯塔亮起第一束光</div>
+            <div class="art draw-art">
+              <svg class="scene" viewBox="0 0 320 162" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="320" height="162" fill="#25384a"/><circle cx="240" cy="43" r="20" fill="#d9ecf4"/><path d="M0 105 Q52 94 102 108T210 102T320 109V162H0Z" fill="#23394a"/><path d="M223 104V61h23v45M219 61h31l-15-19z" fill="#899fac"/></svg>
+              <svg class="drawing" viewBox="0 0 320 150" preserveAspectRatio="none" aria-hidden="true"><path class="draw-fill" fill="#a7dfff" d="M0 103 Q53 93 105 107T211 102T320 108V150H0Z"/><path class="draw-path" d="M0 103 Q53 93 105 107T211 102T320 108 M221 104V61h27v44 M216 61h37l-18-21z M227 61h15 M221 66h27 M232 44v-9"/><path class="draw-path secondary" d="M0 124 Q44 115 86 124T171 123T254 122T320 124 M229 72h11v25h-11z M224 106h22"/></svg>
+              <span class="wait-label"><i></i>轮廓正在显现</span>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><span><strong>节奏</strong> 先描线再填色</span><span><strong>氛围</strong> 手作 · 创作感</span></div>
+      </article>
+
+      <article class="option" data-option="mist">
+        <div class="option-top"><span class="letter">D</span><div class="option-title"><h2>柔雾呼吸</h2><p>边缘光雾缓慢流动，长时间等待也不会显得急促。</p></div><button class="select" type="button">选择方案</button></div>
+        <div class="node">
+          <div class="node-head"><span class="node-icon"></span><span class="node-name">海边灯塔 · 画面生成</span><span class="status"><i class="status-dot"></i>生成中</span></div>
+          <div class="node-body"><div class="prompt"><b>提示词</b>　暴风雨后的海岸，灯塔亮起第一束光</div>
+            <div class="art mist-art">
+              <svg class="scene" viewBox="0 0 320 162" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><linearGradient id="skyD" x2="0" y2="1"><stop stop-color="#334958"/><stop offset="1" stop-color="#111923"/></linearGradient></defs><rect width="320" height="162" fill="url(#skyD)"/><circle cx="240" cy="43" r="20" fill="#d9ecf4" opacity=".8"/><path d="M0 105 Q52 94 102 108T210 102T320 109V162H0Z" fill="#203746"/><path d="M0 123 Q42 114 86 124T172 123T254 122T320 124" fill="none" stroke="#8db8d0"/><path d="M223 104V61h23v45M219 61h31l-15-19z" fill="#a0b2bf"/><path d="M228 61h13l35 20h-43z" fill="#a8dfff" opacity=".4"/></svg>
+              <i class="mist"></i><i class="mist-ring"></i><span class="wait-label"><i></i>正在生成画面</span>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><span><strong>节奏</strong> 慢速循环</span><span><strong>氛围</strong> 克制 · 沉浸</span></div>
+      </article>
+    </section>
+
+    <section class="notes" aria-label="对比说明">
+      <div class="note"><b>A · 星尘聚像</b>动感集中在画面中央，适合强调想象力和“汇聚成像”。</div>
+      <div class="note"><b>B · 横向流光</b>最容易看见正在运行；扫光只覆盖预览画面，不改变状态文字。</div>
+      <div class="note"><b>C · 线稿生长</b>视觉表达最强，但只适合短暂循环，可能让人误以为在展示真实中间结果。</div>
+      <div class="note"><b>D · 柔雾呼吸</b>低干扰，适合较长耗时；状态点持续提供明确反馈。</div>
+    </section>
+    <p class="footer-note">预览使用示意插画表现动效位置；实际生成期间不会伪造中间图片或进度值。系统开启“减少动态效果”时动画会自动停用。</p>
+  </main>
+  <script>
+    const pause = document.getElementById('pause');
+    pause.addEventListener('click', () => {
+      const paused = document.documentElement.classList.toggle('paused');
+      pause.textContent = paused ? '继续动效' : '暂停动效';
+    });
+    document.getElementById('replay').addEventListener('click', () => {
+      document.querySelectorAll('.art').forEach((art) => {
+        const animated = [art, ...art.querySelectorAll('*')];
+        for (const node of animated) node.style.animation = 'none';
+        void art.offsetWidth;
+        for (const node of animated) node.style.animation = '';
+      });
+    });
+    document.querySelectorAll('.option').forEach((option) => {
+      option.querySelector('.select').addEventListener('click', () => {
+        document.querySelectorAll('.option').forEach((item) => {
+          const selected = item === option;
+          item.classList.toggle('selected', selected);
+          item.querySelector('.select').textContent = selected ? '当前预览' : '选择方案';
+          item.querySelector('.select').setAttribute('aria-pressed', String(selected));
+        });
+      });
+    });
+  </script>
+</body>
+</html>

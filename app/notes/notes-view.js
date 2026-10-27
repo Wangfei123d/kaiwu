@@ -62,7 +62,7 @@ function parentDir(relPath) {
 }
 
 export function createNotesView({
-    els, bridge, log = console, onOpenNote = null, onCloseDocx = null,
+    els, bridge, log = console, onOpenNote = null, onCloseDocx = null, onOpenCanvas = null,
     /**
      * 「删除笔记」两步确认里,"再点一次确认删除"这个告警态自动还原的毫秒数。
      *
@@ -81,6 +81,7 @@ export function createNotesView({
 
     let index = null;              // 最近一次 notes:index 的结果
     let currentPath = null;
+    let currentCanvasPath = null;
     let docxReaderDispose = null;
     let openGeneration = 0;
     let saving = false;
@@ -488,7 +489,8 @@ export function createNotesView({
     }
 
     /** 按扩展名给一个粗分类,只用于挑图标与配色。 */
-    function kindOf(name) {
+    function kindOf(name, relPath = name) {
+        if (/^画布\/[^/]+\.canvas$/.test(String(relPath))) return 'canvas';
         const ext = String(name).toLowerCase().split('.').pop();
         if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(ext)) return 'image';
         if (['mp4', 'mov', 'webm', 'mkv', 'mp3', 'wav', 'm4a'].includes(ext)) return 'media';
@@ -504,15 +506,39 @@ export function createNotesView({
      * 其余非笔记文件交给系统程序打开。它们同样可拖 —— "把 shots 里的图拖进另一个文件夹"正是
      * 这次拖放要支持的主要动作之一。
      */
-    function otherItem(other, depth) {
+    function canvasFileIcon() {
+        const ns = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.classList.add('note-canvas-icon');
+        const make = (tag, attrs) => {
+            const node = document.createElementNS(ns, tag);
+            for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
+            svg.appendChild(node);
+        };
+        make('rect', { x: '3.5', y: '4', width: '17', height: '16', rx: '2.5' });
+        make('rect', { x: '6.5', y: '7', width: '5', height: '4', rx: '1' });
+        make('rect', { x: '13.5', y: '7', width: '4', height: '3', rx: '1' });
+        make('path', { d: 'M7 15h4M14 14h3.5M14 17h3.5M11.5 9h2' });
+        return svg;
+    }
+
+    function otherItem(other, depth, subText = null) {
         const li = document.createElement('li');
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'note-other';
         btn.dataset.path = other.path;
-        btn.dataset.kind = kindOf(other.name);
+        btn.dataset.kind = kindOf(other.name, other.path);
         btn.style.setProperty('--depth', String(depth));
         btn.title = `${other.path}\n${humanSize(other.size)}`;
+        const isCanvas = btn.dataset.kind === 'canvas';
+        if (isCanvas) {
+            btn.classList.add('note-canvas-file');
+            btn.setAttribute('aria-selected', String(other.path === currentCanvasPath));
+            btn.setAttribute('aria-label', `打开画布 ${other.name}`);
+        }
         // 用户可以起任意文件名 → 一律 textContent,别拼 HTML
         const name = document.createElement('span');
         name.className = 'note-other-name';
@@ -520,8 +546,22 @@ export function createNotesView({
         const size = document.createElement('span');
         size.className = 'note-other-size';
         size.textContent = humanSize(other.size);
+        if (isCanvas) btn.append(canvasFileIcon());
         btn.append(name, size);
+        if (subText !== null) {
+            const sub = document.createElement('span');
+            sub.className = 'note-sub';
+            sub.textContent = subText;
+            btn.appendChild(sub);
+        }
         btn.addEventListener('click', () => {
+            if (isCanvas) {
+                currentCanvasPath = other.path;
+                renderList();
+                if (typeof onOpenCanvas === 'function') onOpenCanvas(other.path);
+                else setStatus('画布面板当前不可用', 'error');
+                return;
+            }
             if (/\.docx$/i.test(other.name)) {
                 void open(other.path);
                 return;
@@ -534,7 +574,8 @@ export function createNotesView({
             });
         });
         // 非笔记文件**同样可拖** —— "把 shots 里的图拖进另一个文件夹"正是这次要支持的主场景。
-        bindDragRow(btn, { path: other.path, isDir: false, name: other.name });
+        // `.canvas` 的 IPC 路径固定在 `画布/` 下;将其拖出该目录会让它无法再由画布面板打开。
+        if (!isCanvas) bindDragRow(btn, { path: other.path, isDir: false, name: other.name });
         li.appendChild(btn);
         return li;
     }
@@ -640,13 +681,13 @@ export function createNotesView({
     }
 
     /** 拍平列表(搜索/标签筛选时走这条:树 + 筛选会让命中的东西藏在收起的文件夹里)。 */
-    function renderFlatList(visible, visibleTexts = []) {
+    function renderFlatList(visible, visibleTexts = [], visibleCanvases = []) {
         listEl.innerHTML = '';
-        if (visible.length === 0 && visibleTexts.length === 0) {
+        if (visible.length === 0 && visibleTexts.length === 0 && visibleCanvases.length === 0) {
             const li = document.createElement('li');
             li.className = 'hint';
             li.style.padding = '8px 10px';
-            li.textContent = '没有匹配的笔记。';
+            li.textContent = '没有匹配的文件。';
             listEl.appendChild(li);
             return;
         }
@@ -657,6 +698,9 @@ export function createNotesView({
         // 纯文本排在笔记后面(与树里同一条"先笔记,再纯文本,最后只能看的")
         for (const text of visibleTexts) {
             listEl.appendChild(textItem(text, 0, text.path.includes('/') ? text.path : null));
+        }
+        for (const canvas of visibleCanvases) {
+            listEl.appendChild(otherItem(canvas, 0, canvas.path.includes('/') ? canvas.path : null));
         }
     }
 
@@ -812,6 +856,16 @@ export function createNotesView({
             visibleTexts = visibleTexts.filter(t => t.name.toLowerCase().includes(k) || t.path.toLowerCase().includes(k));
         }
 
+        // 画布属于独立文件类型，不参与笔记标签筛选；关键词搜索时与笔记一起拍平展示。
+        const allCanvases = (index?.others ?? []).filter(item => kindOf(item.name, item.path) === 'canvas');
+        let visibleCanvases = allCanvases;
+        if (tagFilter !== null) {
+            visibleCanvases = [];
+        } else if (keyword !== '') {
+            const k = keyword.toLowerCase();
+            visibleCanvases = visibleCanvases.filter(item => item.name.toLowerCase().includes(k) || item.path.toLowerCase().includes(k));
+        }
+
         listEl.innerHTML = '';
 
         // 列表顶部那条"筛选中:#… ×"跟着一起更新 —— 它解释的是**这个列表**为什么变短了
@@ -819,7 +873,7 @@ export function createNotesView({
 
         // 有筛选时拍平:树会让"匹配的东西藏在收起的文件夹里",反而更难找
         if (keyword !== '' || tagFilter !== null) {
-            renderFlatList(visible, visibleTexts);
+            renderFlatList(visible, visibleTexts, visibleCanvases);
             return;
         }
 
@@ -2137,9 +2191,14 @@ export function createNotesView({
             if (emptyEl) emptyEl.hidden = false;
             if (editorEl) editorEl.hidden = true;
             currentPath = null;
+            currentCanvasPath = null;
             return refreshIndex({ keepSelection: false });
         },
         refreshIndex,
+        selectCanvas(path) {
+            currentCanvasPath = typeof path === 'string' && kindOf('', path) === 'canvas' ? path : null;
+            renderList();
+        },
         open,
         createNamed,
         save,

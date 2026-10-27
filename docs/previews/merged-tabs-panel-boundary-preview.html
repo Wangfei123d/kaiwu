@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>标签与面板一体 · 重新设计 V2</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #121314;
+      --surface: #1c1d1f;
+      --rail: #2a2b2d;
+      --outline: #72767a;
+      --divider: #72767a;
+      --text: #e6e7e9;
+      --muted: #a1a4a8;
+      --dim: #70757b;
+      font: 14px/1.65 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      color: var(--text);
+      background: var(--page);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 50% -50%, #363a4160, transparent 65%), var(--page); }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    button:focus-visible { outline: 2px solid #c3c6cc; outline-offset: -4px; }
+    .page { width: min(1260px, 100%); margin: 0 auto; padding: 30px clamp(14px, 3vw, 38px) 35px; }
+    .kicker { color: #949aa1; font-size: 11px; letter-spacing: .12em; }
+    .heading { display: flex; align-items: flex-end; gap: 18px; margin: 8px 0 9px; }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 32px); line-height: 1.3; letter-spacing: -.035em; font-weight: 620; }
+    .version { padding: 3px 9px; margin-bottom: 2px; border: 1px solid #4b5056; border-radius: 6px; color: #c7cbd0; font: 11px/1.6 Consolas, monospace; }
+    .lead { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+    .preview-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .control { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 5px 11px; border: 1px solid #42464c; border-radius: 7px; background: #212326; color: #b8bec6; font-size: 12px; }
+    .control:hover { background: #2a2d31; color: #eee; }
+    .control[aria-pressed="true"] { border-color: #8c929a; background: #353940; color: #f2f3f5; }
+    .reset { margin-left: auto; border-color: transparent; background: transparent; color: #8e959e; }
+    .preview-controls label { margin-left: 8px; color: #858d96; font-size: 11px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 20px; margin: 14px 2px 0; color: #a4abb3; font-size: 11px; }
+    .legend span { display: inline-flex; align-items: center; gap: 8px; }
+    .legend-divider { width: 2px; height: 14px; border-radius: 1px; background: var(--divider); }
+    .legend-contour { width: 21px; height: 14px; border: 1px solid var(--outline); border-bottom: 0; border-radius: 5px 5px 0 0; }
+
+    .window { overflow: hidden; border: 1px solid #41454b; border-radius: 12px; background: #151618; box-shadow: 0 20px 64px #0005; }
+    .window-titlebar { display: flex; align-items: center; gap: 10px; height: 37px; padding: 0 15px; background: #17181a; color: #8f959b; font-size: 11px; }
+    .brand-icon { width: 17px; height: 17px; fill: none; stroke: #d6dade; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+    .window-actions { display: flex; align-items: center; gap: 23px; margin-left: auto; color: #81868c; }
+    .window-actions svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1; }
+    .panel { overflow: hidden; min-width: 0; background: var(--surface); }
+    .tab-strip { display: flex; align-items: stretch; min-width: 0; height: 58px; padding: 8px 8px 0; background: var(--rail); }
+    .tab-list { display: flex; align-items: flex-end; min-width: 0; flex: 1; padding-inline: 12px; overflow-x: auto; overflow-y: hidden; scroll-padding-inline: 12px; scrollbar-width: none; }
+    .tab-list::-webkit-scrollbar { display: none; }
+    .tab-item { position: relative; display: flex; align-items: center; flex: 1 0 152px; max-width: 205px; min-width: 125px; height: 44px; border: 1px solid transparent; border-bottom: 0; border-radius: 12px 12px 0 0; scroll-margin-inline: 12px; color: #a0a3a8; }
+    .tab-label { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; height: 100%; padding: 0 7px 0 15px; border: 0; border-radius: inherit; background: transparent; text-align: left; font-size: 13px; }
+    .tab-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tab-icon { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
+    .tab-close { display: grid; place-items: center; flex: none; width: 25px; height: 25px; margin-right: 8px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #8c9095; }
+    .tab-close svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+    .tab-item:not(.is-active) .tab-close { opacity: .45; }
+    .tab-item:hover { color: #e0e2e5; }
+    .tab-item:hover .tab-close { opacity: 1; }
+    .tab-close:hover { color: #fff; background: #ffffff12; }
+    .tab-item.is-active { isolation: isolate; z-index: 1; height: 50px; border: 0; background: transparent; color: #f1f2f4; }
+    .tab-contour { position: absolute; z-index: -1; top: 0; left: -12px; width: calc(100% + 24px); height: 100%; overflow: visible; fill: var(--surface); stroke: var(--outline); stroke-width: 1; pointer-events: none; }
+    .tab-item.is-active .tab-label { padding-top: 5px; }
+    .tab-item.is-active .tab-close { margin-top: 5px; color: #c6cad0; }
+    /* Dividers occupy their own space in the row, so adjacent tabs cannot cover them. */
+    .tab-divider { align-self: center; flex: 0 0 2px; width: 2px; height: 22px; margin: 3px 6px 0; border-radius: 1px; background: var(--divider); }
+    .tab-divider.next-to-active { flex-basis: 12px; width: 12px; margin-right: 0; margin-left: 0; background: transparent; }
+    .new-tab { display: grid; place-items: center; align-self: center; flex: none; width: 37px; height: 34px; margin: 0 3px 6px 8px; border: 0; border-radius: 7px; background: transparent; color: #a5a9ae; }
+    .new-tab svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+    .new-tab:hover { background: #ffffff0a; color: #fff; }
+    .content { position: relative; min-height: 385px; background: var(--surface); }
+    .document-toolbar { display: flex; align-items: center; gap: 15px; min-height: 56px; padding: 3px 24px 0; color: #8c9199; font-size: 12px; }
+    .navigation { display: flex; gap: 16px; font-size: 19px; line-height: 1; }
+    .breadcrumb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .breadcrumb b { color: #c2c7ce; font-weight: 400; }
+    .doc-tools { display: flex; gap: 17px; margin-left: auto; font-size: 19px; }
+    .document { width: min(745px, 100%); padding: 13px 30px 45px; margin: 0 auto; }
+    .document h2 { margin: 10px 0 15px; font-size: 28px; line-height: 1.4; letter-spacing: -.03em; font-weight: 630; }
+    .document p { margin: 9px 0; color: #b9bec5; font-size: 14px; line-height: 1.9; }
+    .document .eyebrow { color: #7e8691; font-size: 11px; letter-spacing: .07em; }
+    .note-block { padding: 12px 16px; margin: 20px 0; border-left: 2px solid #656e79; border-radius: 0 7px 7px 0; background: #ffffff03; }
+    .note-block p { margin: 0; font-size: 13px; }
+    .document ul { padding-left: 21px; color: #aeb5be; font-size: 13px; line-height: 2.2; }
+    .document li::marker { color: #6f7884; }
+    .document-empty { display: grid; place-content: center; min-height: 230px; text-align: center; color: #79828c; }
+    .document-empty h2 { color: #c1c6cd; font-size: 23px; }
+    .canvas { position: relative; min-height: 285px; margin-top: 7px; border-radius: 8px; background: radial-gradient(#61687355 .7px, transparent .8px) 0 0 / 18px 18px; }
+    .canvas-node { position: absolute; width: 170px; padding: 15px; border: 1px solid #555f6c; border-radius: 10px; background: #25292feF; font-size: 12px; color: #c5cbd2; }
+    .canvas-node strong { display: block; margin-bottom: 5px; color: #e4e7eb; font-size: 13px; font-weight: 500; }
+    .canvas-node:nth-child(1) { top: 30px; left: 6%; }
+    .canvas-node:nth-child(2) { top: 130px; left: 43%; }
+    .statusbar { display: flex; align-items: center; justify-content: flex-end; gap: 17px; min-height: 30px; padding: 0 20px; color: #737c87; font-size: 10px; background: var(--surface); }
+    .message { margin-top: 10px; color: #838c97; font-size: 11px; }
+    .window.is-large .tab-strip { height: 69px; }
+    .window.is-large .tab-item { height: 53px; flex-basis: 185px; max-width: 245px; }
+    .window.is-large .tab-item.is-active { height: 61px; }
+    .window.is-large .tab-label { font-size: 15px; }
+    .window.is-large .tab-divider { height: 28px; }
+    .window.is-large .content { min-height: 374px; }
+    .window.is-soft { --outline: #44484e; --divider: #4e555e; }
+    @media (max-width: 650px) {
+      .page { padding-top: 20px; }
+      .tab-item { flex: 0 0 155px; }
+      .document-toolbar { padding-right: 16px; padding-left: 16px; gap: 12px; }
+      .document { padding: 8px 21px 30px; }
+      .document h2 { font-size: 25px; }
+      .doc-tools { gap: 12px; }
+      .preview-controls label { display: none; }
+      .reset { margin-left: 0; }
+      .canvas-node { width: 140px; }
+      .canvas-node:nth-child(2) { left: 38%; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .tab-close, .new-tab { transition: background .15s, color .15s, opacity .15s; }
+      .content { animation: content-in .18s ease-out; }
+      @keyframes content-in { from { opacity: .6; } to { opacity: 1; } }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="kicker">开物 / 工作区标签预览</div>
+    <div class="heading"><h1>标签连入面板，分隔线清楚可见</h1><span class="version">V2</span></div>
+    <p class="lead">未激活标签用短竖线分隔，当前标签保留圆角轮廓，下方以圆弧接入正文。</p>
+    <div class="preview-controls" aria-label="预览设置">
+      <button type="button" class="control" data-large aria-pressed="false">放大标签栏</button>
+      <button type="button" class="control" data-contrast aria-pressed="true">清晰线条</button>
+      <label>点击标签，观察分隔线随选中位置变化</label>
+      <button type="button" class="control reset" data-reset>重置示例</button>
+    </div>
+
+    <section class="window" data-window aria-label="标签与面板合并效果">
+      <div class="window-titlebar">
+        <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v16M7 12 19 4M7 12l12 8"/></svg>
+        <span>开物</span>
+        <div class="window-actions" aria-hidden="true">
+          <svg viewBox="0 0 12 12"><path d="M1 6h10"/></svg>
+          <svg viewBox="0 0 12 12"><path d="M2 2h8v8H2z"/></svg>
+          <svg viewBox="0 0 12 12"><path d="m2 2 8 8M10 2l-8 8"/></svg>
+        </div>
+      </div>
+      <section class="panel">
+        <header class="tab-strip">
+          <div class="tab-list" role="tablist" aria-label="工作区标签" data-tabs>
+            <div class="tab-item"><button class="tab-label" type="button" role="tab" aria-selected="false"><span>第一集.md</span></button><button class="tab-close" type="button" aria-label="关闭 第一集.md">×</button></div>
+            <span class="tab-divider" aria-hidden="true"></span>
+            <div class="tab-item"><button class="tab-label" type="button" role="tab" aria-selected="false"><span>笔记画布</span></button><button class="tab-close" type="button" aria-label="关闭 笔记画布">×</button></div>
+            <span class="tab-divider next-to-active" aria-hidden="true"></span>
+            <div class="tab-item is-active"><svg class="tab-contour" viewBox="0 0 224 50" preserveAspectRatio="none" aria-hidden="true"><path vector-effect="non-scaling-stroke" d="M 0 49.5 Q 12 49.5 12 38 L 12 12.5 Q 12 .5 24 .5 H 200 Q 212 .5 212 12.5 V 38 Q 212 49.5 224 49.5"/></svg><button class="tab-label" type="button" role="tab" aria-selected="true"><span>人物设定.md</span></button><button class="tab-close" type="button" aria-label="关闭 人物设定.md">×</button></div>
+            <span class="tab-divider next-to-active" aria-hidden="true"></span>
+            <div class="tab-item"><button class="tab-label" type="button" role="tab" aria-selected="false"><span>拍摄计划.md</span></button><button class="tab-close" type="button" aria-label="关闭 拍摄计划.md">×</button></div>
+            <span class="tab-divider" aria-hidden="true"></span>
+            <div class="tab-item"><button class="tab-label" type="button" role="tab" aria-selected="false"><span>灵感摘录.md</span></button><button class="tab-close" type="button" aria-label="关闭 灵感摘录.md">×</button></div>
+          </div>
+          <button class="new-tab" type="button" aria-label="新建标签" title="新建标签" data-add>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v14M3 10h14"/></svg>
+          </button>
+        </header>
+        <section class="content" role="tabpanel" id="preview-tab-panel" data-content tabindex="0"></section>
+        <footer class="statusbar"><span data-status>人物设定.md</span><span>已保存</span></footer>
+      </section>
+    </section>
+    <div class="legend" aria-label="线条说明">
+      <span><i class="legend-divider"></i>未激活标签之间的分隔线</span>
+      <span><i class="legend-contour"></i>当前标签的圆角轮廓</span>
+      <span>标签下方无蓝条、无横向分隔线</span>
+    </div>
+    <div class="message" role="status" aria-live="polite" data-message>当前：人物设定.md</div>
+  </main>
+  <script>
+    const initialTabs = [
+      { id: 'episode', title: '第一集.md' },
+      { id: 'canvas', title: '笔记画布', canvas: true },
+      { id: 'people', title: '人物设定.md' },
+      { id: 'plan', title: '拍摄计划.md' },
+      { id: 'ideas', title: '灵感摘录.md' }
+    ];
+    let tabs = initialTabs.map((tab) => ({ ...tab }));
+    let activeId = 'people';
+    let newTabNumber = 0;
+    const tabList = document.querySelector('[data-tabs]');
+    const content = document.querySelector('[data-content]');
+    const windowPreview = document.querySelector('[data-window]');
+    const message = document.querySelector('[data-message]');
+    const icon = '<svg class="tab-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2.5h7l3 3v12H5zM12 2.5v4h3M7.5 10h5M7.5 13h4"/></svg>';
+    const canvasIcon = '<svg class="tab-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="6" height="5" rx="1"/><rect x="11.5" y="12" width="6" height="5" rx="1"/><path d="M8.5 5.5h4v9h-1"/></svg>';
+    const closeIcon = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="m3 3 8 8M11 3l-8 8"/></svg>';
+    const documents = {
+      people: '<div class="eyebrow">角色档案 · 主角</div><h2>人物设定</h2><p>林澈，28 岁，自由摄影师。他习惯用镜头记录眼前的生活，却很少出现在自己的照片里。</p><div class="note-block"><p>一卷失而复得的底片，把他带回了许多年没有踏足的故乡。</p></div><ul><li>外在目标：找到底片中的那间旧照相馆。</li><li>内在变化：接受那些没有被记录下来的时刻。</li></ul>',
+      episode: '<div class="eyebrow">短剧项目 · 第一集</div><h2>第一集：旧底片</h2><p>清晨，林澈在整理旧相机时发现一卷没有冲洗的底片。相机背带上，还留着父亲写下的名字。</p><div class="note-block"><p>镜头从桌上的旧相机缓慢推近，窗外的光落在磨损的皮革上。</p></div><ul><li>场景：出租屋，清晨。</li><li>人物：林澈。</li></ul>',
+      plan: '<div class="eyebrow">拍摄准备 · 本周</div><h2>拍摄计划</h2><p>本周完成照相馆与出租屋的场景拍摄，优先利用上午的自然光。</p><div class="note-block"><p>确认场地、整理道具、检查摄影设备。</p></div><ul><li>周二：出租屋内景，09:00 — 12:00。</li><li>周四：旧照相馆，14:00 — 18:00。</li></ul>',
+      ideas: '<div class="eyebrow">随手记录</div><h2>灵感摘录</h2><p>照片记录的是光，也记录了拍照的人选择留下什么。</p><div class="note-block"><p>可以让同一条街道在两个时间里反复出现，用招牌的变化交代岁月。</p></div><ul><li>底片中的陌生人。</li><li>照相馆门口的旧木椅。</li></ul>'
+    };
+
+    function drawActiveContour() {
+      const contour = tabList.querySelector('.tab-contour');
+      if (!contour) return;
+      const { width, height } = contour.getBoundingClientRect();
+      if (!width || !height) return;
+      const join = 12;
+      const radius = 12;
+      const bottom = height - 0.5;
+      const right = width - join;
+      contour.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      contour.firstElementChild.setAttribute('d',
+        `M 0 ${bottom} Q ${join} ${bottom} ${join} ${height - join}` +
+        ` V ${radius + 0.5} Q ${join} 0.5 ${join + radius} 0.5` +
+        ` H ${right - radius} Q ${right} 0.5 ${right} ${radius + 0.5}` +
+        ` V ${height - join} Q ${right} ${bottom} ${width} ${bottom}`);
+    }
+
+    function selectTab(id, focus = false) {
+      activeId = id;
+      render();
+      const button = document.getElementById('tab-' + id);
+      if (focus) button?.focus();
+      button?.closest('.tab-item').scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+
+    function render() {
+      tabList.replaceChildren();
+      tabs.forEach((tab, index) => {
+        const item = document.createElement('div');
+        item.className = 'tab-item' + (tab.id === activeId ? ' is-active' : '');
+        if (tab.id === activeId) {
+          const contour = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          contour.classList.add('tab-contour');
+          contour.setAttribute('aria-hidden', 'true');
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('vector-effect', 'non-scaling-stroke');
+          contour.append(path);
+          item.append(contour);
+        }
+        const label = document.createElement('button');
+        label.type = 'button';
+        label.className = 'tab-label';
+        label.id = 'tab-' + tab.id;
+        label.dataset.tab = tab.id;
+        label.setAttribute('role', 'tab');
+        label.setAttribute('aria-selected', String(tab.id === activeId));
+        label.setAttribute('aria-controls', 'preview-tab-panel');
+        label.tabIndex = tab.id === activeId ? 0 : -1;
+        label.innerHTML = tab.canvas ? canvasIcon : icon;
+        const title = document.createElement('span');
+        title.textContent = tab.title;
+        label.append(title);
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'tab-close';
+        close.dataset.close = tab.id;
+        close.setAttribute('aria-label', '关闭 ' + tab.title);
+        close.innerHTML = closeIcon;
+        item.append(label, close);
+        tabList.append(item);
+        const next = tabs[index + 1];
+        if (next) {
+          const divider = document.createElement('span');
+          divider.className = 'tab-divider' + (tab.id === activeId || next.id === activeId ? ' next-to-active' : '');
+          divider.setAttribute('aria-hidden', 'true');
+          tabList.append(divider);
+        }
+      });
+      const activeTab = tabs.find((tab) => tab.id === activeId);
+      content.setAttribute('aria-labelledby', 'tab-' + activeId);
+      content.innerHTML = '<div class="document-toolbar"><span class="navigation" aria-hidden="true">‹　›</span><span class="breadcrumb">笔记 / 短剧 / <b data-breadcrumb></b></span><span class="doc-tools" aria-hidden="true">✎　⋮</span></div><article class="document" data-document></article>';
+      content.querySelector('[data-breadcrumb]').textContent = activeTab?.title ?? '';
+      const article = content.querySelector('[data-document]');
+      if (activeTab?.canvas) {
+        article.innerHTML = '<div class="eyebrow">故事结构</div><div class="canvas"><div class="canvas-node"><strong>第一幕 · 发现</strong>林澈找到一卷旧底片</div><div class="canvas-node"><strong>第二幕 · 归乡</strong>寻找照片中的照相馆</div></div>';
+      } else if (documents[activeId]) {
+        article.innerHTML = documents[activeId];
+      } else {
+        article.classList.add('document-empty');
+        const heading = document.createElement('h2');
+        heading.textContent = activeTab?.title ?? '新建笔记';
+        article.append(heading);
+      }
+      document.querySelector('[data-status]').textContent = activeTab?.title ?? '';
+      message.textContent = '当前：' + (activeTab?.title ?? '');
+      drawActiveContour();
+    }
+
+    tabList.addEventListener('click', (event) => {
+      const close = event.target.closest('[data-close]');
+      if (close) {
+        const index = tabs.findIndex((tab) => tab.id === close.dataset.close);
+        if (tabs.length === 1) {
+          message.textContent = '预览至少保留一个标签，可用“＋”新增。';
+          return;
+        }
+        const removed = tabs.splice(index, 1)[0];
+        if (activeId === removed.id) activeId = tabs[Math.min(index, tabs.length - 1)].id;
+        render();
+        return;
+      }
+      const tab = event.target.closest('[data-tab]');
+      if (tab) selectTab(tab.dataset.tab);
+    });
+    tabList.addEventListener('keydown', (event) => {
+      if (!event.target.matches('[data-tab]')) return;
+      const index = tabs.findIndex((tab) => tab.id === activeId);
+      let nextIndex;
+      if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+      else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+      else if (event.key === 'Home') nextIndex = 0;
+      else if (event.key === 'End') nextIndex = tabs.length - 1;
+      else return;
+      event.preventDefault();
+      selectTab(tabs[nextIndex].id, true);
+    });
+    document.querySelector('[data-add]').addEventListener('click', () => {
+      const id = 'new-' + (++newTabNumber);
+      tabs.push({ id, title: '新建笔记 ' + newTabNumber + '.md' });
+      selectTab(id, true);
+    });
+    document.querySelector('[data-reset]').addEventListener('click', () => {
+      tabs = initialTabs.map((tab) => ({ ...tab }));
+      activeId = 'people';
+      newTabNumber = 0;
+      render();
+    });
+    document.querySelector('[data-large]').addEventListener('click', (event) => {
+      const active = windowPreview.classList.toggle('is-large');
+      event.currentTarget.setAttribute('aria-pressed', String(active));
+      event.currentTarget.textContent = active ? '恢复正常大小' : '放大标签栏';
+      drawActiveContour();
+    });
+    document.querySelector('[data-contrast]').addEventListener('click', (event) => {
+      const soft = windowPreview.classList.toggle('is-soft');
+      event.currentTarget.setAttribute('aria-pressed', String(!soft));
+      event.currentTarget.textContent = soft ? '柔和线条' : '清晰线条';
+    });
+    const contourObserver = new ResizeObserver(drawActiveContour);
+    contourObserver.observe(tabList);
+    render();
+  </script>
+</body>
+</html>

@@ -87,6 +87,16 @@ function textOf(node) {
 
 const render = (md, options) => renderMarkdownNodes(doc, md, options);
 
+test('已在结果框展示的图片可从 Markdown 中省略，正文和其他图片仍正常渲染', () => {
+    const omitted = 'https://example.test/result.png';
+    const root = doc.createElement('div');
+    for (const node of render(`正文 **保留** ![结果](${omitted})\n\n> ![重复](${omitted})\n\n![参考](https://example.test/ref.png)`, {
+        omitImageUrls: new Set([omitted]),
+    })) root.appendChild(node);
+    assert.match(textOf(root), /正文 保留/);
+    assert.deepEqual(root.queryAll('img').map(img => img.getAttribute('src')), ['https://example.test/ref.png']);
+});
+
 // ---------- 常用子集 ----------
 
 test('粗体 / 斜体 / 行内代码渲染成真的元素,而不是留着星号', () => {

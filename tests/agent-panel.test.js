@@ -140,6 +140,7 @@ class El {
 const doc = {
     activeElement: null,
     createElement: (t) => new El(t, doc),
+    createElementNS: (_, t) => new El(t, doc),
     // Markdown 渲染器用 createTextNode 造文字节点 —— 它绝不拼 HTML 字符串
     createTextNode: (text) => {
         const n = new El('#text', doc);
@@ -235,7 +236,7 @@ async function mountPanel({
     const els = {
         panel: new El('section'), statusEl: new El('div'), retryBtn: new El('button'),
         messagesEl: new El('div'), inputEl: new El('textarea'), sendBtn: new El('button'),
-        credentialEl: new El('div'), killBtn: new El('button'),
+        credentialEl: new El('div'),
         // 思考强度 / 模型那枚胶囊(真外壳里是 #agentCfg / #agentCfgWrap)。
         // ⚠️ 真外壳**总是**给这两个元素,所以主替身也必须给 —— 否则"面板会自己补骨架"
         //    那条能力会掩盖掉"这一枚控件根本没接上"。(另外两条"只给 8 个元素"的用例
@@ -663,7 +664,8 @@ test('思考收进一条可折叠的细条:正文一到就自动收起(A2)', asy
     assert.ok(think !== null, '思考要有一条自己的折叠块');
     assert.equal(think.getAttribute('data-live'), 'true', '还在流式 → data-live=true(自检按属性断言)');
     assert.match(textOf(think), /思考中…/);
-    assert.match(textOf(think), /4 字/, '字数要露出来 —— 它是"它真的在想"的唯一可见证据');
+    assert.equal(think.query('.agent-think-count'), null, '思考栏不显示字数');
+    assert.equal(textOf(think.query('.agent-think-body')), '让我想想');
     assert.equal(els.messagesEl.queryAll('.agent-msg').length, 0, '这时还没有正文气泡');
 
     // 正文一到:思考收尾(标签变「已思考」),而且**自动收起**
@@ -965,7 +967,7 @@ test('一颗球:空闲能发、执行中能取消、没连上又没草稿时是�
     const els2 = {
         panel: new El('section'), statusEl: new El('div'), retryBtn: new El('button'),
         messagesEl: new El('div'), inputEl: new El('textarea'), sendBtn: new El('button'),
-        credentialEl: new El('div'), killBtn: new El('button'),
+        credentialEl: new El('div'),
     };
     const h2 = makeBridge();
     const p2 = createAgentPanel({
@@ -1002,69 +1004,34 @@ test('球是自己长出来的:外壳只给一个空按钮,面板补上手/眼�
         '里面的画对读屏要隐形 —— 名字在按钮自己身上');
 });
 
-test('进程级停止是另一个动作 #agentKill → agent:stop,而且只在"有东西可停"时出现(整行的显隐跟着它走)', async () => {
+test('AI 输入卡片移除停止进程按钮，只在连接时显示提示', async () => {
     const { bridge, els, panel } = await mountPanel();
-    // 那一行只在这个测试里存在(骨架是现场造的):探针就是它自己
     const ctxRow = () => els.panel.query('.agent-ctx-row');
+    const hint = () => els.panel.query('.agent-ctx-hint');
 
-    // ① 平时(ready 且手上没活):按钮不在场,整行也 hidden —— 聊天框上面不占任何高度
     assert.equal(panel.state.status.state, 'ready');
-    assert.equal(els.killBtn.hidden, true, '平时不该看见「停止进程」');
-    assert.equal(els.killBtn.disabled, true, '看不见的按钮也不该是可点的');
-    assert.ok(ctxRow() !== null, '那一行仍然在(它是按钮的落点)');
+    assert.ok(ctxRow() !== null, '连接提示行仍然保留');
+    assert.equal(els.panel.query('.agent-ctx-stop'), null, 'AI 输入卡片中不再创建停止进程按钮');
     assert.equal(ctxRow().hidden, true, '整行默认 hidden:不留 20px 空行,也不留下间距');
 
-    // ② 已经坏了(crashed):它出现,而且能点 —— 进程可能还在,得能收尸
+    // 出错时由对话提示卡提供重试入口，输入卡片不再显示空行。
     bridge.emit({ kind: 'state', status: { state: 'crashed', pid: null, error: null, restarts: 0, since: 1 } });
     await flush();
-    assert.equal(els.killBtn.hidden, false, '已经坏了也要能收尸');
-    assert.equal(els.killBtn.disabled, false);
-    assert.equal(ctxRow().hidden, false, '按钮在场时整行才出现(这时它才有 20px)');
+    assert.equal(ctxRow().hidden, true, '故障状态由提示卡表达，不在输入区留空行');
 
-    // ③ 正在起(starting):那一刻面板**不能是一片静止** —— 这一行要写出「正在连接 Agent…」,
-    //    旁边就是退路「停止进程」(握手最长 35 秒,只说在做什么、不写数字也不画进度)。
+    // 正在起(starting)时保留连接提示，但没有停止按钮。
     bridge.emit({ kind: 'state', status: { state: 'starting', pid: null, error: null, restarts: 0, since: 1 } });
     await flush();
-    assert.equal(els.killBtn.hidden, false, '起的过程中卡住时,它得在场');
     assert.equal(ctxRow().hidden, false);
-    const hint = () => els.panel.query('.agent-ctx-hint');
-    assert.equal(hint().hidden, false, '连接中要有可读提示,不能只有按钮');
+    assert.equal(hint().hidden, false, '连接中显示可读提示');
     assert.match(String(hint().textContent ?? ''), /正在连接 Agent/, '说清正在做什么');
     assert.equal(/进度|%|\d+\s*秒/.test(String(hint().textContent ?? '')), false,
         '不许写数字/假进度:分母不存在,写了就是拿猜的数当承诺');
+    assert.equal(els.panel.query('.agent-ctx-stop'), null);
 
-    await els.killBtn.fire('click');
-    await flush();
-
-    assert.equal(bridge.calls.filter(c => c.channel === 'agent:stop').length, 1);
-    assert.equal(bridge.calls.some(c => c.channel === 'agent:cancel'), false);
-
-    // ④ 停掉之后**必须留一个再连的出口**:主进程随后推 stopped,面板要给出带「重试」的
-    //    提示卡 —— 否则用户面对一个灰掉的发送按钮,只能重启开物。
-    //    判据是"状态真的从在跑掉到 stopped",所以不管是这一行的按钮、设置页那一项,
-    //    还是外部把进程干掉的,都成立。
-    bridge.emit({ kind: 'state', status: { state: 'stopped', pid: null, error: null, restarts: 0, since: 1 } });
-    await flush();
-    const notice = els.messagesEl.query('.agent-notice');
-    assert.ok(notice !== null, '自己停掉的也要在对话里说一句(不然就只剩重启这一条路)');
-    assert.match(textOf(notice), /已经停掉/, '这句话不能说成"连不上" —— 它不是故障');
-    assert.equal(els.retryBtn.parentNode, notice, '「重试」要搬到那张卡上');
-    assert.equal(els.retryBtn.disabled, false, '它是唯一的再连入口,必须能点');
-    assert.equal(els.killBtn.hidden, true, '进程已经没了,「停止进程」又收起来');
-    assert.equal(ctxRow().hidden, true, '整行跟着收起来 —— 又回到"不占位"');
-    assert.equal(hint().hidden, true, '「正在连接…」当然也跟着收起来');
-
-    const startsBefore = bridge.calls.filter(c => c.channel === 'agent:start').length;
-    await els.retryBtn.fire('click');
-    await flush();
-    assert.equal(bridge.calls.filter(c => c.channel === 'agent:start').length, startsBefore + 1,
-        '点了「重试」就要真的再连一次');
-    assert.equal(els.messagesEl.query('.agent-notice'), null, '再连上了那张卡就该让位');
-
-    // ⑤ 回到 ready 且没在跑:它又收起来
     bridge.emit({ kind: 'state', status: { state: 'ready', pid: 1, error: null, restarts: 0, since: 1 } });
     await flush();
-    assert.equal(els.killBtn.hidden, true, '回到正常就又收起来');
+    assert.equal(hint().hidden, true);
     assert.equal(ctxRow().hidden, true);
 });
 
@@ -1140,7 +1107,7 @@ test('外壳只交出 8 个元素时,面板也要把骨架补齐并绑上事件'
     const els = {
         panel: new El('section'), statusEl: new El('div'), retryBtn: new El('button'),
         messagesEl: new El('div'), inputEl: new El('textarea'), sendBtn: new El('button'),
-        credentialEl: new El('div'), killBtn: new El('button'),
+        credentialEl: new El('div'),
     };
     const harness = makeBridge();
     const panel = createAgentPanel({
@@ -1169,7 +1136,7 @@ test('外壳只交出 8 个元素时,凭证卡片也要自己从空填成有内�
     const els = {
         panel: new El('section'), statusEl: new El('div'), retryBtn: new El('button'),
         messagesEl: new El('div'), inputEl: new El('textarea'), sendBtn: new El('button'),
-        credentialEl: new El('div'), killBtn: new El('button'),
+        credentialEl: new El('div'),
     };
     const harness = makeBridge({ credentials: { ok: false, source: null, reason: '没找到凭证' } });
     const panel = createAgentPanel({
@@ -1256,17 +1223,12 @@ function fullSkeleton() {
     footer.className = 'agent-footer';
     const ctxRow = new El('div');
     ctxRow.className = 'agent-ctx-row';
-    // 那一行平时**整行 hidden、不占位**;只有"Agent 不正常"时才出现:
-    // 一句「正在连接 Agent…」+ 一个「停止进程」。骨架与 index.html 逐字对齐。
+    // 连接中才显示提示，其余时间整行 hidden；骨架与 index.html 对齐。
     ctxRow.hidden = true;
     const ctxHint = new El('span');
     ctxHint.className = 'agent-ctx-hint';
     ctxHint.hidden = true;
-    const killBtn = new El('button');
-    killBtn.className = 'agent-ctx-stop';     // 与 index.html 的 #agentKill 同形(断言按 class 查)
-    killBtn.hidden = true;
     ctxRow.appendChild(ctxHint);
-    ctxRow.appendChild(killBtn);
     footer.appendChild(ctxRow);
     const inputEl = new El('textarea');
     footer.appendChild(inputEl);
@@ -1284,7 +1246,7 @@ function fullSkeleton() {
     panel.appendChild(footer);
 
     return {
-        panel, statusEl, retryBtn, killBtn, credentialEl, messagesEl,
+        panel, statusEl, retryBtn, credentialEl, messagesEl,
         inputEl, sendBtn, footer,
     };
 }
@@ -1347,7 +1309,7 @@ test('旧结构(输入区被放在消息区里)会被搬出来 —— 这是"输
         els: {
             panel, statusEl, retryBtn: new El('button'), messagesEl, inputEl,
             sendBtn: new El('button'),
-            credentialEl: new El('div'), killBtn: new El('button'),
+            credentialEl: new El('div'),
         },
         bridge: harness.bridge, log: { warn() {}, error() {} },
         getNote: () => null, autoStart: false,
@@ -1371,16 +1333,16 @@ test('输入区是卡片(方案 ③):那一行平时**整行不占位**,输入�
     await flush();
 
     const ctxRow = els.footer.query('.agent-ctx-row');
-    assert.ok(ctxRow !== null, '卡片顶端要有那一行(它是「正在连接…」与「停止进程」的落点)');
+    assert.ok(ctxRow !== null, '卡片顶端保留连接提示行');
     // 用户要求:那一行平时**什么都不常驻、整行 hidden** —— 连状态点也没有。
     assert.equal(els.panel.query('.agent-ctx-dot'), null, '状态点按用户要求删掉了');
     assert.equal(els.panel.query('.agent-ctx-key'), null, '「密钥」按钮按用户要求删掉了');
     assert.equal(els.panel.query('.agent-context'), null, '那行上下文文字也删掉了');
-    assert.equal(ctxRow.children.length, 2, '那一行里只有两个节点:连接提示 + 「停止进程」');
+    assert.equal(ctxRow.children.length, 1, '那一行只保留连接提示');
     // ⚠️ 逐个按 class 查,不写 `.agent-ctx-row > *` —— 测试替身的选择器只支持
     // `.class` / `[attr]` / `TAGNAME` 三种(见 El.matches 的说明),子选择器它会**静默**匹配到 0 个。
     assert.notEqual(els.footer.query('.agent-ctx-hint'), null, '「正在连接…」那句在那一行里');
-    assert.notEqual(els.footer.query('.agent-ctx-stop'), null, '「停止进程」也在那一行里');
+    assert.equal(els.footer.query('.agent-ctx-stop'), null, '输入卡片不再有停止进程按钮');
     for (const child of ctxRow.children) {
         assert.equal(child.hidden, true, `${child.className} 默认是隐藏的`);
     }
@@ -1606,6 +1568,135 @@ test('方案B(界面):工具全跑完之前摘要行标"运行中",跑完就不�
     assert.equal(els.messagesEl.query('.agent-group').getAttribute('data-live'), 'false');
 });
 
+// 录屏中的真实入口是 AI 对话 generate_image，动效必须在折叠的工具栏外。
+async function beginImageTool(t, status = 'in_progress') {
+    const mounted = await mountPanel();
+    t.after(() => mounted.panel.dispose());
+    mounted.els.inputEl.value = '生成一张角色图';
+    await mounted.panel.send();
+    mounted.bridge.emit(evTool('image-call', status, 'generate_image'));
+    await flush();
+    return mounted;
+}
+
+test('AI 生图事件立即显示 D 动效，工具组收起时仍在折叠栏外', async (t) => {
+    const { els } = await beginImageTool(t);
+    const group = els.messagesEl.query('.agent-group');
+    assert.equal(group.getAttribute('open'), null);
+    const preview = els.messagesEl.query('.agent-image-generation');
+    assert.ok(preview, '真实 generate_image 运行事件必须显示动效');
+    assert.equal(preview.getAttribute('data-tool-call-id'), 'image-call');
+    assert.equal(preview.getAttribute('role'), 'status');
+    assert.match(textOf(preview), /正在生成图片/);
+    for (let parent = preview.parentNode; parent; parent = parent.parentNode) {
+        assert.notEqual(parent.tagName, 'DETAILS', '折叠工具不能隐藏生图动效');
+    }
+});
+
+test('AI 生图 pending 到运行状态及正文更新保持同一个动效元素', async (t) => {
+    const { bridge, els } = await beginImageTool(t, 'pending');
+    const before = els.messagesEl.query('.agent-image-generation');
+    assert.ok(before);
+    bridge.emit({ kind: 'update', sessionId: 's1', update: {
+        sessionUpdate: 'tool_call_update', toolCallId: 'image-call', status: 'in_progress',
+    } });
+    bridge.emit(evText('正在绘制。'));
+    await flush();
+    assert.equal(els.messagesEl.query('.agent-image-generation'), before);
+    assert.equal(els.messagesEl.queryAll('.agent-image-generation').length, 1);
+});
+
+test('AI 生图失败或取消时立即移除无结果动效', async (t) => {
+    for (const status of ['failed', 'error', 'cancelled']) {
+        await t.test(status, async (subtest) => {
+            const { bridge, els } = await beginImageTool(subtest);
+            assert.ok(els.messagesEl.query('.agent-image-generation'));
+            bridge.emit({ kind: 'update', sessionId: 's1', update: {
+                sessionUpdate: 'tool_call_update', toolCallId: 'image-call', status,
+            } });
+            await flush();
+            assert.equal(els.messagesEl.query('.agent-image-generation'), null);
+        });
+    }
+});
+
+test('AI 生图完成后结果替换原框，正文重复图片不再显示，下一轮保留结果', async (t) => {
+    const { bridge, els, panel } = await beginImageTool(t);
+    const before = els.messagesEl.query('.agent-image-generation');
+    bridge.emit(evToolDone('image-call'));
+    await flush();
+    assert.equal(els.messagesEl.query('.agent-image-generation'), before, '工具完成后保留原框等图片链接');
+    const url = 'https://example.test/generated.png';
+    bridge.emit(evText(`图片已生成\n![角色图](${url})\n图片直链：${url}\n`));
+    await flush();
+    const image = before.query('img');
+    assert.ok(image, '结果图片必须在原框里');
+    assert.equal(image.getAttribute('src'), url);
+    assert.equal(els.messagesEl.queryAll('img').filter(img => img.getAttribute('src') === url).length, 1);
+    assert.equal(before.query('a').getAttribute('href'), url);
+    await image.fire('load');
+    assert.equal(before.getAttribute('data-state'), 'ready');
+    assert.equal(before.query('.agent-generation-scene').hidden, true);
+    bridge.emit({ kind: 'prompt-end', sessionId: 's1' });
+    await flush();
+    assert.equal(els.messagesEl.query('.agent-image-generation'), before);
+    els.inputEl.value = '继续';
+    await panel.send();
+    await flush();
+    assert.equal(els.messagesEl.query('.agent-image-generation'), before, '下一轮不丢历史结果框');
+});
+
+test('AI 生图结果追加到工具之前的回复时，加载失败仍保留查看原图入口', async (t) => {
+    const { bridge, els, panel } = await mountPanel();
+    t.after(() => panel.dispose());
+    els.inputEl.value = '生成图片';
+    await panel.send();
+    bridge.emit(evText('先画一张。'));
+    bridge.emit(evTool('g', 'in_progress', 'generate_image'));
+    await flush();
+    const before = els.messagesEl.query('.agent-image-generation');
+    bridge.emit(evToolDone('g'));
+    bridge.emit(evText('\n![图片](https://example.test/broken.png)\n'));
+    bridge.emit({ kind: 'prompt-end', sessionId: 's1' });
+    await flush();
+    assert.equal(els.messagesEl.query('.agent-image-generation'), before);
+    const image = before.query('img');
+    assert.ok(image);
+    await image.fire('error');
+    assert.equal(before.getAttribute('data-state'), 'error');
+    assert.equal(before.query('a').getAttribute('href'), 'https://example.test/broken.png');
+});
+
+test('提示结束后移除未收尾的生图动画，下一轮不复活历史 pending 工具', async (t) => {
+    const { bridge, els, panel } = await beginImageTool(t);
+    assert.ok(els.messagesEl.query('.agent-image-generation'));
+    bridge.emit({ kind: 'prompt-end', sessionId: 's1' });
+    await flush();
+    assert.equal(els.messagesEl.query('.agent-image-generation'), null);
+    els.inputEl.value = '继续聊天';
+    await panel.send();
+    await flush();
+    assert.equal(els.messagesEl.query('.agent-image-generation'), null);
+});
+
+test('取消或进程断开时停止生图动效，普通工具不触发它', async (t) => {
+    const { bridge, els, panel } = await beginImageTool(t);
+    assert.ok(els.messagesEl.query('.agent-image-generation'));
+    await panel.cancel();
+    assert.equal(els.messagesEl.query('.agent-image-generation'), null);
+    els.inputEl.value = '读文件';
+    await panel.send();
+    bridge.emit(evTool('read-call', 'in_progress', 'read'));
+    await flush();
+    assert.equal(els.messagesEl.query('.agent-image-generation'), null);
+    bridge.emit(evTool('image-second', 'in_progress', 'generate_image'));
+    await flush();
+    assert.ok(els.messagesEl.query('.agent-image-generation'));
+    bridge.emit({ kind: 'state', status: { state: 'crashed', pid: null, error: '连接断开' } });
+    await flush();
+    assert.equal(els.messagesEl.query('.agent-image-generation'), null);
+});
+
 // ---------- Markdown:只渲染**助手**的回复,而且只走建节点 ----------
 //
 // 用户反馈:「聊天页面无法渲染 Markdown 格式」。面板原本一律 textContent(那是为了
@@ -1821,7 +1912,7 @@ test('授权卡照旧:question 缺省(false)时仍然是权限卡那套', async 
     assert.equal(els.messagesEl.query('.agent-question'), null);
 });
 
-// ---------- 按需翻译:思考条上一个「译」 ----------
+// ---------- 按需翻译:思考条上的双向换译 SVG ----------
 //
 // 模型偶尔仍会用英文思考(人设已经改成中文,但模型不是被保证的)。于是给思考条一个
 // 「译」:点了才让桥翻一次(省钱),译文与原文都在,可随时切回去。**只有收尾的思考条
@@ -1841,18 +1932,30 @@ const thinkEvent = (text) => ({
 const chipOf = (strip, act) => strip.queryAll('[data-act]')
     .find((b) => b.getAttribute('data-act') === act) ?? null;
 
-test('按需翻译:思考收尾后出现「译」,点了走 agent:translate(带上这条的 id 与原文)', async () => {
+test('按需翻译:思考收尾后只显示一个 SVG 换译图标、不显示字数；点击只请求一次', async () => {
     const { bridge, els } = await mountPanel();
     bridge.emit(thinkEvent('Let me check the handler first.')); await flush();
     bridge.emit(evText('看过了。')); await flush();      // 正文一到,思考收尾
 
     const strip = els.messagesEl.query('.agent-think');
     const chip = chipOf(strip, 'translate');
-    assert.ok(chip !== null, '收尾的思考条要有「译」');
-    assert.equal(textOf(chip), '译');
+    assert.ok(chip !== null, '收尾后应有翻译入口');
+    assert.ok(chip.query('svg'), '图标必须由矢量节点构成');
+    assert.equal(textOf(chip), '', '不保留文字按钮');
+    assert.equal(strip.queryAll('button').length, 1);
+    assert.equal(strip.query('.agent-think-count'), null);
+    assert.equal(chip.getAttribute('aria-label'), '翻译为中文');
 
-    await chip.fire('click');
+    let prevented = false, stopped = false;
+    await chip.fire('click', { preventDefault() { prevented = true; }, stopPropagation() { stopped = true; } });
+    await chip.fire('click'); // 已经被摘下的旧节点也不能重复请求。
     await flush();
+
+    assert.equal(prevented && stopped, true, '点击不能连带开合思考块');
+    const busy = els.messagesEl.query('.agent-think-translate');
+    assert.equal(busy.disabled, true);
+    assert.equal(busy.getAttribute('aria-busy'), 'true');
+    assert.equal(busy.getAttribute('data-state'), 'busy');
 
     const sent = bridge.calls.filter((c) => c.channel === 'agent:translate');
     assert.deepEqual(sent.map((c) => c.payload),
@@ -1866,6 +1969,9 @@ test('按需翻译:流式中的思考条没有「译」(翻了也是白翻)', as
     const strip = els.messagesEl.query('.agent-think');
     assert.ok(strip !== null, '先确认这条思考条真的在(否则下面那条断言是空转)');
     assert.equal(chipOf(strip, 'translate'), null);
+    assert.equal(strip.query('.agent-think-count'), null);
+    bridge.emit(thinkEvent('，继续补充')); await flush();
+    assert.equal(textOf(els.messagesEl.query('.agent-think-body')), '还在想，继续补充', '删掉字数后流式思考正文仍原地更新');
 });
 
 test('按需翻译:翻译中 → 译文;可切回原文,再切回中文', async () => {
@@ -1874,7 +1980,11 @@ test('按需翻译:翻译中 → 译文;可切回原文,再切回中文', async 
     bridge.emit(evText('看过了。')); await flush();
 
     bridge.emit({ kind: 'translation', thoughtId: 't-1', status: 'pending' }); await flush();
-    assert.match(textOf(els.messagesEl.query('.agent-think')), /翻译中/);
+    const pending = els.messagesEl.query('.agent-think-translate');
+    assert.equal(pending.getAttribute('data-state'), 'busy');
+    assert.equal(pending.disabled, true);
+    assert.equal(pending.getAttribute('aria-busy'), 'true');
+    assert.equal(textOf(pending), '');
 
     bridge.emit({
         kind: 'translation', thoughtId: 't-1', status: 'done', text: '我先看一下这个处理函数。',
@@ -1885,16 +1995,21 @@ test('按需翻译:翻译中 → 译文;可切回原文,再切回中文', async 
     assert.equal(strip.getAttribute('open'), '', '译好了要自动展开,否则用户看不到结果');
     assert.match(textOf(strip), /我先看一下这个处理函数。/);
     assert.equal(textOf(strip).includes('Let me check'), false, '这时正文里不该还是英文');
+    assert.equal(strip.queryAll('button').length, 1);
+    assert.equal(chipOf(strip, 'src').getAttribute('aria-pressed'), 'true');
 
     await chipOf(strip, 'src').fire('click'); await flush();
     strip = els.messagesEl.query('.agent-think');
     assert.equal(strip.getAttribute('data-lang'), 'src');
     assert.match(textOf(strip), /Let me check the handler first\./, '切回原文要看到英文原文');
+    assert.equal(strip.queryAll('button').length, 1);
+    assert.equal(chipOf(strip, 'zh').getAttribute('aria-pressed'), 'false');
 
     await chipOf(strip, 'zh').fire('click'); await flush();
     strip = els.messagesEl.query('.agent-think');
     assert.equal(strip.getAttribute('data-lang'), 'zh');
     assert.match(textOf(strip), /我先看一下这个处理函数。/);
+    assert.equal(bridge.calls.filter(call => call.channel === 'agent:translate').length, 0, '已缓存的中英文切换不重新翻译');
 });
 
 test('按需翻译:失败之后能重译(不许卡在一个永远转圈的「翻译中」)', async () => {
@@ -1905,9 +2020,31 @@ test('按需翻译:失败之后能重译(不许卡在一个永远转圈的「翻
     bridge.emit({ kind: 'translation', thoughtId: 't-1', status: 'error', error: '模型调用超时' }); await flush();
 
     const strip = els.messagesEl.query('.agent-think');
-    assert.match(textOf(strip), /重译/, '失败要能重来');
+    const retry = chipOf(strip, 'translate');
+    assert.ok(retry.query('svg'));
+    assert.match(retry.getAttribute('title'), /模型调用超时/);
+    assert.match(retry.getAttribute('aria-label'), /重试/);
+    assert.equal(retry.disabled, false);
     assert.equal(strip.getAttribute('data-translation'), 'error');
     assert.equal(chipOf(strip, 'src'), null, '没译成就不该有"原文/中文"的切换');
+    await retry.fire('click'); await flush();
+    assert.equal(bridge.calls.filter(call => call.channel === 'agent:translate').length, 1);
+});
+
+test('按需翻译:请求拒绝后恢复图标重试入口，不遗留永久忙态', async () => {
+    const { bridge, els } = await mountPanel();
+    bridge.emit(thinkEvent('English thought')); await flush();
+    bridge.emit(evText('好。')); await flush();
+    const invoke = bridge.invoke;
+    bridge.invoke = (channel, payload) => channel === 'agent:translate'
+        ? Promise.reject(new Error('连接已断开')) : invoke(channel, payload);
+    await chipOf(els.messagesEl.query('.agent-think'), 'translate').fire('click');
+    await flush();
+    const retry = els.messagesEl.query('.agent-think-translate');
+    assert.equal(retry.getAttribute('data-state'), 'error');
+    assert.equal(retry.getAttribute('aria-busy'), 'false');
+    assert.equal(retry.disabled, false);
+    assert.match(retry.getAttribute('title'), /连接已断开/);
 });
 
 // ---------- 黏贴截图 ----------

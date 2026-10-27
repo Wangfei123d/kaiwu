@@ -25,7 +25,7 @@
 // (连同它的 `applyDrop` / `swapPanes` / `dropOnEdge` / `dockBottom` 入口)。
 // 规格 §1.2 禁止用标题栏 / 抓手 / 标签条空白 / 任何"整组面板"来移动或交换布局 ——
 // 而且明确要求"不得仅仅在视觉上隐藏抓手而保留事件"。所以:
-//   · 抓手 ⠿ 与条上空白仍然**显示**(保留这一行的视觉语言与面板尺寸角标的悬停区),
+//   · 抓手 ⠿ 与条上空白仍然**显示**(保留这一行的视觉语言与标签间留白),
 //     但它们**不再启动任何拖动**,也不再可聚焦、不再向读屏宣告(见 renderLeaf);
 //   · 唯一的拖动起点是 `.pw-tab`(宽布局)与 `.pw-tabs-cur`(窄布局下拉);
 //   · 落点由 `tabDropZoneAt()` 认**整个 `.pw-pane`**(不再只认 `.pw-tabs`),
@@ -115,6 +115,8 @@ function el(doc, tag, className) {
  *        面板;defaultPx = 双击复位到多少像素(旧的"双击回到 236 / 240"就是它);
  *        which = 双击时**哪一侧**回到 defaultPx(0 左 / 1 右,默认按 after/before 推)
  * @param {object|null} [p.initialTree] 初始树(main.js 用旧的像素宽度算出来,保证默认外观不变)
+ * @param {{left?:boolean,right?:boolean}} [p.sidebarState] 左右侧栏的初始折叠状态
+ * @param {(state:{left:boolean,right:boolean})=>void} [p.onSidebarStateChange] 侧栏折叠状态变化(外壳负责存档)
  * @param {string[]} [p.requiredIds] 布局完整性所需的视图;默认全部 panes key(兼容旧调用方)
  * @param {(tree:object, info:{persist:boolean})=>void} [p.onLayout] 提交回调
  * @param {(tab:object,paneId:string)=>string} [p.viewTitle] 标签**全名**(笔记标签用笔记标题)
@@ -142,6 +144,8 @@ export function createPanelWorkspace({
     minRatio = MIN_RATIO,
     bandPx = DEFAULT_BAND_PX,          // ⚠️ 已不用(同上);保留参数以免旧调用方解构不到
     edgeBandPx = DEFAULT_EDGE_BAND_PX,
+    sidebarState = null,
+    onSidebarStateChange = null,
     edge = DEFAULT_EDGE,               // ⚠️ 旧口径,只给 zoneAt() 那个只读兼容口用
     keyStepPx = KEY_STEP_PX,
     onLayout = null,
@@ -188,11 +192,17 @@ export function createPanelWorkspace({
     }
 
     let tree = cloneTree(initialTree) ?? defaultTree();
+    let collapsedSidebars = {
+        left: sidebarState?.left === true,
+        right: sidebarState?.right === true,
+    };
     let mounted = false;
     let interacted = false;            // 存档还没读回来用户就动过手 → 不要覆盖他的意图
     let bodies = new Map();            // pane id → .pw-body
     let paneEls = new Map();           // pane id → .pw-pane
-    let sizeEls = new Map();           // pane id → .pw-size
+    let nodeEls = new Map();           // tree node → rendered branch
+    let nodeGutters = new Map();       // split node → its rendered gutters, in split order
+    let sidebarGroups = null;          // outer root-row branches and their adjacent gutters
     let tabRefs = [];                  // 每次渲染重建:每片叶子的 { node, pane, strip, body }
     let ariaRefreshers = [];           // 每次渲染重建:分隔条 aria 的刷新函数
     // ---- 标签条那几件状态 ----
@@ -211,17 +221,147 @@ export function createPanelWorkspace({
         disposers.push(() => target.removeEventListener(type, fn, opts));
     }
 
+    const sidebarHandles = {};
+    function ensureSidebarHandles() {
+        if (!desk?.appendChild) return;
+        for (const side of ['left', 'right']) {
+            if (sidebarHandles[side]) continue;
+            const handle = el(doc, 'button', `pw-sidebar-handle pw-sidebar-handle-${side}`);
+            handle.type = 'button';
+            handle.hidden = true;
+            handle.textContent = side === 'left' ? '›' : '‹';
+            handle.setAttribute('aria-controls', `pw-sidebar-${side}-branch`);
+            handle.setAttribute('aria-expanded', 'false');
+            listen(handle, 'click', (event) => {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+                setSidebarCollapsed(side, false);
+            });
+            sidebarHandles[side] = handle;
+            desk.appendChild(handle);
+        }
+    }
+
+    function edgeLeaf(node, side) {
+        if (isPane(node)) return node;
+        if (!isSplit(node) || node.children.length === 0) return null;
+        const index = side === 'left' ? 0 : node.children.length - 1;
+        return edgeLeaf(node.children[index], side);
+    }
+
+    function bindSidebarGroups() {
+        sidebarGroups = null;
+        for (const ref of tabRefs) {
+            ref.sidebarSide = null;
+            ref.pane.classList.remove('pw-sidebar-boundary');
+            ref.sidebarToggle.hidden = true;
+        }
+
+        if (!isSplit(tree) || tree.dir !== 'row' || tree.children.length < 3) {
+            // 侧栏语义只在三列以上的水平根布局成立。布局被用户改成其它形态时，
+            // 清掉旧状态，避免下一次恢复三列时意外重新隐藏一侧。
+            if (collapsedSidebars.left || collapsedSidebars.right) {
+                collapsedSidebars = { left: false, right: false };
+                try { onSidebarStateChange?.({ ...collapsedSidebars }); } catch { /* 存档失败不影响布局 */ }
+            }
+            desk?.classList?.remove('pw-left-collapsed', 'pw-right-collapsed');
+            for (const handle of Object.values(sidebarHandles)) handle.hidden = true;
+            return;
+        }
+
+        const lastIndex = tree.children.length - 1;
+        const gutters = nodeGutters.get(tree) ?? [];
+        const leftBranch = nodeEls.get(tree.children[0]);
+        const rightBranch = nodeEls.get(tree.children[lastIndex]);
+        const leftGutter = gutters[0];
+        const rightGutter = gutters[lastIndex - 1];
+        if (!leftBranch || !rightBranch || !leftGutter || !rightGutter) return;
+
+        leftBranch.id = 'pw-sidebar-left-branch';
+        rightBranch.id = 'pw-sidebar-right-branch';
+        leftBranch.classList.add('pw-sidebar-branch');
+        rightBranch.classList.add('pw-sidebar-branch');
+        sidebarGroups = {
+            left: { branch: leftBranch, gutter: leftGutter, index: 0 },
+            right: { branch: rightBranch, gutter: rightGutter, index: lastIndex },
+        };
+
+        const leftPane = edgeLeaf(tree.children[0], 'left');
+        const rightPane = edgeLeaf(tree.children[lastIndex], 'right');
+        for (const ref of tabRefs) {
+            if (ref.node === leftPane) ref.sidebarSide = 'left';
+            else if (ref.node === rightPane) ref.sidebarSide = 'right';
+            if (ref.sidebarSide !== null) {
+                ref.pane.classList.add('pw-sidebar-boundary');
+                ref.sidebarToggle.hidden = collapsedSidebars[ref.sidebarSide];
+                const label = ref.sidebarSide === 'left' ? '左侧栏' : '右侧栏';
+                ref.sidebarToggle.textContent = ref.sidebarSide === 'left' ? '‹' : '›';
+                ref.sidebarToggle.title = `收起${label}`;
+                ref.sidebarToggle.setAttribute('aria-label', `收起${label}`);
+                ref.sidebarToggle.setAttribute('aria-controls', `pw-sidebar-${ref.sidebarSide}-branch`);
+                ref.sidebarToggle.setAttribute('aria-expanded', String(!collapsedSidebars[ref.sidebarSide]));
+            }
+        }
+        applySidebarPresentation();
+    }
+
+    function applySidebarPresentation() {
+        if (!sidebarGroups) return;
+        for (const side of ['left', 'right']) {
+            const group = sidebarGroups[side];
+            const collapsed = collapsedSidebars[side] === true;
+            const ratio = tree.sizes[group.index];
+            group.branch.style.flex = collapsed ? '0 0 0px' : `${ratio} 1 0%`;
+            group.branch.style.overflow = collapsed ? 'hidden' : '';
+            group.branch.inert = collapsed;
+            if (collapsed) group.branch.setAttribute('aria-hidden', 'true');
+            else group.branch.removeAttribute('aria-hidden');
+            group.gutter.hidden = collapsed;
+            desk?.classList?.toggle(`pw-${side}-collapsed`, collapsed);
+
+            const toggle = sidebarHandles[side];
+            if (toggle) {
+                toggle.hidden = !collapsed;
+                toggle.setAttribute('aria-expanded', String(!collapsed));
+                toggle.setAttribute('aria-label', `展开${side === 'left' ? '左侧栏' : '右侧栏'}`);
+                toggle.title = `展开${side === 'left' ? '左侧栏' : '右侧栏'}`;
+            }
+        }
+    }
+
+    function setSidebarCollapsed(side, collapsed, { focus = true } = {}) {
+        if (!sidebarGroups || (side !== 'left' && side !== 'right')) return false;
+        const next = collapsed === true;
+        if (collapsedSidebars[side] === next) return true;
+        collapsedSidebars = { ...collapsedSidebars, [side]: next };
+        applySidebarPresentation();
+        for (const ref of tabRefs) {
+            if (ref.sidebarSide !== side) continue;
+            ref.sidebarToggle.hidden = next;
+            ref.sidebarToggle.setAttribute('aria-expanded', String(!next));
+        }
+        try { onSidebarStateChange?.({ ...collapsedSidebars }); } catch { /* 存档失败不影响交互 */ }
+        refresh();
+        if (focus) {
+            if (next) sidebarHandles[side]?.focus?.();
+            else tabRefs.find((ref) => ref.sidebarSide === side)?.sidebarToggle?.focus?.();
+        }
+        return true;
+    }
+
     // ---- 渲染:树 → DOM。比例用 flex-grow,所以窗口缩放也成立 ----
 
     function render() {
         bodies = new Map();
         paneEls = new Map();
-        sizeEls = new Map();
+        nodeEls = new Map();
+        nodeGutters = new Map();
         tabRefs = [];
         ariaRefreshers = [];
         const root = renderNode(tree);
         root.style.flex = '1 1 0%';                        // 根节点铺满 .pw-stack
         stack.replaceChildren(root);
+        bindSidebarGroups();
         // 每一格的内容 = 这一格**活动标签**对应的那个视图元素(同一批节点,只是换了容器)。
         // ⚠️ 从前这里是按 pane id 找元素 —— 有了标签之后 id 不再等于视图:
         // 一个面板里可以放「笔记正文」+「链接」两个标签,内容由**活动标签的 view** 决定。
@@ -250,16 +390,25 @@ export function createPanelWorkspace({
     }
 
     function renderNode(node) {
-        if (isPane(node)) return renderLeaf(node);
+        if (isPane(node)) {
+            const leaf = renderLeaf(node);
+            nodeEls.set(node, leaf);
+            return leaf;
+        }
         const box = el(doc, 'div', `pw-node pw-${node.dir}`);
+        nodeEls.set(node, box);
         const kids = node.children.map((child) => renderNode(child));
+        const gutters = [];
         kids.forEach((childEl, i) => {
             childEl.style.flex = `${node.sizes[i]} 1 0%`;
             box.appendChild(childEl);
             if (i < kids.length - 1) {
-                box.appendChild(renderGutter(node, i, childEl, kids[i + 1]));
+                const gutter = renderGutter(node, i, childEl, kids[i + 1]);
+                gutters.push(gutter);
+                box.appendChild(gutter);
             }
         });
+        nodeGutters.set(node, gutters);
         return box;
     }
 
@@ -281,14 +430,13 @@ export function createPanelWorkspace({
         const strip = el(doc, 'div', 'pw-tabs');
         strip.dataset.paneTabs = node.id;
 
-        // ⚠️ 抓手 / 条上空白 / 尺寸角标**只造一次**:paintStrip 每次都会
-        //    `strip.replaceChildren()`,这三个节点要复用 —— 否则监听会随重画越挂越多
+        // ⚠️ 抓手 / 条上空白**只造一次**:paintStrip 每次都会
+        //    `strip.replaceChildren()`,这两个节点要复用 —— 否则监听会随重画越挂越多
         //    (标签条上踩过同一个坑:一次点击开出两个菜单)。
         //
         // ⚠️ 抓手 ⠿ 与条上空白**不再启动任何拖动**(规格 §1.2,本轮把整条手势删掉了)。
         //    为什么还留着它们、而不是从 DOM 里删掉:
-        //      · 条上空白是这一行唯一的"喘息位"—— 删了它,标签会紧贴 ＋ 挤在一起,
-        //        而且 `.pw-size`(尺寸角标)是**绝对定位在条里**的,它需要这段空白当视觉底座;
+        //      · 条上空白是这一行唯一的"喘息位"—— 删了它,标签会紧贴 ＋ 挤在一起;
         //      · 抓手是这一行的视觉语言(用户已经认得的"这一格"标记),突然消失会被当成 bug。
         //    所以它们只**显示**、不响应指针、不进 Tab 序、也不向读屏报名字:
         //    一个"看着能拖、其实不能"的键盘可达控件比不显示更糟(读屏用户会反复按它)。
@@ -298,17 +446,24 @@ export function createPanelWorkspace({
         grip.title = '这一格的标记(拖动请拖标签;整片拖动已取消)';
         const pad = el(doc, 'span', 'pw-grabpad');
         pad.setAttribute('aria-hidden', 'true');
-        const size = el(doc, 'span', 'pw-size');
+        const sidebarToggle = el(doc, 'button', 'pw-sidebar-toggle');
+        sidebarToggle.type = 'button';
+        sidebarToggle.hidden = true;
 
         const body = el(doc, 'div', 'pw-body');
         body.dataset.paneBody = node.id;
-        pane.append(strip, body);
+        const ref = { node, pane, strip, body, bound: [], grip, pad, sidebarToggle, sidebarSide: null };
+        on(sidebarToggle, 'click', (event) => {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            if (ref.sidebarSide !== null) setSidebarCollapsed(ref.sidebarSide, true);
+        });
+        pane.append(strip, body, sidebarToggle);
         leaf.appendChild(pane);
 
         bodies.set(node.id, body);
         paneEls.set(node.id, pane);
-        sizeEls.set(node.id, size);
-        tabRefs.push({ node, pane, strip, body, bound: [], grip, pad, size });
+        tabRefs.push(ref);
         // ⚠️ 这里**没有** bindPaneDrag(整片拖动那条路按规格删掉了)。
         // 「当前面板」= 焦点/鼠标所在的那一片:快捷键都作用在它身上(实测那几条在自检里)。
         // ⚠️ 用 `on` 而不是 `listen`:pane 每次重画都是**新节点**,不需要(也不该)登记解绑。
@@ -473,16 +628,34 @@ export function createPanelWorkspace({
             }
         }
         // 条上空白:夹在标签与 ＋ 之间。⚠️ v4 起它**不启动任何拖动**(整片拖动已删),
-        // 留着它是这一行的喘息位 + 尺寸角标的视觉底座(见 renderLeaf 的注释)。
+        // 留着它是这一行的喘息位(见 renderLeaf 的注释)。
         strip.append(ref.pad);
-        // 尺寸角标同样只造一次,重画时挂回原位(绝对定位,不参与排版)
-        strip.append(ref.size);
         strip.append(makeAddButton(node));
         // ⚠️ 面板自己没有名字了,读屏的名字取**当前那一枚标签** ——
         //    这就是"属性由标签页继承"在无障碍上的同一条规矩(空容器就直说它是空的)。
         const activeNow = activeTabOf(node);
         const activeName = activeNow === null ? '' : String(tabTitle(activeNow, node.id) ?? '');
         pane.setAttribute('aria-label', activeName === '' ? '空容器(还没有标签)' : `${activeName}(当前标签)`);
+        drawTabContour(strip);
+    }
+
+    // 与已批准预览相同的开放轮廓:上角向内圆,下角向外接入正文,底部不封口。
+    // 每次标签重绘后量实际尺寸,窄标签与窗口缩放时圆角都保持固定像素。
+    function drawTabContour(strip) {
+        const contour = strip.querySelector?.('.pw-tab-contour');
+        if (!contour) return;
+        const { width, height } = contour.getBoundingClientRect();
+        if (!width || !height) return;
+        const join = 9;
+        const radius = 9;
+        const bottom = height - 0.5;
+        const right = width - join;
+        contour.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        contour.firstElementChild.setAttribute('d',
+            `M 0 ${bottom} Q ${join} ${bottom} ${join} ${height - join}` +
+            ` V ${radius + 0.5} Q ${join} 0.5 ${join + radius} 0.5` +
+            ` H ${right - radius} Q ${right} 0.5 ${right} ${radius + 0.5}` +
+            ` V ${height - join} Q ${right} ${bottom} ${width} ${bottom}`);
     }
 
     // ---- 拖**一枚标签**到别的面板上(规格 §4:按胶囊中线定插入位,竖线指示)----
@@ -664,7 +837,18 @@ export function createPanelWorkspace({
         b.type = 'button';
         b.dataset.tabIndex = String(index);
         b.setAttribute('aria-selected', String(on_));
-        if (on_) b.classList.add('pw-tab-on');
+        if (on_) {
+            b.classList.add('pw-tab-on');
+            if (doc.createElementNS) {
+                const contour = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                contour.classList.add('pw-tab-contour');
+                contour.setAttribute('aria-hidden', 'true');
+                const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('vector-effect', 'non-scaling-stroke');
+                contour.append(path);
+                b.append(contour);
+            }
+        }
         const dirty = isTabDirty ? isTabDirty(tab) === true : false;
         if (dirty) b.classList.add('pw-tab-dirty');
         const text = el(doc, 'span', 'pw-tab-label');
@@ -1246,9 +1430,6 @@ export function createPanelWorkspace({
         listen(g, 'pointerdown', (e) => startGutterDrag(e, g, path, index, leftEl, rightEl));
         listen(g, 'dblclick', () => resetPair(path, index, leftEl, rightEl, matched));
         listen(g, 'keydown', (e) => onGutterKey(e, path, index, leftEl, rightEl));
-        // 键盘调尺寸时角标也要看得见:分隔条**拿到焦点**就等于"正在调它"(方向键随时会按)
-        listen(g, 'focus', () => setResizing(true));
-        listen(g, 'blur', () => setResizing(false));
         return g;
     }
 
@@ -1280,16 +1461,6 @@ export function createPanelWorkspace({
         rightEl.style.flex = `${live.sizes[index + 1]} 1 0%`;
         refreshAria();
         updateText();
-        // ⚠️ 尺寸角标也要跟着动:它是"正在改尺寸"时才看的那份读数,拖动中读到旧数字
-        // 比不显示更糟(松手才跳一下,用户会以为拖动没生效)。
-        refreshSizeTexts();
-    }
-
-    /** 拖分隔条 / 聚焦分隔条期间给工作台挂个标记:CSS 靠它让**所有**面板的尺寸角标显形。 */
-    function setResizing(on) {
-        const cls = desk?.classList;
-        if (on === true) cls?.add?.('pw-resizing');
-        else cls?.remove?.('pw-resizing');
     }
 
     function startGutterDrag(e, g, path, index, leftEl, rightEl) {
@@ -1306,7 +1477,6 @@ export function createPanelWorkspace({
         const startSizes = live.sizes.slice();
         const startPos = horizontal ? (e.clientX ?? 0) : (e.clientY ?? 0);
         g.dataset.dragging = '1';
-        setResizing(true);                                  // 尺寸角标显形(拖完/取消时收回)
 
         const move = (ev) => {
             ev.preventDefault?.();
@@ -1319,7 +1489,6 @@ export function createPanelWorkspace({
             win?.removeEventListener?.('pointerup', up);
             win?.removeEventListener?.('pointercancel', up);
             delete g.dataset.dragging;
-            setResizing(false);
             interacted = true;
             commit();
         };
@@ -1417,26 +1586,9 @@ export function createPanelWorkspace({
         // ⚠️ 标签条要跟着宽度重画:220px 那条阈值与三级缩写都是**按实际可用宽度**算的,
         // 拖分隔条 / 换窗口大小之后,同一个面板可能从胶囊变下拉(或反过来)。
         paintStrips();
-        refreshSizeTexts();
         refreshAria();
         updateText();
         onLayout?.(tree, { persist: false });               // 只更新读数(CSS 变量),不写盘
-    }
-
-    /**
-     * 标题栏那个尺寸角标(`820×949`)的文本。
-     *
-     * 单独一个函数是因为它有**两个**调用点:重画之后(`refresh`),以及拖分隔条的过程中
-     * (`applyPairSizes`)—— 拖动中读到旧数字比不显示更糟。角标显不显示由 CSS 决定
-     * (悬停/聚焦/拖动时淡入),这里只管把数字写对。
-     */
-    function refreshSizeTexts() {
-        for (const [id, sizeEl] of sizeEls) {
-            const pane = paneEls.get(id);
-            if (!pane) continue;
-            const r = pane.getBoundingClientRect();
-            sizeEl.textContent = `${Math.round(r.width)}×${Math.round(r.height)}`;
-        }
     }
 
     function refreshAria() {
@@ -1473,6 +1625,7 @@ export function createPanelWorkspace({
         if (host?.querySelectorAll) {
             for (const old of [...host.querySelectorAll('.col-resizer')]) old.remove();
         }
+        ensureSidebarHandles();
         render();
         if (store) {
             try {
@@ -1508,8 +1661,10 @@ export function createPanelWorkspace({
 
     function reset() {
         tree = cloneTree(initialTree) ?? defaultTree();
+        collapsedSidebars = { left: false, right: false };
         interacted = true;
         render();
+        try { onSidebarStateChange?.({ ...collapsedSidebars }); } catch { /* 存档失败不影响重置 */ }
         commit();
         return tree;
     }
@@ -1596,6 +1751,8 @@ export function createPanelWorkspace({
         applyTree,
         refresh,                       // 重新量一遍读数(尺寸/aria/标签条);不写盘
         getTree: () => cloneTree(tree),
+        getSidebarState: () => ({ ...collapsedSidebars }),
+        setSidebarCollapsed,
         text: () => formatTree(tree, treeLabels()),
         /** ⚠️ 只读兼容口(旧的**比例**口径,不参与拖动)。真正的落点判定见 tabDropZoneAt。 */
         zoneAt,
@@ -1632,6 +1789,18 @@ export function createPanelWorkspace({
             closePopup();
             clearNotice();
             for (const off of disposers.splice(0)) off();
+            if (sidebarGroups) {
+                for (const side of ['left', 'right']) {
+                    const group = sidebarGroups[side];
+                    group.branch.style.flex = `${tree.sizes[group.index]} 1 0%`;
+                    group.branch.style.overflow = '';
+                    group.branch.inert = false;
+                    group.branch.removeAttribute('aria-hidden');
+                    group.gutter.hidden = false;
+                }
+            }
+            for (const handle of Object.values(sidebarHandles)) handle.remove?.();
+            desk?.classList?.remove('pw-left-collapsed', 'pw-right-collapsed');
         },
     };
 }
