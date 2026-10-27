@@ -12,8 +12,8 @@ import {
     DEFAULT_NAV_W, DEFAULT_SIDE_W, MIN_NAV_W, MAX_NAV_W, MIN_SIDE_W, MAX_SIDE_W,
 } from './shell/column-resizer.js';
 import { createPanelWorkspace, GUTTER_PX } from './shell/panel-workspace.js';
+import { createApplicationMenu } from './shell/application-menu.js';
 import { createPaneLifecycle } from './lib/pane-lifecycle.js';
-import { createSettingsView } from './settings/settings-view.js';
 import { treeFromWidths, adoptPanes, addPane, viewsOpenIn } from './lib/panel-tree.js';
 // 「窗口」菜单那份面板表(已知视图 × 现在开着没有)——纯函数,带回归单测(用户档里"开着却没勾"那一条)。
 import { splitPanelMenuTables } from './lib/panel-menu-table.js';
@@ -141,7 +141,7 @@ async function setupColumnResizers() {
  *
  * 挂载失败不致命:调用方会退回改动前的固定三栏兜底(.pane-notes 的 grid,四格依次排开)。
  */
-async function setupPanelWorkspace({ onOpenPanel = null } = {}) {
+async function setupPanelWorkspace() {
     const host = $('paneNotes');
     const desk = $('panelWorkspace');
     const stack = $('panelTree');
@@ -161,6 +161,11 @@ async function setupPanelWorkspace({ onOpenPanel = null } = {}) {
     // 旧的两个像素宽度:既是默认树的权重,也是拖动后继续维护的那份读数(既有契约)。
     const navW = clampWidth(await read('ui.navWidth', DEFAULT_NAV_W), MIN_NAV_W, MAX_NAV_W, DEFAULT_NAV_W);
     const sideW = clampWidth(await read('ui.sideWidth', DEFAULT_SIDE_W), MIN_SIDE_W, MAX_SIDE_W, DEFAULT_SIDE_W);
+    const savedSidebarState = await read('ui.collapsedSidebars', {});
+    const sidebarState = {
+        left: savedSidebarState?.left === true,
+        right: savedSidebarState?.right === true,
+    };
     // 容器宽度 ≈ 视口宽度(笔记视图横跨整个 body)。拿不到就退回一个常见宽度 ——
     // 反正是**比例**,差几像素只影响默认树的权重,不影响窗口缩放。
     const viewportW = document.documentElement?.clientWidth || window.innerWidth || 1280;
@@ -342,8 +347,12 @@ async function setupPanelWorkspace({ onOpenPanel = null } = {}) {
     const workspace = createPanelWorkspace({
         desk, stack,
         hintEl: $('panelHint'), bandEl: $('panelBand'),
-        treeEl: $('layoutTree'), resetBtn: $('layoutReset'),
         host, panes, store, initialTree,
+        sidebarState,
+        onSidebarStateChange: (state) => write('ui.collapsedSidebars', {
+            left: state?.left === true,
+            right: state?.right === true,
+        }),
         requiredIds,
         // 标签**全名**:笔记标签用笔记标题(「甲篇」而不是「笔记正文」),
         // 其它视图用登记的名字。找不到标题(索引还没载入)就退回文件名。
@@ -351,7 +360,8 @@ async function setupPanelWorkspace({ onOpenPanel = null } = {}) {
             if (tab?.view === 'doc' && typeof tab.doc === 'string' && tab.doc !== '') {
                 const hit = (notesApi?.index?.notes ?? []).find((n) => n.path === tab.doc);
                 const title = hit?.title;
-                return (typeof title === 'string' && title.trim() !== '') ? title.trim() : tab.doc;
+                return (typeof title === 'string' && title.trim() !== '')
+                    ? title.trim() : (tab.doc.split('/').at(-1) ?? tab.doc);
             }
             return panes[tab?.view]?.title ?? tab?.view ?? '';
         },
@@ -414,7 +424,6 @@ async function setupPanelWorkspace({ onOpenPanel = null } = {}) {
      */
     function openWorkspacePanel(viewId) {
         if (typeof viewId !== 'string' || !knownIds.includes(viewId)) return false;
-        onOpenPanel?.(viewId);
         const tree = workspace.getTree();
         // ⚠️ 第二道闸也按**视图**判:同一个视图在窗口里只该有一份。
         //    (先前按槽位 id 判,于是"视图没开、但它的名字被别的格子占着"时会**静默什么都不做** ——
@@ -473,6 +482,7 @@ async function setupPanelWorkspace({ onOpenPanel = null } = {}) {
 
 async function boot() {
     stage('boot:进入');
+    createApplicationMenu();
     startStarfield($('starfield'));
     stage('boot:星空已启动');
 
@@ -530,10 +540,38 @@ async function boot() {
             if (info?.source !== 'tabs') workspaceApi?.openView('doc', path);
             agent.syncNote();
         },
+        onOpenCanvas: (path) => {
+            const open = () => {
+                workspaceApi?.openView('note-canvas');
+                // 插件面板惰性挂载在 openView 的微任务中；等它注册事件监听后再发打开请求。
+                queueMicrotask(() => window.dispatchEvent(new CustomEvent('kaiwu:open-canvas', { detail: { path } })));
+            };
+            if (workspaceApi) open();
+            else void ensureWorkspace().then(open).catch((err) => console.error('[notes] 打开画布失败', err));
+        },
+        onCloseDocx: (path) => {
+            for (const pane of workspaceApi?.allTabs?.() ?? []) {
+                const index = pane.tabs?.findIndex((tab) => tab.view === 'doc' && tab.doc === path) ?? -1;
+                if (index >= 0) {
+                    workspaceApi.closeTab(pane.paneId, index);
+                    return true;
+                }
+            }
+            return false;
+        },
     });
     stage('boot:笔记视图已建');
     // 工作台要用它(标签全名 = 笔记标题;切 doc 标签 = 把编辑器切到那一篇)
     notesApi = notes;
+    window.addEventListener('kaiwu:canvas-opened', (event) => {
+        const path = event.detail?.path;
+        if (typeof path === 'string') notesApi?.selectCanvas(path);
+    });
+    window.addEventListener('kaiwu:canvas-list-changed', () => {
+        void notesApi?.refreshIndex({ keepSelection: true }).catch((err) => {
+            console.warn('[notes] 刷新画布文件列表失败', err);
+        });
+    });
 
     // 侧栏宽度可拖(左 + 右)/ 平铺工作台。放在这里:两条分隔条与 #paneNotes 都在骨架里,
     // 而宽度的读回要走设置通道 —— 失败也不该拦住后面的外壳启动。
@@ -541,50 +579,20 @@ async function boot() {
     // ⚠️ 工作台必须在 `#shell` **可见之后**才挂载(见 setupPanelWorkspace 顶部),
     // 所以真正的挂载点在下面对应的分支里(ensureWorkspace)。
     let workspacePromise = null;
+    let workspaceRef = null;
     function ensureWorkspace() {
         if (workspacePromise) return workspacePromise;
-        workspacePromise = setupPanelWorkspace({
-            onOpenPanel: (viewId) => {
-                if (viewId.startsWith('tool:')) switchView('notes');
-            },
-        })
+        workspacePromise = setupPanelWorkspace()
             .then((ws) => { workspaceApi = ws; return ws; })
             .catch((err) => {
                 stageError('boot:工作台初始化失败,退回固定网格兜底', err);
                 // 退路:改动前的固定布局兜底(.pane-notes 的 grid,四格依次排开)。
-                // 工作台没挂上时 .pw-host 不会被加,.pw-desk / .pw-bar 保持 display:none,
+                // 工作台没挂上时 .pw-host 不会被加,.pw-desk 保持 display:none,
                 // 布局照旧走 shell.css 的 grid。
                 return setupColumnResizers().catch((e) => stageError('boot:侧栏宽度初始化失败', e));
             });
         return workspacePromise;
     }
-
-    // ---------- 设置视图(设计稿方案 D:左导航 + 搜索 + 表单) ----------
-    //
-    // ⚠️ 它**不属于平铺工作台**:是一个整屏视图(与「工具」同级),布局树管不到它。
-    // 读数全部走**既有通道**(视频模型/密钥/凭证/索引),这里只负责把它与外壳接起来:
-    // 库路径(顶栏那份)、布局树文本(工作台那份)、重置布局(工作台那个能力)、
-    // 更换库(顶栏那个按钮的能力)、动效开关(落盘 + 通知星空)。
-    let vaultPathText = '';
-    const settingsView = createSettingsView({
-        els: {
-            searchEl: $('settingsSearch'),
-            navEl: $('settingsNav'),
-            bodyEl: $('settingsBody'),
-            overviewEl: $('settingsOverview'),
-        },
-        bridge,
-        log: console,
-        getIndex: () => notes.index,
-        getVaultPath: () => vaultPathText,
-        // 工作台是**异步**挂上的(要等外壳可见),所以这里走一个惰性引用:
-        // 打开设置页时它早就挂好了。
-        getLayoutText: () => (workspaceRef !== null ? workspaceRef.text() : ''),
-        onResetLayout: () => { if (workspaceRef !== null) workspaceRef.reset(); },
-        onChangeVault: () => onboarding.open(),
-        onMotionChange: (off) => applyMotionOff(off),
-    });
-    let workspaceRef = null;
 
     // ---------- AI 面板(右侧常驻) ----------
     //
@@ -611,14 +619,13 @@ async function boot() {
             configBtn: $('agentCfg'),
             configWrap: $('agentCfgWrap'),
             credentialEl: $('agentCredential'),
-            killBtn: $('agentKill'),
         },
         bridge,
         log: console,
         autoStart: !isSelftest,
         getNote: () => {
             const path = notes.currentPath;
-            if (!path) return null;
+            if (!path || /\.docx$/i.test(path)) return null;
             const meta = (notes.index?.notes ?? []).find(n => n.path === path);
             return {
                 path,
@@ -637,25 +644,9 @@ async function boot() {
         console.error('[shell] AI 面板挂载失败', err);
     });
 
-    // ---------- 视图切换 ----------
-    function switchView(next) {
-        const selected = next === 'settings' ? 'settings' : 'notes';
-        $('paneNotes').hidden = selected !== 'notes';
-        $('paneSettings').hidden = selected !== 'settings';
-        for (const tab of document.querySelectorAll('.view-tab')) {
-            tab.setAttribute('aria-selected', String(tab.dataset.view === selected));
-        }
-        if (selected === 'settings') void settingsView.show();
-    }
-    for (const tab of document.querySelectorAll('.view-tab')) {
-        tab.addEventListener('click', () => switchView(tab.dataset.view));
-    }
-    // 插件(B站下载队列)请 AI 面板理解一段**本地视频**时,先把视图切到笔记 ——
-    // 对话与回答都在那边(右侧工作台属于笔记视图)。视图切换是**外壳**的知识,
-    // 面板自己够不着,所以这一句必须落在这里;真正干活的是面板里的同名监听。
+    // 插件(B站下载队列)请 AI 面板理解一段**本地视频**时,对话与回答都在 Notes 工作台。
     document.addEventListener('kaiwu:understand-video', () => {
-        switchView('notes');
-        stage('boot:收到「理解这段视频」请求,已切到笔记视图');
+        stage('boot:收到「理解这段视频」请求,Notes 工作台保持显示');
     });
 
     // ---------- 首启向导 ----------
@@ -675,25 +666,25 @@ async function boot() {
     // 必须有真实时间线。
     onboarding.setTrace?.(m => stage('[向导] ' + m));
 
-    /** ⚠️ 顶栏那块「库路径 + 更换」按用户要求**撤掉了**(元素已经不存在 —— 再写它就是 null.textContent)。
-     *  这里只保留**那份读数**:设置页的「笔记库 → 库路径」读的就是它(vaultPathText / getVaultPath),
-     *  于是"当前在哪个库"只有一个数据源,不会出现两处不一致。 */
-    function renderVaultName(status) {
-        vaultPathText = (status && status.ok) ? String(status.path) : '';
-    }
+    bridge.onPreferencesResetLayout(() => {
+        if (workspaceRef === null) return;
+        workspaceRef.reset();
+        bridge.reportPreferencesLayoutText(workspaceRef.text());
+    });
+    bridge.onPreferencesLayoutTextRequest(() => {
+        if (workspaceRef !== null) bridge.reportPreferencesLayoutText(workspaceRef.text());
+    });
+    bridge.onPreferencesChangeVault(() => onboarding.open());
+    bridge.onPreferencesMotionChange(({ off } = {}) => { if (typeof off === 'boolean') applyMotionOff(off); });
 
     async function enterVault(status) {
         stage(`enterVault:开始 status.ok=${status && status.ok}`);
-        renderVaultName(status);
         if (status && status.ok) {
             await notes.setVault();
             stage('enterVault:索引已载入');
             agent.syncNote();                  // 进了新库,上下文提示跟着刷新
-            switchView('notes');
-            stage('enterVault:已切到笔记视图');
         } else {
-            switchView('notes');
-            stage('enterVault:状态不可用,仍切到笔记视图(空状态)');
+            stage('enterVault:状态不可用,Notes 工作台保持显示(空状态)');
         }
     }
 
@@ -767,7 +758,7 @@ async function boot() {
         stage('boot:外壳已显示,准备进入笔记库');
         await enterVault(status);
         // ⚠️ 这一条路(`?testVault=`,自检走的就是它)也必须把工作台引用**存下来** ——
-        // 设置页的「布局」那一项读的就是它(读不到就会显示成空的布局树)。
+        // 设置页的「布局」那一项从这里读取当前布局。
         workspaceRef = await ensureWorkspace();   // 同上:必须等外壳可见
         stage('boot:进入笔记库完成');
     } else {
@@ -860,8 +851,9 @@ async function mergeRuntimeManifests(descriptors) {
  * 选上 —— 屏幕上并没有任何可编辑的东西,却整片被框住。上一轮只处理了"焦点在正文块
  * 输入区"这一种情形,这条默认没有人拦(产品负责人截图报的就是它)。
  *
- * 为什么放在**外壳**(app/main.js)而不是某个视图里:它管的是"页面"这一层,不属于任何
- * 单个视图。放进笔记视图的话,AI 对话 / 工具 / 设置视图下按 Ctrl+A 照样整页被选。
+ * 为什么放在**外壳**(app/main.js)而不是某个面板里:它管的是"页面"这一层,不属于任何
+ * 单个工作台面板。放进笔记面板的话,AI 对话 / 工具面板 / Preferences 窗口下按 Ctrl+A
+ * 照样会整页被选。
  *
  * 为什么必须是 **capture**:别的监听方(AI 面板的浮层、工作台快捷键等)也挂在 document /
  * window 上听 keydown,冒泡阶段再拦就排在它们后面了。捕获期只是**先看一眼**"要不要挡

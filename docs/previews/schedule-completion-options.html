@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日程单击完成 · 三种动效预览</title>
+<style>
+:root {
+  color-scheme: dark;
+  font: 14px/1.5 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  color: #e8eaec;
+  background: #111213;
+  --surface: #1c1f20;
+  --line: #303538;
+  --muted: #8d9499;
+  --blue: #7ec8ff;
+  --purple: #b89bfa;
+}
+* { box-sizing: border-box; }
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 7% 18%, rgba(126,200,255,.23) 0 2px, transparent 4px),
+    radial-gradient(circle at 90% 74%, rgba(126,200,255,.18) 0 2px, transparent 4px),
+    radial-gradient(ellipse at 50% -12%, rgba(41,72,94,.25), transparent 55%),
+    #111213;
+}
+button { color: inherit; font: inherit; }
+.page { width: min(1420px, 100%); margin: 0 auto; padding: 30px clamp(16px, 3vw, 40px) 42px; }
+.eyebrow { margin: 0 0 7px; color: #8fb9d4; font-size: 11px; letter-spacing: .08em; }
+h1 { margin: 0; font-size: clamp(23px, 3vw, 32px); line-height: 1.2; letter-spacing: -.025em; }
+.intro { max-width: 870px; margin-bottom: 20px; }
+.intro p { margin: 9px 0 0; color: var(--muted); font-size: 13px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 14px; }
+.next-day { padding: 7px 11px; border: 1px solid rgba(126,200,255,.42); border-radius: 7px; background: rgba(126,200,255,.1); color: #bfe4ff; cursor: pointer; font-size: 11px; }
+.next-day:hover { background: rgba(126,200,255,.18); }
+.day-status { color: #8b9297; font-size: 10px; }
+.options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.option { min-width: 0; overflow: hidden; border: 1px solid #2d3235; border-radius: 11px; background: linear-gradient(145deg, rgba(255,255,255,.035), rgba(255,255,255,.008)); box-shadow: 0 9px 28px rgba(0,0,0,.24); }
+.option-head { display: flex; align-items: flex-start; gap: 10px; padding: 13px 14px 11px; }
+.letter { display: grid; flex: none; place-items: center; width: 25px; height: 25px; border: 1px solid rgba(126,200,255,.32); border-radius: 7px; color: var(--blue); background: rgba(126,200,255,.07); font-size: 11px; font-weight: 600; }
+.option-copy { min-width: 0; flex: 1; }
+.option-copy h2 { margin: 0; font-size: 13px; font-weight: 630; }
+.option-copy p { margin: 3px 0 0; color: var(--muted); font-size: 10px; }
+.demo { position: relative; margin: 0 8px 8px; overflow: hidden; border: 1px solid #303538; border-radius: 8px; background: #17191a; }
+.demo-head { display: flex; align-items: center; gap: 7px; min-height: 41px; padding: 0 12px; border-bottom: 1px solid #292e30; color: #dadde0; font-size: 11px; font-weight: 600; }
+.demo-head span:last-child { margin-left: auto; color: #778087; font-size: 9px; font-weight: 400; }
+.day-line { display: flex; align-items: baseline; gap: 8px; margin: 11px 12px 8px; }
+.day-title { color: #e2e4e6; font-size: 13px; font-weight: 650; }
+.done-count { margin-left: auto; color: #858d92; font-size: 9px; white-space: nowrap; }
+.entries { display: grid; gap: 6px; padding: 0 9px 10px; }
+.schedule-item {
+  --time-offset: 76px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 49px;
+  overflow: hidden;
+  padding: 8px 11px;
+  border: 1px solid rgba(255,255,255,.055);
+  border-left: 2px solid var(--blue);
+  border-radius: 0 7px 7px 0;
+  background: #1c1f20;
+  text-align: left;
+  cursor: pointer;
+  isolation: isolate;
+}
+.schedule-item:focus-visible { outline: 2px solid rgba(126,200,255,.65); outline-offset: 1px; }
+.item-time { position: absolute; z-index: 1; top: 50%; left: 13px; opacity: 0; transform: translate(-9px,-50%); color: #a5aaae; font-size: 10px; line-height: 1.55; font-variant-numeric: tabular-nums; pointer-events: none; transition: opacity .2s ease, transform .32s cubic-bezier(.18,.8,.22,1); }
+.item-time span { display: block; }
+.item-copy { position: relative; z-index: 1; min-width: 0; max-width: 100%; color: #e4e6e8; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; transform: translateX(0); transition: max-width .36s cubic-bezier(.18,.8,.22,1), transform .36s cubic-bezier(.18,.8,.22,1), color .22s ease, opacity .22s ease; }
+.item-check { position: relative; z-index: 2; display: grid; flex: none; place-items: center; width: 17px; height: 17px; margin-left: auto; border: 1px solid #58636a; border-radius: 50%; color: transparent; background: #171a1b; transition: border-color .22s ease, background .22s ease, color .22s ease, transform .28s cubic-bezier(.2,1.6,.3,1), box-shadow .22s ease; }
+.item-check svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.item-check path { stroke-dasharray: 16; stroke-dashoffset: 16; transition: stroke-dashoffset .24s ease .04s; }
+.item-time span { white-space: nowrap; }
+.schedule-item:hover .item-time, .schedule-item:focus-visible .item-time { opacity: 1; transform: translate(0,-50%); }
+.schedule-item:hover .item-copy, .schedule-item:focus-visible .item-copy { max-width: calc(100% - var(--time-offset)); transform: translateX(var(--time-offset)); }
+.schedule-item.is-done .item-copy { color: #899197; text-decoration: line-through; text-decoration-color: rgba(126,200,255,.62); }
+.schedule-item.is-done .item-check { border-color: #83cfff; color: #14202a; background: #8fd2ff; box-shadow: 0 0 12px rgba(126,200,255,.35); }
+.schedule-item.is-done .item-check path { stroke-dashoffset: 0; }
+.footer { margin: 13px 2px 0; color: #6f777c; font-size: 10px; }
+.toast { position: fixed; right: 18px; bottom: 18px; z-index: 10; padding: 9px 13px; border: 1px solid #3a5668; border-radius: 8px; color: #c5e7ff; background: #1a2227; box-shadow: 0 7px 22px #0005; font-size: 11px; opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
+.toast.is-visible { opacity: 1; transform: translateY(0); }
+
+/* A · 勾选轻扫：右侧勾选圈描边成勾，标题同步划线。 */
+.scheme-a .schedule-item { transition: background .2s ease, border-color .2s ease; }
+.scheme-a .schedule-item:hover, .scheme-a .schedule-item:focus-visible { border-left-color: #a9ddff; background: #202426; }
+.scheme-a .schedule-item.is-done { border-left-color: #8bd0ff; background: rgba(126,200,255,.075); }
+.scheme-a .schedule-item.is-done .item-check { transform: scale(1.08); }
+
+/* B · 蓝光扫过：一束光划过卡片，再落下完成勾。 */
+.scheme-b .schedule-item { transition: background .25s ease, border-color .25s ease; }
+.scheme-b .schedule-item::before { position: absolute; z-index: 0; inset: 0 auto 0 -55%; width: 38%; background: linear-gradient(90deg, transparent, rgba(160,222,255,.26), transparent); content: ""; opacity: 0; pointer-events: none; }
+.scheme-b .schedule-item:hover, .scheme-b .schedule-item:focus-visible { border-left-color: #a9ddff; background: #202426; }
+.scheme-b .schedule-item.is-done { border-left-color: #8bd0ff; background: rgba(126,200,255,.065); }
+.scheme-b .schedule-item.is-done::before { animation: completion-sweep .62s ease-out both; }
+.scheme-b .schedule-item.is-done .item-check { transform: scale(1.13); }
+@keyframes completion-sweep { 0% { left: -45%; opacity: 0; } 18% { opacity: 1; } 100% { left: 120%; opacity: 0; } }
+
+/* C · 柔光涟漪：点击后从勾选点向卡片扩散一圈柔光，随后留下轻微蓝色辉映。 */
+.scheme-c .schedule-item { transition: background .28s ease, border-color .28s ease, box-shadow .3s ease; }
+.scheme-c .schedule-item::after { position: absolute; z-index: 0; inset: 0; border-radius: inherit; background: radial-gradient(circle at calc(100% - 19px) 50%, rgba(126,200,255,.25), rgba(126,200,255,.1) 22%, rgba(126,200,255,.025) 58%, transparent 78%); content: ""; opacity: 0; clip-path: circle(0 at calc(100% - 19px) 50%); pointer-events: none; }
+.scheme-c .schedule-item:hover, .scheme-c .schedule-item:focus-visible { border-left-color: #a9ddff; background: #202426; }
+.scheme-c .schedule-item.is-done { border-left-color: #8bd0ff; background: #202527; box-shadow: inset 0 0 24px rgba(126,200,255,.075), 0 0 13px rgba(87,173,229,.09); }
+.scheme-c .schedule-item.is-done::after { animation: ripple-across .7s cubic-bezier(.16,.72,.3,1) both; }
+.scheme-c .schedule-item.is-done .item-copy { color: #c5e9ff; text-decoration: none; }
+.scheme-c .item-check { position: relative; overflow: visible; opacity: 0; transform: scale(.55); transition: opacity .2s ease, transform .28s cubic-bezier(.2,1.6,.3,1), border-color .22s ease, background .22s ease, color .22s ease, box-shadow .22s ease; }
+.scheme-c .item-check::before { position: absolute; inset: -4px; border: 1px solid rgba(151,219,255,.8); border-radius: 50%; content: ""; opacity: 0; transform: scale(.65); pointer-events: none; }
+.scheme-c .schedule-item.is-done .item-check { opacity: 1; transform: scale(1.08); box-shadow: 0 0 13px rgba(126,200,255,.52); }
+.scheme-c .schedule-item.is-done .item-check::before { animation: check-ripple .55s ease-out both; }
+@keyframes ripple-across { 0% { opacity: .9; clip-path: circle(0 at calc(100% - 19px) 50%); } 70% { opacity: .72; } 100% { opacity: .72; clip-path: circle(150% at calc(100% - 19px) 50%); } }
+@keyframes check-ripple { 0% { opacity: .9; transform: scale(.65); } 100% { opacity: 0; transform: scale(1.9); } }
+
+@media (max-width: 980px) { .options { grid-template-columns: 1fr; max-width: 620px; margin: 0 auto; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="intro">
+    <p class="eyebrow">日程交互 · 效果预览</p>
+    <h1>单击完成 · 三种动态效果</h1>
+    <p>点击任意日程切换完成状态。当前完成状态只属于当天；模拟切换到第二天后，所有完成标记会重置。</p>
+    <div class="toolbar">
+      <button class="next-day" type="button" data-next-day>模拟第二天 · 重置完成状态</button>
+      <span class="day-status" data-day-status>当前：10月27日 · 周二</span>
+    </div>
+  </header>
+
+  <section class="options" aria-label="三种单击完成动效方案">
+    <article class="option scheme-a" data-scheme="a">
+      <header class="option-head"><span class="letter">A</span><div class="option-copy"><h2>勾选轻扫</h2><p>勾选圈描边成勾，标题同步划线，反馈清楚克制。</p></div></header>
+      <div class="demo"><div class="demo-head">日程<span>单击一项完成</span></div><div class="day-line"><span class="day-title" data-date>10月27日 · 周二</span><span class="done-count" data-count>0 / 4 已完成</span></div><div class="entries" data-entries></div></div>
+    </article>
+    <article class="option scheme-b" data-scheme="b">
+      <header class="option-head"><span class="letter">B</span><div class="option-copy"><h2>蓝光扫过</h2><p>光束从卡片横向扫过，再落下完成勾。</p></div></header>
+      <div class="demo"><div class="demo-head">日程<span>单击一项完成</span></div><div class="day-line"><span class="day-title" data-date>10月27日 · 周二</span><span class="done-count" data-count>0 / 4 已完成</span></div><div class="entries" data-entries></div></div>
+    </article>
+    <article class="option scheme-c" data-scheme="c">
+      <header class="option-head"><span class="letter">C</span><div class="option-copy"><h2>柔光涟漪</h2><p>点击后光环从勾选点扩散，卡片留下轻柔蓝色辉映。</p></div></header>
+      <div class="demo"><div class="demo-head">日程</div><div class="day-line"><span class="day-title" data-date>10月27日 · 周二</span></div><div class="entries" data-entries></div></div>
+    </article>
+  </section>
+  <p class="footer">时间继续按所选的 C 方案悬停显示；按 Enter 或空格也可以切换日程完成状态。</p>
+</main>
+<div class="toast" role="status" aria-live="polite" data-toast></div>
+<script>
+(() => {
+  const items = [
+    { title: '7:00起床', start: '09:00', end: '09:30' },
+    { title: '整理床铺', start: '09:00', end: '09:30' },
+    { title: '刷牙', start: '09:00', end: '09:30' },
+    { title: '洗脸', start: '09:00', end: '09:30' },
+  ];
+  const schemes = [...document.querySelectorAll('[data-scheme]')];
+  const dateLabels = [...document.querySelectorAll('[data-date]')];
+  const countLabels = [...document.querySelectorAll('[data-count]')];
+  const dayStatus = document.querySelector('[data-day-status]');
+  const nextDayButton = document.querySelector('[data-next-day]');
+  const toast = document.querySelector('[data-toast]');
+  let isTomorrow = false;
+  let toastTimer;
+
+  function showToast(message) {
+    toast.textContent = message;
+    toast.classList.add('is-visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 1800);
+  }
+
+  function makeItem(item) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'schedule-item';
+    button.setAttribute('aria-pressed', 'false');
+    button.setAttribute('aria-label', `${item.title}，未完成`);
+
+    const time = document.createElement('span');
+    time.className = 'item-time';
+    time.innerHTML = `<span>${item.start}—</span><span>${item.end}</span>`;
+
+    const copy = document.createElement('span');
+    copy.className = 'item-copy';
+    copy.textContent = item.title;
+
+    const check = document.createElement('span');
+    check.className = 'item-check';
+    check.setAttribute('aria-hidden', 'true');
+    check.innerHTML = '<svg viewBox="0 0 16 16"><path d="m3 8 3.1 3.2L13 4.5"></path></svg>';
+
+    button.append(time, copy, check);
+    button.addEventListener('click', () => {
+      const done = button.classList.toggle('is-done');
+      button.setAttribute('aria-pressed', String(done));
+      button.setAttribute('aria-label', `${item.title}，${done ? '已完成' : '未完成'}`);
+      updateCounts();
+    });
+    return button;
+  }
+
+  function updateCounts() {
+    schemes.forEach((scheme, index) => {
+      const doneCount = scheme.querySelectorAll('.schedule-item.is-done').length;
+      if (countLabels[index]) countLabels[index].textContent = `${doneCount} / ${items.length} 已完成`;
+    });
+  }
+
+  function resetForDayChange() {
+    isTomorrow = !isTomorrow;
+    schemes.forEach((scheme) => {
+      scheme.querySelectorAll('.schedule-item').forEach((button) => {
+        button.classList.remove('is-done');
+        button.setAttribute('aria-pressed', 'false');
+        const title = button.querySelector('.item-copy').textContent;
+        button.setAttribute('aria-label', `${title}，未完成`);
+      });
+    });
+    const label = isTomorrow ? '10月28日 · 周三' : '10月27日 · 周二';
+    dateLabels.forEach((element) => { element.textContent = label; });
+    dayStatus.textContent = `当前：${label}${isTomorrow ? ' · 已重置' : ''}`;
+    nextDayButton.textContent = isTomorrow ? '返回今天示例' : '模拟第二天 · 重置完成状态';
+    updateCounts();
+    showToast(isTomorrow ? '进入第二天：完成状态已重置' : '返回今天示例：完成状态已清空');
+  }
+
+  schemes.forEach((scheme) => {
+    const list = scheme.querySelector('[data-entries]');
+    items.forEach((item) => list.appendChild(makeItem(item)));
+  });
+  nextDayButton.addEventListener('click', resetForDayChange);
+  updateCounts();
+})();
+</script>
+</body>
+</html>

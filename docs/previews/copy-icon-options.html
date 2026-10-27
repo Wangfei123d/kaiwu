@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>开物 · 回复复制图标方案</title>
+  <style>
+    :root { color-scheme:dark; --bg:#111110; --panel:#191817; --edge:#33312d; --text:#e9e5df; --dim:#aaa399; --faint:#777168; --accent:#96d3ed; --success:#a9d8bf; --icon-size:24px; font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-width:340px; min-height:100vh; color:var(--text); background:radial-gradient(ellipse at 50% -25%,#27394455,transparent 58%),var(--bg); }
+    button { font:inherit; -webkit-tap-highlight-color:transparent; }
+    button:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+    .page { max-width:1210px; margin:auto; padding:30px 30px 36px; }
+    .top { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:34px; color:var(--faint); font-size:11px; }
+    .brand { display:flex; align-items:center; gap:9px; color:#bbb5ab; }
+    .brand svg { width:21px; height:22px; }
+    .top-note { text-align:right; }
+    .intro { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:25px; }
+    .eyebrow { margin:0 0 10px; color:var(--accent); font-size:10px; letter-spacing:.12em; }
+    h1 { margin:0; font-size:clamp(25px,3.3vw,35px); letter-spacing:-.035em; font-weight:560; }
+    .lead { max-width:640px; margin:12px 0 0; color:var(--dim); font-size:12px; line-height:1.9; }
+    .toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:none; }
+    .control { padding:8px 11px; color:#c9c1b6; border:1px solid #403b34; border-radius:8px; background:#24211d; cursor:pointer; font-size:11px; transition:background .2s,border-color .2s; }
+    .control:hover { background:#302b25; border-color:#655b4c; }
+    .control.primary { color:#b9e0ef; border-color:#42606e; background:#20303a; }
+    .control[aria-pressed="true"] { border-color:#769aa9; color:#c8e7f3; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:17px; }
+    .option { min-width:0; padding:19px; border:1px solid var(--edge); border-radius:14px; background:linear-gradient(145deg,#1e1c19,var(--panel) 70%); }
+    .option-title { display:flex; align-items:center; gap:9px; }
+    .number { color:#766f64; font:10px ui-monospace,Consolas,monospace; }
+    h2 { margin:0; font-size:14px; font-weight:550; }
+    .badge { padding:2px 6px; border:1px solid #405a63; border-radius:4px; color:#a2cbdc; font-size:9px; }
+    .description { min-height:36px; margin:9px 0 17px; color:#999084; font-size:11px; line-height:1.7; }
+    .stage { padding:14px 16px 9px; border:1px solid #2c2925; border-radius:10px; background:#141413; }
+    .thought-head { display:flex; align-items:center; gap:6px; height:24px; color:#79746c; font-size:11px; }
+    .caret { width:0; height:0; border-top:4px solid transparent; border-bottom:4px solid transparent; border-left:6px solid #757169; }
+    .translate { margin-left:auto; width:23px; height:23px; fill:none; stroke:#827d74; stroke-width:1.35; stroke-linecap:round; stroke-linejoin:round; }
+    .reply { padding-top:13px; color:#c5bfb5; font-size:12px; line-height:1.95; }
+    .reply h3 { color:#e1dcd3; font-size:13px; font-weight:550; margin:0 0 9px; }
+    .reply p { margin:0 0 8px; }
+    .reply ol { margin:0; padding-left:21px; }
+    .reply li { padding-left:2px; }
+    .reply strong { color:#ded8cd; font-weight:550; }
+    .reply code { padding:1px 5px; border-radius:4px; background:#292723; color:#d2c7b7; font:11px ui-monospace,Consolas,monospace; }
+    .reply-tools { display:flex; align-items:center; height:47px; margin-top:10px; }
+    .copy { position:relative; display:grid; place-items:center; width:34px; height:34px; padding:3px; margin-left:-5px; color:#8e8980; border:0; border-radius:6px; background:transparent; cursor:pointer; transition:color .2s; }
+    .copy:hover,.copy:focus-visible { color:#d5e7ef; }
+    .copy[data-state="pending"] { color:var(--accent); cursor:progress; }
+    .copy[data-state="success"] { color:var(--success); }
+    .copy[data-state="error"] { color:#e3a799; }
+    .copy svg { width:var(--icon-size); height:var(--icon-size); overflow:visible; fill:none; stroke:currentColor; stroke-width:1.45; stroke-linecap:round; stroke-linejoin:round; }
+    .copy::after { content:attr(data-tooltip); position:absolute; z-index:2; left:-3px; bottom:calc(100% + 8px); padding:6px 9px; border:1px solid #494239; border-radius:6px; background:#2c2822; color:#e0d7ca; white-space:nowrap; font-size:10px; pointer-events:none; opacity:0; transform:translateY(3px); transition:opacity .16s,transform .16s; }
+    .copy:hover::after,.copy:focus-visible::after,.copy[data-state="error"]::after { opacity:1; transform:none; }
+    .copy-mark { transform-origin:14px 14px; transition:opacity .2s,transform .3s; }
+    .check { opacity:0; stroke-width:1.85; stroke-dasharray:1; stroke-dashoffset:1; transform-origin:14px 14px; }
+    .copy[data-state="success"] .copy-mark { opacity:0; transform:scale(.72); }
+    .copy[data-state="success"] .check { opacity:1; animation:check-draw .38s .08s cubic-bezier(.22,.8,.3,1) both; }
+    .copy[data-state="pending"] .copy-mark { animation:pending .9s ease-in-out infinite alternate; }
+    .option-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:29px; padding-top:14px; }
+    .status { color:#77736b; font-size:10px; line-height:1.7; }
+    .option[data-status="success"] .status { color:#9cbda7; }
+    .option[data-status="error"] .status { color:#d1a091; }
+    .demo { padding:5px 0 5px 10px; color:#aea498; border:0; background:none; cursor:pointer; font-size:10px; white-space:nowrap; }
+    .demo:hover { color:#c7e5ef; }
+    .legend { display:flex; align-items:center; flex-wrap:wrap; gap:15px; margin-top:24px; color:#898277; font-size:10px; }
+    .legend span { display:flex; align-items:center; gap:6px; }
+    .dot { width:5px; height:5px; background:#8e8980; border-radius:50%; }
+    .dot.blue { background:var(--accent); }
+    .dot.green { background:var(--success); }
+    .page-foot { margin-top:16px; color:#716b61; font-size:10px; line-height:1.9; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
+
+    /* 01：重叠的两页小幅错开，成功后收拢为勾。 */
+    .stack .back,.stack .front { transform-origin:14px 14px; transition:transform .32s cubic-bezier(.2,.8,.2,1); }
+    .stack:is(:hover,:focus-visible)[data-state="idle"] .back { transform:translate(-1.2px,-1.2px); }
+    .stack:is(:hover,:focus-visible)[data-state="idle"] .front { transform:translate(1.2px,1.2px); }
+    .stack[data-state="success"] .back { transform:translate(2px,3px); }
+    .stack[data-state="success"] .front { transform:translate(-2px,-2px); }
+
+    /* 02：纸页轮廓沿路径流动，成功时描出一笔确认。 */
+    .trace .outline { stroke-dasharray:1; stroke-dashoffset:0; }
+    .trace:is(:hover,:focus-visible)[data-state="idle"] .outline { animation:outline-trace .8s ease both; }
+    .trace .ink { opacity:.42; }
+    .trace[data-state="success"] .copy-mark { transform:scale(.92); transition:opacity .16s; }
+    .trace[data-state="success"] .check { animation:check-draw .58s cubic-bezier(.18,.8,.25,1) both; }
+
+    /* 03：折角抬起，整页轻翻，确认勾弹性落位。 */
+    .fold .paper { transform-origin:14px 14px; transition:transform .4s,opacity .23s; }
+    .fold .corner { transform-origin:17px 6px; transition:transform .35s,color .35s; }
+    .fold:is(:hover,:focus-visible)[data-state="idle"] .corner { transform:rotate(-14deg) translate(-.5px,-.6px); color:#c0e4f2; }
+    .fold:is(:hover,:focus-visible)[data-state="idle"] .paper { transform:rotate(-4deg); }
+    .fold[data-state="success"] .paper { animation:paper-turn .35s ease both; }
+    .fold[data-state="success"] .copy-mark { transform:none; }
+    .fold[data-state="success"] .check { stroke-dashoffset:0; animation:check-land .5s .15s cubic-bezier(.16,.8,.32,1.25) both; }
+
+    /* 04：四颗矢量星点贴近纸页，点击后向中心聚合。 */
+    .stars { opacity:0; transform-origin:14px 14px; transition:opacity .25s; }
+    .star { transform-box:fill-box; transform-origin:center; }
+    .constellation:is(:hover,:focus-visible)[data-state="idle"] .stars { opacity:.85; animation:star-drift 2s ease-in-out infinite; }
+    .constellation:is(:hover,:focus-visible)[data-state="idle"] .star:nth-child(even) { animation:twinkle 1.1s ease-in-out infinite alternate; }
+    .constellation[data-state="success"] .stars { opacity:1; animation:stars-gather .62s ease both; }
+    .constellation[data-state="success"] .check { animation:check-draw .4s .2s ease both; }
+    @keyframes check-draw { from { stroke-dashoffset:1; } to { stroke-dashoffset:0; } }
+    @keyframes pending { from { opacity:.5; } to { opacity:1; } }
+    @keyframes outline-trace { 0% { stroke-dashoffset:0; opacity:.45; } 35% { stroke-dashoffset:1; opacity:.65; } 100% { stroke-dashoffset:0; opacity:1; } }
+    @keyframes paper-turn { to { opacity:0; transform:perspective(80px) rotateY(78deg) translateX(2px); } }
+    @keyframes check-land { 0% { opacity:0; transform:translateY(3px) scale(.55); } 70% { opacity:1; transform:translateY(-.5px) scale(1.06); } 100% { opacity:1; transform:none; } }
+    @keyframes star-drift { 0%,100% { transform:rotate(-7deg) scale(.95); } 50% { transform:rotate(9deg) scale(1.06); } }
+    @keyframes twinkle { from { opacity:.35; } to { opacity:1; } }
+    @keyframes stars-gather { 0% { opacity:.8; transform:scale(1.08); } 65% { opacity:.9; transform:scale(.65) rotate(22deg); } 100% { opacity:0; transform:scale(.2) rotate(35deg); } }
+    @media (max-width:820px) { .intro { align-items:flex-start; flex-direction:column; gap:19px; } .page { padding:25px 22px 30px; } }
+    @media (max-width:650px) { .grid { grid-template-columns:1fr; } .top { margin-bottom:28px; } .option { padding:16px; } .description { min-height:0; } .page { padding:23px 16px 30px; } .top-note { max-width:120px; line-height:1.7; } }
+    @media (prefers-reduced-motion:reduce) {
+      *,*::before,*::after { animation:none !important; transition:none !important; }
+      .copy[data-state="success"] .check { opacity:1; stroke-dashoffset:0; }
+      .copy[data-state="success"] .stars { opacity:0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="top">
+      <div class="brand"><svg viewBox="0 0 24 26" fill="none" aria-hidden="true"><path d="M5 4v18M6 13 19 4M7 13l13 9" stroke="#e5e5e0" stroke-width="4" stroke-linecap="round"/><circle cx="5" cy="12" r="3.5" fill="#8dcced"/></svg><span>开物 · 界面方案</span></div>
+      <span class="top-note">HTML 交互预览 / 复制图标</span>
+    </header>
+    <section class="intro" aria-labelledby="title">
+      <div>
+        <p class="eyebrow">回复末尾 · 04 种动效</p>
+        <h1 id="title">让复制有一个轻巧的回应</h1>
+        <p class="lead">图标统一放在 AI 正文下方，无边框、无填充。悬停观察细节，点击复制示例回复的 Markdown；“演示动效”只播放动画。</p>
+      </div>
+      <div class="toolbar">
+        <button class="control" id="size-toggle" type="button" aria-pressed="false">放大图标</button>
+        <button class="control primary" id="demo-all" type="button">一起演示</button>
+      </div>
+    </section>
+    <section class="grid" id="options" aria-label="四种复制图标方案"></section>
+    <div class="legend" aria-label="状态说明"><span><i class="dot"></i>静置</span><span><i class="dot blue"></i>悬停 / 复制中</span><span><i class="dot green"></i>复制成功</span><span>鼠标和键盘均可操作</span></div>
+    <footer class="page-foot">复制内容仅包含回复正文，不含思考内容或预览说明。已适配系统“减少动态效果”设置。</footer>
+  </main>
+  <script>
+    'use strict';
+    const replyMarkdown = [
+      '### 整理笔记的三个步骤',
+      '',
+      '先留下重点，再把零散想法连起来。可以从这三个步骤开始：',
+      '',
+      '1. **提取重点**：每段保留一个核心观点。',
+      '2. **建立关联**：把相关内容放进同一个主题。',
+      '3. **留下行动**：用 `下一步` 记录具体要做的事。',
+      '',
+      '整理完成后，回看时就能更快找到思路。'
+    ].join('\n');
+    const replyHtml = '<h3>整理笔记的三个步骤</h3><p>先留下重点，再把零散想法连起来。可以从这三个步骤开始：</p><ol><li><strong>提取重点</strong>：每段保留一个核心观点。</li><li><strong>建立关联</strong>：把相关内容放进同一个主题。</li><li><strong>留下行动</strong>：用 <code>下一步</code> 记录具体要做的事。</li></ol><p style="margin-top:9px;margin-bottom:0">整理完成后，回看时就能更快找到思路。</p>';
+    const check = '<path class="check" d="m7.5 14.3 4.3 4.3 8.7-9.2" pathLength="1"/>';
+    const options = [
+      {
+        name:'双页轻叠', kind:'stack', badge:'推荐',
+        description:'悬停时两张纸轻轻错开，复制后收拢为确认勾。幅度克制，适合长时间阅读。',
+        icon:'<g class="copy-mark"><path class="back" d="M17.5 7V5.5A1.5 1.5 0 0 0 16 4H6.5A1.5 1.5 0 0 0 5 5.5V17a1.5 1.5 0 0 0 1.5 1.5H8"/><rect class="front" x="10" y="8" width="13" height="16" rx="2"/></g>'+check
+      },
+      {
+        name:'描边成勾', kind:'trace', badge:'已采用',
+        description:'悬停时轮廓沿纸页走一圈，复制成功后描出一笔勾。线条感更清晰。',
+        icon:'<g class="copy-mark"><path class="outline" pathLength="1" d="M9 7V5.5A1.5 1.5 0 0 0 7.5 4h-2A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H8M12 8h10a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H12a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><path class="ink" d="M14.5 13h5M14.5 17h5"/></g>'+check
+      },
+      {
+        name:'折页确认', kind:'fold',
+        description:'悬停时纸角微微抬起，复制后轻翻纸页，确认勾柔和落位。更有物件触感。',
+        icon:'<g class="copy-mark"><g class="paper"><path d="M19 5H8a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2V9l-4-4Z"/><path class="corner" d="M18 5v5h5"/><path d="M10 13h8M10 17h6" opacity=".5"/></g><path d="M4 16V5a2 2 0 0 1 2-2h9" opacity=".4"/></g>'+check
+      },
+      {
+        name:'星点聚合', kind:'constellation',
+        description:'悬停时小星点缓慢浮动，复制后向中心聚拢，再亮起确认勾。呼应星辰主题。',
+        icon:'<g class="copy-mark"><path d="M17 7V5a1 1 0 0 0-1-1H7a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><rect x="10" y="8" width="12" height="16" rx="2"/></g><g class="stars" stroke-width="1.1"><path class="star" d="M3 9v3M1.5 10.5h3"/><path class="star" d="M24 3v3M22.5 4.5h3"/><circle class="star" cx="4" cy="23" r=".65" fill="currentColor" stroke="none"/><circle class="star" cx="25" cy="19" r=".8" fill="currentColor" stroke="none"/></g>'+check
+      }
+    ];
+    const translationSvg = '<svg class="translate" viewBox="0 0 32 32" aria-hidden="true"><path d="M7 4h15l-3-3M25 28H10l3 3M17 11l4-7 4 7m-6.6-2.5h5.2M6 17h12M12 14v3m-4 0c1 5 4 8 9 10m-2-10c-1 5-4 8-9 10"/></svg>';
+    const container = document.getElementById('options');
+    options.forEach((option,index) => {
+      const card = document.createElement('article');
+      card.className = 'option';
+      card.dataset.status = 'idle';
+      card.setAttribute('aria-labelledby','option-'+index);
+      card.innerHTML = '<div class="option-title"><span class="number">0'+(index+1)+'</span><h2 id="option-'+index+'">'+option.name+'</h2>'+(option.badge?'<span class="badge">'+option.badge+'</span>':'')+'</div><p class="description">'+option.description+'</p><div class="stage"><div class="thought-head"><span class="caret" aria-hidden="true"></span><span>已思考 2.2 秒</span>'+translationSvg+'</div><div class="reply">'+replyHtml+'</div><div class="reply-tools"><button class="copy '+option.kind+'" type="button" data-state="idle" data-tooltip="复制回复" aria-label="复制回复 · '+option.name+'" aria-busy="false"><svg viewBox="0 0 28 28" aria-hidden="true">'+option.icon+'</svg></button></div></div><div class="option-foot"><span class="status">点击图标体验实际复制</span><button class="demo" type="button">演示动效 ↗</button></div><span class="sr-only" role="status" aria-live="polite"></span>';
+      container.append(card);
+    });
+
+    const buttons = [...document.querySelectorAll('.copy')];
+    const runs = new WeakMap();
+    function setState(button,state,demo=false) {
+      const card = button.closest('.option');
+      const status = card.querySelector('.status');
+      button.dataset.state = state;
+      button.setAttribute('aria-busy',String(state==='pending'));
+      card.dataset.status = state;
+      const tooltip = state==='success' ? (demo?'演示：复制成功':'已复制') : state==='pending' ? (demo?'播放动效中':'正在复制') : state==='error' ? '复制失败，点击重试' : '复制回复';
+      button.dataset.tooltip = tooltip;
+      button.setAttribute('aria-label',tooltip+' · '+options[buttons.indexOf(button)].name);
+      status.textContent = state==='success' ? (demo?'成功动效演示 · 未更改剪贴板':'已复制回复正文（Markdown）') : state==='pending' ? (demo?'仅演示动效':'正在写入剪贴板…') : state==='error' ? '无法写入剪贴板，请重试或手动选择正文复制' : '点击图标体验实际复制';
+      card.querySelector('[role="status"]').textContent = state==='success'||state==='error' ? status.textContent : '';
+    }
+    function begin(button) {
+      if(button.dataset.state==='pending') return null;
+      const previous = runs.get(button);
+      if(previous) clearTimeout(previous.timer);
+      const run = { timer:null, started:performance.now() };
+      runs.set(button,run);
+      setState(button,'idle');
+      // 清除上次动画状态后再启动，允许连续演示完整动效。
+      void button.offsetWidth;
+      return run;
+    }
+    function finish(button,run,success,demo=false) {
+      if(runs.get(button)!==run) return;
+      setState(button,success?'success':'error',demo);
+      run.timer = setTimeout(() => {
+        if(runs.get(button)===run) setState(button,'idle');
+      },success?1900:5000);
+    }
+    function fallbackCopy(text) {
+      const focused = document.activeElement;
+      const selection = window.getSelection();
+      const savedRanges = [];
+      if(selection) for(let i=0;i<selection.rangeCount;i++) savedRanges.push(selection.getRangeAt(i).cloneRange());
+      const field = document.createElement('textarea');
+      field.value = text;
+      field.readOnly = true;
+      field.setAttribute('aria-label','复制回复临时区域');
+      field.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;';
+      document.body.append(field);
+      try {
+        field.focus({preventScroll:true});
+        field.select();
+        return document.execCommand('copy') === true;
+      } catch {
+        return false;
+      } finally {
+        field.remove();
+        if(selection) {
+          selection.removeAllRanges();
+          savedRanges.forEach(range => selection.addRange(range));
+        }
+        if(focused instanceof HTMLElement) focused.focus({preventScroll:true});
+      }
+    }
+    async function copyReply(button) {
+      const run = begin(button);
+      if(!run) return;
+      setState(button,'pending');
+      let copied = false;
+      try {
+        if(navigator.clipboard && window.isSecureContext) {
+          try { await navigator.clipboard.writeText(replyMarkdown); copied = true; }
+          catch { copied = fallbackCopy(replyMarkdown); }
+        } else copied = fallbackCopy(replyMarkdown);
+      } catch { copied = false; }
+      const remaining = Math.max(0,260-(performance.now()-run.started));
+      run.timer = setTimeout(() => finish(button,run,copied),remaining);
+    }
+    function demo(button) {
+      const run = begin(button);
+      if(!run) return;
+      setState(button,'pending',true);
+      run.timer = setTimeout(() => finish(button,run,true,true),320);
+    }
+    buttons.forEach(button => {
+      button.addEventListener('click',() => copyReply(button));
+      button.closest('.option').querySelector('.demo').addEventListener('click',() => demo(button));
+    });
+    document.getElementById('demo-all').addEventListener('click',() => buttons.forEach(demo));
+    document.getElementById('size-toggle').addEventListener('click',event => {
+      const button = event.currentTarget;
+      const large = button.getAttribute('aria-pressed')!=='true';
+      button.setAttribute('aria-pressed',String(large));
+      button.textContent = large?'恢复实际尺寸':'放大图标';
+      document.documentElement.style.setProperty('--icon-size',large?'33px':'24px');
+    });
+  </script>
+</body>
+</html>

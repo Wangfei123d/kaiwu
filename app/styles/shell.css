@@ -1,5 +1,5 @@
 /* 外壳布局。
-   顶栏 + 主体两段(笔记 / 设置)。底部不再有状态条。 */
+   顶栏 + 笔记工作台。底部不再有状态条。 */
 
 .shell {
     display: grid;
@@ -11,6 +11,8 @@
 /* ================= 顶栏 ================= */
 .topbar {
     grid-area: top;
+    position: relative;
+    z-index: 30;
     display: flex; align-items: center; gap: 18px;
     padding: 0 14px;
     background: rgba(18, 16, 15, .88);
@@ -19,28 +21,87 @@
 }
 .topbar button, .topbar input { -webkit-app-region: no-drag; }
 
+.topbar-menu {
+    position: relative;
+    display: flex; align-items: center;
+    height: 100%;
+    -webkit-app-region: no-drag;
+}
+
 .topbar-brand {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 15px; font-weight: 700; letter-spacing: 2px; color: #fff;
-}
-
-/* 品牌标记。尺寸定死、不参与收缩 —— 顶栏变窄时先挤别的,不能把 LOGO 压扁。 */
-.brand-mark { width: 22px; height: 22px; flex: none; }
-
-.topbar-views { display: flex; gap: 4px; }
-
-.view-tab {
-    padding: 5px 14px;
-    font: inherit; font-size: 13px;
-    color: var(--dim);
-    background: none; border: 0; border-radius: 6px;
+    display: grid; place-items: center;
+    width: 32px; height: 32px; padding: 4px;
+    border: 0; border-radius: 7px;
+    background: transparent; color: #fff;
     cursor: pointer;
-    transition: background .2s, color .2s;
 }
-.view-tab:hover { background: rgba(126, 200, 255, .08); color: var(--text); }
-.view-tab[aria-selected="true"] {
-    background: rgba(126, 200, 255, .14); color: #fff;
+.topbar-brand:hover,
+.topbar-brand[aria-expanded="true"] { background: rgba(126, 200, 255, .10); }
+.topbar-brand:disabled { opacity: 1; color: #fff; cursor: default; }
+.topbar-brand:focus-visible,
+.app-menu-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Windows 的原生标题按钮覆盖在这一行的最右侧。 */
+html[data-custom-chrome="true"] .topbar { padding-right: 144px; }
+
+.app-menu-popup {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 100;
+    width: 254px; max-height: min(72vh, 620px); overflow: auto;
+    padding: 6px; border: 1px solid rgba(126, 200, 255, .16);
+    border-radius: 9px; background: #201e1c;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .60);
+    transform-origin: top left;
 }
+.app-menu-popup[hidden],
+.app-menu-children[hidden] { display: none !important; }
+.app-menu-popup:not([hidden]) { animation: app-menu-open 220ms cubic-bezier(.16, 1, .3, 1) both; }
+.app-menu-groups { display: grid; gap: 2px; }
+.app-menu-group { min-width: 0; }
+.app-menu-groups > .app-menu-group { animation: app-menu-item-open 170ms ease-out both; animation-delay: calc(var(--menu-index, 0) * 28ms); }
+.app-menu-button {
+    position: relative;
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; min-height: 32px; padding: 7px 9px;
+    border: 0; border-radius: 5px;
+    background: transparent; color: var(--dim);
+    font: inherit; font-size: 12px; text-align: left;
+    cursor: pointer;
+}
+.app-menu-button:hover:not(:disabled),
+.app-menu-button[aria-expanded="true"] { background: rgba(126, 200, 255, .10); color: var(--text); }
+.app-menu-button:disabled { opacity: .46; cursor: default; }
+.app-menu-heading { color: var(--text); font-size: 12.5px; }
+.app-menu-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.app-menu-chevron { color: var(--faint); font-size: 16px; line-height: 1; transition: transform .16s ease; }
+.app-menu-button[aria-expanded="true"] .app-menu-chevron { transform: rotate(90deg); }
+.app-menu-button[role="menuitemcheckbox"]::before { content: ""; flex: none; width: 14px; text-align: center; }
+.app-menu-button[role="menuitemcheckbox"][aria-checked="true"]::before { content: "✓"; color: var(--accent); }
+.app-menu-children {
+    margin: 2px 0 5px 9px; padding: 3px 0 3px 7px;
+    border-left: 1px solid rgba(126, 200, 255, .17);
+    animation: app-menu-submenu-open 170ms ease-out both;
+}
+.app-menu-command .app-menu-button { min-height: 29px; padding: 6px 8px; }
+.app-menu-separator { height: 1px; margin: 4px 7px; background: rgba(255, 255, 255, .09); }
+@keyframes app-menu-open {
+    from { opacity: 0; transform: translateY(-8px) scale(.96); filter: blur(2px); }
+    to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes app-menu-item-open {
+    from { opacity: 0; transform: translateX(-5px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+@keyframes app-menu-submenu-open {
+    from { opacity: 0; transform: translateY(-4px); clip-path: inset(0 0 100% 0); }
+    to { opacity: 1; transform: translateY(0); clip-path: inset(0 0 0 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .app-menu-popup:not([hidden]), .app-menu-groups > .app-menu-group, .app-menu-children { animation: none; }
+    .app-menu-chevron { transition: none; }
+}
+
+/* 品牌标记。尺寸定死、不参与收缩。 */
+.brand-mark { width: 22px; height: 22px; flex: none; }
 
     margin-left: auto;
     display: flex; align-items: center; gap: 8px;
@@ -148,6 +209,10 @@
 .note-list .note-other[data-kind="image"] .note-other-name { color: #8fb8d8; }
 .note-list .note-other[data-kind="media"] .note-other-name { color: #c9a0d8; }
 .note-list .note-other[data-kind="data"]  .note-other-name { color: #d8b36a; }
+.note-list .note-other[data-kind="canvas"] .note-other-name { color: #b7a4ed; }
+.note-list .note-canvas-icon { width: 14px; height: 14px; flex: none; fill: none; stroke: #b7a4ed; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.note-list .note-other[data-kind="canvas"][aria-selected="true"] .note-other-name { color: #fff; }
+.note-list .note-other[data-kind="canvas"][aria-selected="true"] .note-canvas-icon { stroke: #d5c9ff; }
 
 /* ---- 纯文本笔记行(.txt)----
    它与笔记、与非笔记文件是**三种**东西,必须一眼分得开:
@@ -460,6 +525,91 @@
 .note-status[data-state="dirty"] { color: var(--accent); }
 .note-status[data-state="error"] { color: var(--error); }
 
+/* ---- DOCX 只读阅读器 ---- */
+#noteEditor[data-document-kind="docx"] #noteModeBtn,
+#noteEditor[data-document-kind="docx"] #noteSave { display: none; }
+#noteEditor[data-document-kind="docx"] .note-editor-head { flex-wrap: wrap; }
+#noteEditor[data-document-kind="docx"] .note-title-input { cursor: default; }
+.docx-reader {
+    --docx-zoom: 1;
+    display: flex; flex-direction: column; height: calc(100% + 58px); min-height: 0;
+    margin: -18px -22px -40px;
+    color: #282724; background: #151413; cursor: default;
+}
+.docx-reader-toolbar {
+    display: flex; align-items: center; gap: 6px; min-height: 48px;
+    padding: 7px 12px; color: var(--text); background: #191817;
+    border-bottom: 1px solid var(--border); flex: 0 0 auto;
+}
+.docx-reader-readonly {
+    padding: 3px 7px; border: 1px solid rgba(126, 200, 255, .28);
+    border-radius: 999px; color: var(--accent); font-size: 10px; white-space: nowrap;
+}
+.docx-reader-search {
+    width: clamp(130px, 20vw, 240px); min-width: 100px; height: 30px;
+    padding: 4px 9px; color: var(--text); background: #22201e;
+    border: 1px solid var(--border); border-radius: 5px; outline: none;
+}
+.docx-reader-search:focus { border-color: var(--accent); }
+.docx-reader-search-count, .docx-reader-zoom-value, .docx-reader-page-value {
+    min-width: 46px; color: var(--dim); font-size: 11px; text-align: center; white-space: nowrap;
+}
+.docx-reader-button {
+    min-height: 29px; padding: 3px 8px; color: var(--text); background: #252321;
+    border: 1px solid #3a3733; border-radius: 5px; cursor: pointer; white-space: nowrap;
+}
+.docx-reader-button:hover:not(:disabled) { background: #302d29; border-color: #55504a; }
+.docx-reader-button:disabled { opacity: .4; cursor: default; }
+.docx-reader-file-info {
+    min-width: 0; margin-left: auto; overflow: hidden; color: var(--faint);
+    font-size: 10px; text-overflow: ellipsis; white-space: nowrap;
+}
+.docx-reader-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.docx-reader-viewport { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 24px 24px 60px; scroll-behavior: smooth; }
+.docx-reader-pages { display: flex; flex-direction: column; align-items: center; gap: 24px; min-width: max-content; }
+.docx-reader-page {
+    flex: 0 0 auto; box-sizing: border-box; overflow: visible; color: #292723;
+    background: #f7f5ef; box-shadow: 0 7px 28px rgba(0, 0, 0, .34);
+}
+.docx-reader-page-content {
+    width: 100%; height: 100%; overflow: visible; color: #292723;
+    font-family: Georgia, "Times New Roman", "Microsoft YaHei", serif; line-height: 1.72;
+    overflow-wrap: anywhere;
+}
+.docx-reader-page-content > :first-child { margin-top: 0; }
+.docx-reader-page-content h1, .docx-reader-page-content h2,
+.docx-reader-page-content h3, .docx-reader-page-content h4,
+.docx-reader-page-content h5, .docx-reader-page-content h6 {
+    margin: 1.35em 0 .55em; color: #25231f; line-height: 1.35; break-after: avoid;
+}
+.docx-reader-page-content h1 { font-size: 1.7em; }
+.docx-reader-page-content h2 { font-size: 1.4em; }
+.docx-reader-page-content h3 { font-size: 1.2em; }
+.docx-reader-page-content p { margin: 0 0 .85em; }
+.docx-reader-page-content ul, .docx-reader-page-content ol { padding-left: 1.7em; margin: 0 0 .9em; }
+.docx-reader-page-content li { padding-left: .15em; margin: .15em 0; }
+.docx-reader-page-content blockquote { margin: 1em 0; padding: .2em 0 .2em 1em; border-left: 3px solid #9aa8b2; color: #625f59; }
+.docx-reader-page-content pre { padding: 10px 12px; overflow: auto; background: #ece9e1; border-radius: 4px; font: .85em/1.55 Consolas, monospace; white-space: pre-wrap; }
+.docx-reader-page-content table { width: 100%; margin: 1em 0; border-collapse: collapse; font-size: .9em; }
+.docx-reader-page-content th, .docx-reader-page-content td { padding: 6px 8px; border: 1px solid #cbc7bd; vertical-align: top; }
+.docx-reader-page-content th { background: #ebe8df; font-weight: 650; }
+.docx-reader-page-content img { display: block; max-width: 100%; max-height: 760px; height: auto; margin: 1em auto; object-fit: contain; }
+.docx-reader-page-content a { color: #176c9e; text-decoration: underline; cursor: pointer; }
+.docx-search-hit { padding: 0 .04em; color: inherit; background: #ffd86b; border-radius: 2px; }
+.docx-search-hit.is-current { outline: 2px solid #d78a15; }
+.docx-reader-error {
+    display: flex; flex-direction: column; justify-content: center; min-height: 260px;
+    margin: 24px; padding: 28px; color: var(--text); background: #191817;
+    border: 1px solid var(--border); border-radius: 9px;
+}
+.docx-reader-error h2 { margin: 0 0 12px; font-size: 17px; }
+.docx-reader-error p { max-width: 680px; color: var(--dim); }
+@media (max-width: 900px) {
+    .docx-reader-toolbar { flex-wrap: wrap; }
+    .docx-reader-file-info { display: none; }
+    .docx-reader-viewport { padding: 16px 12px 40px; }
+}
+
 /* ---- 右:反向链接(独立的一格面板) ----
    上一版它和 AI 面板挤在同一个 `.note-side` 里(所以叫"链接与 AI")。现在它是工作台里
    自己的那一格:靠布局树拿高度,不再需要"给它自己和 AI 分配高度"的那套上限。 */
@@ -644,7 +794,7 @@
     100% { transform: scaleX(1); }
 }
 
-/* 消息气泡。role 写在 data-role 上(自检按属性断言,不按类名后缀)。 */
+/* 消息正文。role 写在 data-role 上(自检按属性断言,不按类名后缀)。 */
 .agent-msg { margin-bottom: 8px; font-size: 13px; line-height: 1.7; }
 .agent-msg-text { padding: 7px 10px; border-radius: var(--radius-sm); white-space: pre-wrap; word-break: break-word; }
 .agent-msg[data-role="user"] { text-align: right; }
@@ -653,13 +803,59 @@
     background: rgba(126, 200, 255, .14); color: var(--text);
 }
 .agent-msg[data-role="assistant"] .agent-msg-text {
-    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    padding: 7px 0; border: 0; border-radius: 0;
+    background: transparent; color: var(--muted);
 }
+/* 已完成的 AI 回复末尾：纯矢量复制按钮，不占回复正文的文本选择范围。 */
+.agent-msg-copy-row { display: flex; align-items: center; min-height: 27px; margin: 1px 0 3px; }
+.agent-msg-copy-row[hidden] { display: none; }
+.agent-msg-copy {
+    position: relative; display: grid; place-items: center;
+    width: 29px; height: 29px; padding: 4px; margin-left: -5px;
+    color: var(--faint); border: 0; border-radius: 6px; background: transparent;
+    cursor: pointer; transition: color .18s ease;
+}
+.agent-msg-copy:hover, .agent-msg-copy:focus-visible { color: var(--text); }
+.agent-msg-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.agent-msg-copy:disabled { cursor: progress; }
+.agent-msg-copy svg {
+    display: block; width: 21px; height: 21px; overflow: visible;
+    fill: none; stroke: currentColor; stroke-width: 1.45; stroke-linecap: round; stroke-linejoin: round;
+}
+.agent-copy-back { opacity: .66; }
+.agent-copy-outline { stroke-dasharray: 1; stroke-dashoffset: 0; }
+.agent-copy-lines { opacity: .48; }
+.agent-copy-check { opacity: 0; stroke-width: 1.9; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.agent-msg-copy[data-state="idle"]:is(:hover, :focus-visible) .agent-copy-outline {
+    animation: agent-copy-trace .68s ease both;
+}
+.agent-msg-copy[data-state="copying"] { color: var(--accent); }
+.agent-msg-copy[data-state="copying"] .agent-copy-outline {
+    animation: agent-copy-trace .9s ease-in-out infinite alternate;
+}
+.agent-msg-copy[data-state="copied"] { color: var(--ok); }
+.agent-msg-copy[data-state="copied"] .agent-copy-mark { opacity: 0; transform: scale(.88); transition: opacity .16s, transform .24s; }
+.agent-msg-copy[data-state="copied"] .agent-copy-check {
+    opacity: 1; animation: agent-copy-check .42s .06s cubic-bezier(.2,.8,.25,1) both;
+}
+.agent-msg-copy[data-state="error"] { color: var(--error); }
+.agent-msg-copy::after {
+    content: attr(data-tooltip); position: absolute; z-index: 5; left: -2px; bottom: calc(100% + 7px);
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px;
+    background: var(--surface); color: var(--muted); font-size: 10px; font-weight: 400;
+    line-height: 1.4; white-space: nowrap; pointer-events: none;
+    opacity: 0; transform: translateY(3px); transition: opacity .16s, transform .16s;
+}
+.agent-msg-copy:hover::after, .agent-msg-copy:focus-visible::after, .agent-msg-copy[data-state="error"]::after {
+    opacity: 1; transform: none;
+}
+@keyframes agent-copy-trace { from { stroke-dashoffset: 1; opacity: .5; } to { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes agent-copy-check { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 /* 还在流式的那一条:左边一道竖线,一眼能看出"这句话还没说完" */
-/* 生成中:左侧亮一条边(气泡样式**保持不变** —— 见下面 .agent-sweep 的说明) */
+/* 生成中:左侧亮一条细边作为状态提示;正文区域不再绘制回复框。 */
 .agent-msg[data-streaming="true"] .agent-msg-text { border-left: 2px solid var(--accent); }
 
-/* ---- 助手回复的 Markdown(收尾后渲染;只渲染助手,用户气泡保持纯文本)----
+/* ---- 助手回复的 Markdown(随显示进度实时渲染;用户气泡保持纯文本)----
    ⚠️ 必须把 white-space 收回来:气泡默认 pre-wrap(流式纯文本要靠它保留换行),
    而块级内容的换行由 <p>/<br> 表达 —— 留着 pre-wrap 会让段落之间多出一堆空行。
    ⚠️ 全是**后代**选择器,作用域仅限气泡内部:插件样式与笔记预览不受影响。 */
@@ -726,53 +922,65 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
     background: var(--surface);
 }
 
-/* 扫光:一道光从左往右扫过**正在生成的那段文字**。
-   ⚠️ 它必须作用在这一层内层 span 上,**不能**直接加在 .agent-msg-text 上:
-   那个元素有气泡底色与边框,一旦给它 `background-clip:text`,气泡的底会被一起
-   裁进字形里 —— 流式中文气泡的底色"消失",看起来像中途换了一套样式(实测踩到过)。
-   这里两层背景:上层是扫光带,下层是文字底色。**下层必须是实色** —— 这样
-   prefers-reduced-motion 把动画关掉时,文字仍然看得见,而不会变成一片透明。
-   ⚠️ 为什么 display:block:百分比 background-position 需要一个确定的参照宽度。
-   行内元素折行后 Chrome 按片段(box-decoration-break: slice)拼着画,光带落点会随
-   文字长度乱跳(实测踩到过);块级化之后 background-position 就是相对整块气泡,
-   光带走位才可预期 —— docs/kaiwu-sweep-demo.html 里定格测量过:
-   动画 30/40/50/60% 时,光带中心实测落在 0%/17%/50%/75% 屏宽处,正是设计值。
-   底色调暗一档到 --dim 是**必须的**:底色原本用 --muted(#cfccc7 已近白),
-   再叠 rgba(255,255,255,.5) 的宽带,带内 #e7e6e3、带外 #cfccc7,反差只有 1.28:1,
-   在真机上就是"看不出扫光"(用户反馈的原话)。改成 --dim 底 + 收窄加亮的光带,
-   反差 2.66:1(实测像素:带内 207 / 带外 135),光带才真的看得见;
-   代价只是流式文字比最终文字暗一档 —— 而收尾时正文会回到 --muted,
-   顺带成了一个"写完了"的信号。--dim 在气泡底上仍有 6.34:1,远高于 AA 的 4.5:1。 */
+/* 两层都只含已经显示的 Markdown；缓存中的未来文字没有 DOM，也不占高度。
+   扫光容器保持稳定，正文追加或 Markdown 结构变化不会重置横扫相位。 */
+.agent-stream { position: relative; display: block; white-space: inherit; word-break: inherit; }
+.agent-stream-base { position: relative; z-index: 0; display: block; white-space: inherit; word-break: inherit; }
+.agent-stream[data-active="true"] .agent-stream-base { color: var(--dim); }
+.agent-stream-base > :first-child, .agent-sweep > :first-child { margin-top: 0 !important; }
+.agent-stream-base > :last-child, .agent-sweep > :last-child { margin-bottom: 0 !important; }
 .agent-sweep {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
     display: block;
     background-image:
-        linear-gradient(100deg, transparent 44%, rgba(255, 255, 255, .9) 50%, transparent 56%),
-        linear-gradient(90deg, var(--dim), var(--dim));
-    background-size: 220% 100%, 100% 100%;
-    background-position: 0 0, 0 0;    /* 动画关掉时的静止态:光带停在文字右侧之外 */
+        linear-gradient(100deg, transparent 44%, rgba(255, 255, 255, .9) 50%, transparent 56%);
+    background-size: 220% 100%;
+    background-position: 170% 0;    /* 动画关掉时的静止态:光带停在文字右侧之外 */
     background-repeat: no-repeat;
     -webkit-background-clip: text; background-clip: text;
     color: transparent;
     animation: text-sweep 1.4s linear infinite;
 }
-@keyframes text-sweep {
-    from { background-position: 170% 0, 0 0; }
-    to { background-position: -70% 0, 0 0; }
+/* 副本保留相同字号、缩进、边框尺寸，仅画字形中的光；不重复绘制代码底色和图片。 */
+.agent-msg-text.md .agent-sweep,
+.agent-msg-text.md .agent-sweep * {
+    color: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    scrollbar-color: transparent transparent;
 }
-/* 末字显影(B4):最新那几个字"正在显影"。
-   ⚠️ 这里**不能**用 mask —— 尾巴这层 span 自己是 `color: transparent` 又没有背景,
-   它什么都没画,遮罩自然没有东西可遮。实测过:mask 版的末行亮度剖面与"完全不处理"
-   的对照组**逐字节相同**(138 128 97),等于没写;换成"自己裁一层半透明罩子"之后,
-   同样三个采样点是 138 117 72,后两个字确实被压暗了。
-   罩子画在父层文字之上,而且**是半透明的**,所以扫光带扫到这几个字时仍然透得出来。 */
-.agent-tail {
-    background-image: linear-gradient(90deg, transparent 10%, var(--sweep-veil) 100%);
+.agent-sweep img { visibility: hidden; }
+.agent-sweep pre { visibility: hidden; }
+.agent-sweep ::marker { color: transparent; }
+.agent-code-content { position: relative; width: max-content; min-width: 100%; }
+.agent-code-content > code { display: block; }
+.agent-msg-text.md pre .agent-code-sweep {
+    position: absolute; inset: 0; pointer-events: none; color: transparent;
+    background-image: linear-gradient(100deg, transparent 44%, rgba(255, 255, 255, .9) 50%, transparent 56%);
+    background-size: 220% 100%; background-position: 170% 0; background-repeat: no-repeat;
     -webkit-background-clip: text; background-clip: text;
+    animation: text-sweep 1.4s linear infinite;
+}
+.agent-stream[data-active="false"] .agent-code-sweep { display: none; }
+@keyframes text-sweep {
+    from { background-position: 170% 0; }
+    to { background-position: -70% 0; }
+}
+/* 只给本帧已经加入正文的字短暂提亮，没有长延迟、透明占位或逐行停顿。 */
+.agent-reply-new { animation: agent-reply-light 140ms ease-out both; }
+@keyframes agent-reply-light {
+    from { opacity: .72; text-shadow: 0 0 5px rgba(255, 255, 255, .7); }
+    to { opacity: 1; text-shadow: none; }
 }
 /* 减少动态偏好:这一条是必须的。动画关掉之后扫光带停在某一帧,
    但下层那块实色仍在,文字照常可读;光标脉冲也一并停住。 */
 @media (prefers-reduced-motion: reduce) {
-    .agent-sweep { animation: none; }
+    .agent-sweep, .agent-code-sweep { animation: none; }
+    .agent-reply-new { animation: none; }
+    .agent-msg-copy, .agent-msg-copy::after { transition: none; }
+    .agent-msg-copy[data-state="copied"] .agent-copy-check { animation: none; stroke-dashoffset: 0; }
     .agent-think[data-live="true"] .agent-think-label::after { animation: none; }
     /* 轮次轨:生成中的脉冲、新轮入场、以及那根竖条的过渡一起停掉。
        位置指示(当前轮那格更高更亮)**照旧常显** —— 关的是动效,不是信息。 */
@@ -785,18 +993,16 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
    可见证据),正文一开始就自动收起 —— 想看再点开。 */
 .agent-think {
     margin-bottom: 8px;
-    border: 1px solid var(--border); border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, .02);
+    border: 0; border-radius: 0; background: transparent;
 }
 .agent-think-head {
     display: flex; align-items: center; gap: 6px;
-    padding: 5px 8px; font-size: 11.5px; color: var(--faint);
+    padding: 5px 0; font-size: 11.5px; color: var(--faint);
     cursor: pointer; list-style: none;
 }
 .agent-think-head::-webkit-details-marker { display: none; }
 .agent-think-caret { flex: none; font-size: 9px; transition: transform .15s ease; }
 .agent-think[open] .agent-think-caret { transform: rotate(90deg); }
-.agent-think-count { margin-left: auto; font: 10.5px/1 var(--mono); color: var(--faint); }
 /* 思考耗时(「3.2 秒」):紧跟标签。⚠️ 三个数字每秒都在变,**必须**等宽数字
    (`tabular-nums`),否则整行的标签会跟着一跳一跳 —— 一个正在走的秒表最忌讳这个。 */
 .agent-think-time {
@@ -804,54 +1010,72 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
     font-variant-numeric: tabular-nums;
 }
 .agent-think[data-live="true"] .agent-think-time { color: var(--dim); }
-/* 思考条上的翻译控件(按需翻译:点「译」才翻一次)。
-   ⚠️ 它们长在 <summary> 里,所以点击必须 preventDefault —— 否则点一下「译」会顺带
-   把这条折叠块开合一次(见 panel.js 的 translationChips)。 */
-.agent-think-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
-.agent-think-count { margin-left: 8px; }
-.agent-think-chip {
-    font: 10.5px/1 var(--mono);
-    padding: 2px 7px; border-radius: 999px; cursor: pointer;
-    color: var(--dim); background: none; border: 1px solid var(--border);
+/* 双向换译：常态安静，悬停箭头轻移，翻译中轻旋；只保留一个无框 SVG 按钮。 */
+.agent-think-actions { margin-left: auto; display: flex; align-items: center; }
+.agent-think-translate {
+    display: inline-grid; place-items: center; flex: none;
+    width: 28px; height: 24px; padding: 0; border: 0; border-radius: 4px;
+    color: var(--dim); background: transparent; cursor: pointer;
+    transition: color .2s ease;
 }
-.agent-think-chip:hover { color: var(--text); border-color: var(--border-hi); }
-.agent-think-chip.on { color: var(--accent); border-color: var(--accent); background: rgba(126, 200, 255, .10); }
-.agent-think-chip.busy { color: var(--ask); border-color: var(--ask); cursor: default; }
+.agent-think-translate:hover { color: var(--text); }
+.agent-think-translate:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+.agent-think-translate[data-state="zh"] { color: var(--accent); }
+.agent-think-translate[data-state="busy"] { color: var(--accent); cursor: progress; opacity: 1; }
+.agent-think-translate[data-state="error"] { color: var(--error); }
+.agent-think-translate svg {
+    width: 24px; height: 24px; overflow: visible; fill: none; stroke: currentColor;
+    stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round;
+}
+.agent-translate-cn { opacity: .56; transition: opacity .25s; }
+.agent-translate-en { opacity: .86; transition: opacity .25s; }
+.agent-think-translate[data-state="zh"] .agent-translate-cn { opacity: 1; }
+.agent-think-translate[data-state="zh"] .agent-translate-en { opacity: .5; }
+.agent-translate-arrows { transform-origin: 16px 16px; }
+.agent-translate-upper, .agent-translate-lower { transform-box: fill-box; transform-origin: center; }
+.agent-think-translate:not(:disabled):hover .agent-translate-upper { animation: agent-translate-upper .7s ease both; }
+.agent-think-translate:not(:disabled):hover .agent-translate-lower { animation: agent-translate-lower .7s ease both; }
+.agent-think-translate[data-state="busy"] .agent-translate-arrows { animation: agent-translate-turn 1.7s cubic-bezier(.48,.05,.34,1) infinite; }
+.agent-think-translate[data-state="busy"] .agent-translate-cn { animation: agent-translate-pulse 1.2s ease-in-out infinite alternate; }
+.agent-think-translate[data-state="busy"] .agent-translate-en { animation: agent-translate-pulse 1.2s ease-in-out .6s infinite alternate; }
+@keyframes agent-translate-upper { 0%, 100% { transform: translateX(0); } 45% { transform: translateX(2.5px); } }
+@keyframes agent-translate-lower { 0%, 100% { transform: translateX(0); } 45% { transform: translateX(-2.5px); } }
+@keyframes agent-translate-turn { 0%, 12% { transform: rotate(0); } 80%, 100% { transform: rotate(360deg); } }
+@keyframes agent-translate-pulse { from { opacity: .35; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+    .agent-think-translate, .agent-think-translate * { animation: none !important; transition: none !important; }
+}
 .agent-think-body {
-    padding: 0 9px 7px;
-    font-size: 12px; line-height: 1.6; color: var(--faint);
+    padding: 0 0 7px;
+    font-size: 12px; line-height: 1.6; color: var(--muted);
     white-space: pre-wrap; word-break: break-word;
     max-height: 120px; overflow-y: auto;
+    scrollbar-width: none; -ms-overflow-style: none;
 }
-/* ---- 展开动效:逐行 × 每行从左到右 × 渐变浮现(三件事**同时**开始)----
-   数值来自方案选型(docs/kaiwu-think-reveal-merged-demo.html):
-     行间错开 70ms / 每行擦除 320ms / 每行淡入 260ms / 壳撑开 220ms。
-   ⚠️ 擦除用 linear:一带缓动就像"甩进来",不像"写出来"。
+.agent-think-body::-webkit-scrollbar { display: none; width: 0; }
+/* ---- 展开动效:思考文字逐行由暗到亮,不移动、不模糊、不擦除。
+   行间错开 70ms / 每行提亮 540ms;壳体仍以 220ms 撑开。
    ⚠️ 动效挂在 [data-reveal] 上(一次性标记,播完由 panel.js 摘掉),
       不是挂在 [open] 上 —— 后者会让每次重画都重播。
    ⚠️ 只有收尾的思考条会切成 .agent-think-line(流式中不切),见 panel.js。 */
-.agent-think { --think-stagger: 70ms; --think-wipe: 320ms; --think-fade: 260ms; }
+.agent-think { --think-stagger: 70ms; --think-bright: 540ms; }
 .agent-think-grow { display: grid; grid-template-rows: 1fr; min-height: 0; }
 .agent-think[data-reveal="1"] .agent-think-grow {
     animation: agent-think-grow 220ms cubic-bezier(.2, .75, .25, 1) both;
 }
 @keyframes agent-think-grow { from { grid-template-rows: 0fr } to { grid-template-rows: 1fr } }
-.agent-think-line { display: block; clip-path: inset(0 0 0 0); }
+.agent-think-line { display: block; }
 .agent-think[data-reveal="1"] .agent-think-line {
-    animation:
-        agent-think-wipe var(--think-wipe) linear calc(var(--think-stagger) * var(--i, 0)) both,
-        agent-think-fade var(--think-fade) cubic-bezier(.2, .75, .25, 1)
-            calc(var(--think-stagger) * var(--i, 0)) both;
+    animation: agent-think-bright var(--think-bright) ease calc(var(--think-stagger) * var(--i, 0)) both;
 }
-@keyframes agent-think-wipe { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
-@keyframes agent-think-fade {
-    from { opacity: 0; filter: blur(3px); transform: translateY(2px) }
-    to { opacity: 1; filter: blur(0); transform: none }
+@keyframes agent-think-bright {
+    from { color: var(--faint); opacity: .42; }
+    to { color: var(--muted); opacity: 1; }
 }
 /* 系统里设了"减少动态效果"就基本瞬开 —— 动效是锦上添花,不能拿它顶用户的系统设置 */
 @media (prefers-reduced-motion: reduce) {
     .agent-think[data-reveal="1"] .agent-think-grow,
-    .agent-think[data-reveal="1"] .agent-think-line { animation-duration: 1ms; }
+    .agent-think[data-reveal="1"] .agent-think-line { animation-duration: 1ms; animation-delay: 0ms; }
 }
 /* 还在想的时候给一个光标:折叠着也要看得出"它没卡住" */
 .agent-think[data-live="true"] .agent-think-label { color: var(--dim); }
@@ -865,10 +1089,9 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
 /* 工具卡片 */
 .agent-tool {
     display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
-    margin-bottom: 6px; padding: 6px 9px;
+    margin-bottom: 6px; padding: 6px 0;
     font-size: 12px;
-    border: 1px solid var(--border); border-radius: var(--radius-sm);
-    background: var(--surface);
+    border: 0; border-radius: 0; background: transparent;
 }
 .agent-tool-status {
     flex: none; padding: 1px 7px; border-radius: 999px;
@@ -888,12 +1111,11 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
    用户点开也要立刻有东西,不能等一次重画。 */
 .agent-group {
     margin-bottom: 8px;
-    border: 1px solid var(--border); border-radius: var(--radius-sm);
-    background: var(--surface);
+    border: 0; border-radius: 0; background: transparent;
 }
 .agent-group-head {
     display: flex; align-items: center; gap: 6px;
-    padding: 5px 8px; font-size: 11.5px; color: var(--dim);
+    padding: 5px 0; font-size: 11.5px; color: var(--dim);
     cursor: pointer; list-style: none;
 }
 .agent-group-head::-webkit-details-marker { display: none; }
@@ -922,6 +1144,89 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
 .agent-group[open] > .agent-tool,
 .agent-group[open] > .agent-msg { margin-left: 8px; margin-right: 8px; }
 .agent-group[open] > .agent-tool:first-of-type { margin-top: 4px; }
+
+/* generate_image 运行时的 D 分层视差；位于 details 外，折叠工具不隐藏它。 */
+.agent-image-generation { position: relative; isolation: isolate; overflow: hidden; flex: none;
+    width: min(100%, 420px, calc(420px * var(--agent-image-ratio, 1))); aspect-ratio: var(--agent-image-ratio, 1);
+    margin: 6px 0 14px; transition: width 180ms ease, aspect-ratio 180ms ease;
+    border-radius: 8px; background: linear-gradient(#17202b, #10151c); pointer-events: none; }
+.agent-generation-scene { position: absolute; inset: 0; }
+.agent-generation-sky { position: absolute; inset: 0;
+    background: radial-gradient(circle at 71% 25%, rgba(203,239,255,.18) 0 7%, transparent 7.5%),
+        radial-gradient(ellipse at 71% 25%, rgba(203,239,255,.18), transparent 30%),
+        linear-gradient(180deg, rgba(41,64,87,.44), #171e28 75%);
+    animation: agentImageSkyBreath 4.5s ease-in-out infinite alternate; }
+.agent-generation-layer { position: absolute; left: -5%; width: 110%; transform-origin: center; fill: currentColor; }
+.agent-generation-contour { fill: none; stroke: rgba(201,237,255,.46); stroke-width: 1.1; }
+.agent-generation-back { z-index: 1; top: 17%; height: 57%; color: #7c9db7; opacity: .44;
+    animation: agentImageBackDrift 5.5s ease-in-out infinite alternate; }
+.agent-generation-middle { z-index: 2; top: 32%; height: 53%; color: #6686a1; opacity: .7;
+    animation: agentImageMiddleDrift 4.3s ease-in-out infinite alternate; }
+.agent-generation-front { z-index: 4; bottom: -6%; height: 48%; color: #243a4a;
+    animation: agentImageFrontDrift 3.8s ease-in-out infinite alternate; }
+.agent-generation-light { position: absolute; z-index: 3; top: 46%; left: 69%; width: 18%; height: 2px;
+    transform: rotate(-18deg); background: rgba(195,237,255,.69); box-shadow: 0 0 8px 3px rgba(126,200,255,.38);
+    animation: agentImageLightPulse 2s ease-in-out infinite alternate; }
+.agent-generation-caption { position: absolute; z-index: 5; bottom: 8px; left: 50%; transform: translateX(-50%);
+    padding: 3px 8px; border-radius: 99px; color: #dfebf4; background: rgba(13,17,22,.74);
+    font-size: 10px; line-height: 1.5; white-space: nowrap; }
+.agent-image-generation [hidden] { display: none !important; }
+.agent-generation-results { position: absolute; z-index: 4; inset: 0; display: flex; gap: 4px; }
+.agent-generation-result { position: relative; display: block; flex: 1; min-width: 0; height: 100%; pointer-events: auto;
+    cursor: zoom-in; outline: none; }
+.agent-generation-result:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.agent-generation-result img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.agent-generation-result::after { content: '双击放大'; position: absolute; left: 50%; bottom: 10px; z-index: 2;
+    padding: 4px 9px; border: 1px solid rgba(255,255,255,.24); border-radius: 99px;
+    color: #f1f6fa; background: rgba(16,21,27,.78); font-size: 10px; white-space: nowrap;
+    opacity: 0; transform: translate(-50%,5px); transition: opacity .18s, transform .18s; pointer-events: none; }
+.agent-generation-result:hover::after, .agent-generation-result:focus-visible::after { opacity: 1; transform: translate(-50%,0); }
+.agent-image-generation[data-state="ready"] .agent-generation-scene *,
+.agent-image-generation[data-state="error"] .agent-generation-scene * { animation: none; }
+/* 双击打开：使用 dialog 顶层，不受对话列表裁剪；原图入口和缩放控件位于顶部工具栏。 */
+.agent-image-viewer { position: fixed; inset: 0; margin: auto; width: min(96vw,1120px); height: min(92vh,850px);
+    max-width: none; max-height: none; padding: 0; overflow: hidden; border: 1px solid rgba(255,255,255,.15);
+    border-radius: 14px; color: var(--text); background: #101113; box-shadow: 0 30px 100px rgba(0,0,0,.8); }
+.agent-image-viewer::backdrop { background: rgba(5,6,7,.86); backdrop-filter: blur(9px); }
+.agent-image-viewer[open] { animation: agent-image-viewer-in .24s cubic-bezier(.18,.78,.24,1) both; }
+.agent-image-viewer-shell { height: 100%; display: grid; grid-template-rows: 50px minmax(0,1fr); }
+.agent-image-viewer-bar { display: flex; align-items: center; gap: 7px; padding: 0 12px;
+    border-bottom: 1px solid rgba(255,255,255,.1); background: #18191b; }
+.agent-image-viewer-title { margin-right: auto; color: #ddd; font-size: 12px; }
+.agent-image-viewer-zoom { min-width: 43px; color: var(--muted); text-align: center; font: 11px var(--mono); }
+.agent-image-viewer-tool { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px;
+    padding: 0 8px; border: 1px solid #383a3d; border-radius: 6px; color: #d0d0d0; background: #222427;
+    font: inherit; font-size: 12px; line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer;
+    transition: background .16s,border-color .16s,color .16s; }
+.agent-image-viewer-tool:hover { border-color: #59636c; color: #fff; background: #303338; }
+.agent-image-viewer-close { margin-left: 3px; font-size: 18px; }
+.agent-image-viewer-stage { position: relative; min-height: 0; overflow: hidden; display: grid; place-items: center;
+    background: radial-gradient(ellipse at center,#25282d 0,#17191c 48%,#0f1012 100%); cursor: grab; touch-action: none; }
+.agent-image-viewer-stage.is-dragging { cursor: grabbing; }
+.agent-image-viewer-image { display: block; max-width: min(88%,900px); max-height: calc(100% - 48px); object-fit: contain;
+    border-radius: 5px; box-shadow: 0 12px 42px rgba(0,0,0,.58); transform-origin: center; user-select: none;
+    -webkit-user-drag: none; will-change: transform; }
+.agent-image-viewer-hint { position: absolute; bottom: 13px; left: 50%; transform: translateX(-50%); padding: 5px 9px;
+    border: 1px solid rgba(255,255,255,.1); border-radius: 99px; color: #aaa; background: rgba(17,21,27,.8);
+    font-size: 10px; white-space: nowrap; pointer-events: none; }
+@keyframes agent-image-viewer-in { from { opacity: 0; transform: scale(.965) translateY(9px); }
+    to { opacity: 1; transform: none; } }
+@keyframes agentImageSkyBreath { to { filter: brightness(1.28) saturate(1.18); } }
+@keyframes agentImageBackDrift { to { transform: translate(-1.6%, 1%) scale(1.03); } }
+@keyframes agentImageMiddleDrift { to { transform: translate(1.7%, -1.2%) scale(1.02); } }
+@keyframes agentImageFrontDrift { to { transform: translate(-1.2%, .7%) scale(1.025); } }
+@keyframes agentImageLightPulse { to { opacity: .45; box-shadow: 0 0 15px 5px rgba(126,200,255,.54); } }
+@media (prefers-reduced-motion: reduce) {
+    .agent-image-generation, .agent-image-generation * { animation: none !important; transition: none !important; }
+    .agent-image-viewer[open] { animation: none !important; }
+    .agent-image-viewer-tool { transition: none !important; }
+}
+@media (max-width: 700px) {
+    .agent-image-viewer { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
+    .agent-image-viewer-shell { grid-template-rows: 48px minmax(0,1fr); }
+    .agent-image-viewer-bar { gap: 4px; padding: 0 6px; }
+    .agent-image-viewer-tool { min-width: 28px; padding: 0 7px; }
+}
 
 /* 权限卡片:对端要提权时才出现(正常笔记流程不依赖它) */
 .agent-permission {
@@ -985,31 +1290,18 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
     border-radius: var(--radius);
     background: var(--surface);
 }
-/* 卡片顶端那一行:平时**整行不占位**(用户要求:聊天框上面干净,连状态点也不要了)。
-   它只有在"Agent 不正常"时才有内容:一句「正在连接 Agent…」(只在 connecting 时)
-   与「停止进程」按钮。
+/* 卡片顶端那一行:只在连接中出现一句「正在连接 Agent…」。
 
    ⚠️ 为什么要有 `[hidden]` 这条:这一行的 `display:flex` 会**盖掉** `hidden` 自带的
    `display:none`(同优先级下作者样式赢)—— 少了这条,整行会留下 20px 空行 + 6px 下间距,
    正是"占着位置的空壳"。
-   ⚠️ 为什么高度钉死 20px:按钮在场时这一行就是那一个 20px 的小按钮,
-   卡片在"出事"这一刻**不该因为多出一行而跳动**(上一轮钉过的不变量:出现时 20、
-   不出现时不占位)。按钮自己 line-height:1.6 + 1px 边框 + 1px padding = 20px,正好装下。 */
+   ⚠️ 高度保持 20px:连接提示出现时不让输入卡片明显跳动。 */
 .agent-ctx-row { display: flex; align-items: center; gap: 6px; height: 20px; margin-bottom: 6px; }
 .agent-ctx-row[hidden] { display: none; }
 /* 「正在连接 Agent…」:握手最长 35 秒,那段时间面板不能一片静止。
    只说正在做什么,**不写数字、不画进度** —— 分母(这一台机器这次要多久)不存在。
    它自己也要能被 `hidden` 关掉(这条没有 display 规则,所以 `hidden` 天然生效)。 */
 .agent-ctx-hint { flex: none; font-size: 10.5px; color: var(--faint); }
-/* 进程级停止:出事才出现(见 panel.js renderStatus),所以它只是这一行里的一个可能成员,
-   不再是高度的来源 —— 高度由上面 .agent-ctx-row 的 20px 决定。 */
-.agent-ctx-stop {
-    flex: none; padding: 1px 6px;
-    background: none; border: 1px solid var(--border); border-radius: 5px;
-    color: var(--faint); font: inherit; font-size: 10px; line-height: 1.6; cursor: pointer;
-}
-.agent-ctx-stop:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
-.agent-ctx-stop:disabled { opacity: .45; cursor: default; }
 /* (已删除)`.agent-ctx-dot` / `.agent-ctx-key` / `.agent-ctx-key-on` / `.agent-context`:
    状态点、密钥按钮与整段上下文文字都按用户要求去掉了。状态点原来只表达**上下文**
    (有笔记=亮点、没有=灰点,判据在 .agent-footer[data-ctx] 上),不承担连接状态 ——
@@ -1044,14 +1336,14 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
 .agent-cfg {
     display: inline-flex; align-items: center; gap: 5px;
     font: 12px/1 var(--ui); color: var(--dim);
-    background: #1c1b19; border: 1px solid var(--border); padding: 6px 10px; border-radius: 999px;
+    background: transparent; border: 0; padding: 6px 10px; border-radius: 999px;
     cursor: pointer; white-space: nowrap;
-    transition: color .14s ease, border-color .14s ease, background .14s ease;
+    transition: color .14s ease;
 }
 .agent-cfg::after { content: "▲"; font: 9px/1 var(--mono); color: var(--faint); transition: transform .18s cubic-bezier(.2,.8,.3,1); }
-.agent-cfg[aria-expanded="true"] { color: var(--fg); border-color: var(--border-hi); background: #232220; }
+.agent-cfg[aria-expanded="true"] { color: var(--fg); }
 .agent-cfg[aria-expanded="true"]::after { transform: rotate(180deg); }
-.agent-cfg:hover { border-color: var(--border-hi); color: var(--fg); }
+.agent-cfg:hover { color: var(--fg); }
 .agent-cfg.disabled, .agent-cfg:disabled { opacity: .45; cursor: not-allowed; }
 /* 换字:上滑淡入(与思考条逐行入场同一套语言) */
 .agent-cfg.swap { animation: agent-cfg-tick .14s cubic-bezier(.2,.8,.3,1); }
@@ -1084,11 +1376,24 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
 .agent-cfg-now { display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; font: 17px/1.2 var(--ui); color: var(--fg); }
 .agent-cfg-now .go { font: 12px/1 var(--mono); color: var(--faint); transition: transform .14s ease, color .14s ease; }
 .agent-cfg-now:hover .go { color: var(--accent); transform: translateX(2px); }
-.agent-cfg-tip { margin-left: auto; font: 10.5px/1 var(--mono); color: var(--faint); }
 /* 滑块:拖动中**不许**有过渡(跟手),松手才回弹 */
 .agent-cfg-track { position: relative; height: 28px; margin: 2px 2px 0; cursor: pointer; touch-action: none; border-radius: 8px; }
 .agent-cfg-track .rail { position: absolute; left: 0; right: 0; top: 50%; height: 4px; transform: translateY(-50%); background: #2b2926; border-radius: 99px; }
-.agent-cfg-track .fill { position: absolute; left: 0; top: 50%; height: 4px; transform: translateY(-50%); background: var(--accent); border-radius: 99px; width: 0; transition: width .24s cubic-bezier(.34,1.4,.5,1); }
+.agent-cfg-track .fill { position: absolute; left: 0; top: 50%; height: 4px; overflow: hidden; transform: translateY(-50%); background: var(--accent); border-radius: 99px; width: 0; transition: width .24s cubic-bezier(.34,1.4,.5,1); }
+.agent-cfg-track .fill::after {
+    content: ""; position: absolute; inset: 0; opacity: .9; pointer-events: none;
+    background-image:
+        radial-gradient(circle, color-mix(in srgb, var(--accent), white 36%) 0 .75px, transparent 1.3px),
+        radial-gradient(circle, rgba(255,255,255,.7) 0 .65px, transparent 1.2px);
+    background-position: 0 0, 8px 1px;
+    background-size: 22px 4px, 31px 4px;
+    animation: agent-cfg-star-drift 4.8s linear infinite;
+}
+@keyframes agent-cfg-star-drift {
+    from { background-position: 0 0, 8px 1px; }
+    to { background-position: 110px 0, 163px 1px; }
+}
+.agent-cfg-pop:not(.open) .agent-cfg-track .fill::after { animation-play-state: paused; }
 .agent-cfg-track .knob { position: absolute; top: 50%; left: 0; width: 19px; height: 19px; border-radius: 50%; background: #f4f7fb; transform: translate(-50%,-50%); box-shadow: 0 1px 5px rgba(0,0,0,.5); transition: left .24s cubic-bezier(.34,1.4,.5,1); }
 .agent-cfg-track.dragging { cursor: grabbing; }
 .agent-cfg-track.dragging .fill, .agent-cfg-track.dragging .knob { transition: none; }
@@ -1101,20 +1406,6 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
 .agent-cfg-stops { display: flex; justify-content: space-between; margin: 2px 0 0; font: 10.5px/1.6 var(--ui); color: var(--faint); }
 .agent-cfg-stops span { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; transition: color .14s ease; }
 .agent-cfg-stops span.on { color: var(--fg); }
-.agent-cfg-desc { margin: 11px 0 0; font-size: 11.5px; line-height: 1.65; color: var(--dim); min-height: 34px; }
-.agent-cfg-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid #262523; margin-top: 10px; padding-top: 9px; font: 11px/1.5 var(--ui); color: var(--faint); }
-/* 「重连以启用图片」:图片能力是**连接建立那一刻**定下的,换模型之后要重新握手才生效 ——
-   这是唯一一件非重连不可的事,所以给它一颗按钮(代价写进 title:会话上下文会清零)。
-   ⚠️ 这里**不写 display**:写了就会和 [hidden]{display:none} 同权重、按源码顺序压过它,
-      于是"该藏起来"时它还在(实测踩过这个权重坑)。 */
-.agent-cfg-renew {
-    margin-left: auto; flex: none;
-    font: 11px/1 var(--ui); color: var(--accent); background: none;
-    border: 1px solid #2f4356; padding: 5px 9px; border-radius: 7px; cursor: pointer;
-    transition: color .14s ease, border-color .14s ease;
-}
-.agent-cfg-renew:hover { border-color: var(--accent); }
-.agent-cfg-renew:disabled { opacity: .5; cursor: not-allowed; }
 .agent-cfg-back { display: block; font: 11.5px/1 var(--ui); color: var(--dim); background: none; border: 0; padding: 0 0 9px; cursor: pointer; }
 .agent-cfg-back:hover { color: var(--fg); }
 .agent-cfg-grp { font: 10.5px/1 var(--mono); color: var(--faint); padding: 6px 8px 5px; letter-spacing: .04em; }
@@ -1131,7 +1422,7 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
 .agent-cfg-opt .t2 { display: block; font: 11px/1.5 var(--ui); color: var(--faint); }
 .agent-cfg-empty { margin: 6px 2px; font-size: 11.5px; color: var(--faint); }
 @media (prefers-reduced-motion: reduce) {
-    .agent-cfg, .agent-cfg-pop, .agent-cfg-pane, .agent-cfg-opt, .agent-cfg-track .fill, .agent-cfg-track .knob {
+    .agent-cfg, .agent-cfg-pop, .agent-cfg-pane, .agent-cfg-opt, .agent-cfg-track .fill, .agent-cfg-track .fill::after, .agent-cfg-track .knob {
         animation: none !important; transition: none !important;
     }
 }

@@ -19,7 +19,7 @@ import {
 } from '../../app/lib/agent-image.js';
 import {
     REASONING_CONFIG_ID, MODEL_CONFIG_ID, configOptionOf, currentModelEntry, effortLevels,
-    effortValueOf, preferredEffortValue, shortEffortName,
+    effortValueOf, modelGroups, preferredEffortValue, shortEffortName,
 } from '../../app/lib/agent-config.js';
 import { resumeFailureOf } from '../../app/lib/agent-sessions.js';
 import { nullLedger } from '../sessions/session-ledger.js';
@@ -223,16 +223,7 @@ export function createAgentRuntime({
     let recordPending = null;
     /** 自动建会话那一次的在飞 promise(见 autoCreateSession;非 null = 已经有一次在飞)。 */
     let autoSessionInFlight = null;
-    /**
-     * 对端在 `initialize` 里**广告的能力**(至少 `promptCapabilities`)。
-     *
-     * 为什么非要记住它:图片是"内联图片块",而 ACP 的规定是**只有对方广告了才准发**。
-     * 装机那份 acp profile 钉的模型是 `deepseek-v4-flash`,它在 dsh-llm-deepseek 的
-     * 目录里没有声明 `inputModalities:['text','image']` —— 于是桥在 initialize 时
-     * 广告 `image:false`(实测),带图的提示会被它当场以 -32602 拒掉,用户看到的是
-     * 一句英文 + IPC 包装。把广告值记在这里,就能在**发之前**拦住,并把原因说成人话。
-     * 连接生命周期内这个值不变(桥在 initialize 那一刻定下 imagePromptEnabled)。
-     */
+    /** 对端在 initialize 时广告、并可按当前会话模型动态刷新的能力。 */
     let caps = null;
     /** 这次会话的 configOptions(model / reasoning 之类),只为了在拒绝图片时说出模型名。 */
     let sessionConfigOptions = [];
@@ -287,6 +278,65 @@ export function createAgentRuntime({
         const option = configOptionOf(options, MODEL_CONFIG_ID);
         if (option === null) return '';
         return currentModelEntry(option, option.currentValue)?.name ?? '';
+    }
+
+    /**
+     * 新会话优先切到一个已配置且实际支持图片的模型。
+     * 候选来自 ACP 当前会话的模型选项;逐个用桥的同一能力探针核实,不靠模型名猜。
+     * 所有切换都发生在会话首次显示和首条提示之前,不会清除已存在的对话上下文。
+     */
+    async function selectImageModel(c, sid, options) {
+        const model = configOptionOf(options, MODEL_CONFIG_ID);
+        if (model === null) return options;
+        const originalValue = String(model.currentValue ?? '');
+        let latest = options;
+        const candidates = modelGroups(model).flatMap((group) => group.options);
+        let selectedImageModel = false;
+
+        try {
+            const current = await c.client.capabilities({ sessionId: sid });
+            caps = { ...(caps ?? {}), image: current?.image === true, audio: false, embeddedContext: false };
+            if (caps.image === true) return options;
+        } catch (err) {
+            log.warn?.('[agent] 当前模型图片能力探测失败,继续检查可用模型', err);
+        }
+
+        for (const candidate of candidates) {
+            if (candidate.value === originalValue) continue;
+            try {
+                const changed = await c.client.setConfigOption({
+                    sessionId: sid, configId: MODEL_CONFIG_ID, value: candidate.value,
+                });
+                const next = asArray(changed?.configOptions);
+                if (next.length === 0) continue;
+                latest = next;
+                if (configOptionOf(next, MODEL_CONFIG_ID)?.currentValue !== candidate.value) continue;
+                const probed = await c.client.capabilities({ sessionId: sid });
+                caps = { ...(caps ?? {}), image: probed?.image === true, audio: false, embeddedContext: false };
+                if (caps.image === true) {
+                    selectedImageModel = true;
+                    log.info?.(`[agent] 新会话已自动选择图片模型:${candidate.name || candidate.value}`);
+                    break;
+                }
+            } catch (err) {
+                log.warn?.(`[agent] 图片模型探测失败(${candidate.name || candidate.value})`, err);
+            }
+        }
+
+        if (!selectedImageModel && configOptionOf(latest, MODEL_CONFIG_ID)?.currentValue !== originalValue) {
+            try {
+                const restored = await c.client.setConfigOption({
+                    sessionId: sid, configId: MODEL_CONFIG_ID, value: originalValue,
+                });
+                const next = asArray(restored?.configOptions);
+                if (next.length > 0) latest = next;
+                const probed = await c.client.capabilities({ sessionId: sid });
+                caps = { ...(caps ?? {}), image: probed?.image === true, audio: false, embeddedContext: false };
+            } catch (err) {
+                log.warn?.('[agent] 未找到图片模型且原模型恢复失败', err);
+            }
+        }
+        return latest;
     }
 
     /** 当前思考强度的短名(关/低/中/高)。 */
@@ -536,10 +586,8 @@ export function createAgentRuntime({
             handshake: async () => {
                 const result = await makeClient().initialize({ name: 'kaiwu', version: '0.1.0' });
                 caps = promptCapabilitiesOf(result);
-                // 立刻把新能力报给界面:重连之后它会拿这份新值替换旧值 ——
-                // 否则界面会继续按"旧的"那条连接拦用户(实测:换成视觉模型、重连成功,
-                // 界面还在显示"当前模型不接受图片输入")。
-                emit({ kind: 'caps', caps });
+                // 握手完成后把能力报给界面;新会话创建时还会根据已配置模型再次确认。
+                emit({ kind: 'caps', caps: sessionId === null ? null : caps });
                 return result;
             },
             handshakeTimeoutMs,
@@ -716,6 +764,7 @@ export function createAgentRuntime({
             sessionId = sess.sessionId;
             activatedSessions.add(sessionId);
             sessionConfigOptions = asArray(sess.configOptions);
+            sessionConfigOptions = await selectImageModel(c, sessionId, sessionConfigOptions);
             // 「默认思考强度是中」由 kaiwu 保证,不靠对端恰好给中(见 pinEffort)。
             // ⚠️ 必须在 emit 之前补完:否则界面会先亮一下对端的默认值再跳一下。
             sessionConfigOptions = await pinEffort(c, sessionId, sessionConfigOptions, null);

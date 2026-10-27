@@ -30,6 +30,8 @@
 // ⚠️ 元数据也走同一种标记(`"kind":"meta"`),不写 YAML frontmatter:frontmatter 要处理
 //    引号、反斜杠(Windows 路径)、冒号这些转义,而 JSON 一行就说完,不会读错。
 
+import { imageAspectRatioFromInput, isImageGenerationTitle } from './image-aspect-ratio.js';
+
 /** 文件格式版本。将来改字段时靠它分辨老文件。 */
 export const RECORD_VERSION = 1;
 /** 会话记录住的目录(相对笔记库)。 */
@@ -146,6 +148,9 @@ export function renderRecord(record) {
             payload.title = e.title;
             payload.status = e.status;
             payload.toolKind = e.toolKind;
+            if (Number.isFinite(e.aspectRatio) && e.aspectRatio >= 0.1 && e.aspectRatio <= 10) {
+                payload.aspectRatio = e.aspectRatio;
+            }
         }
         if (e.kind === 'end') {
             payload.stopReason = e.stopReason;
@@ -200,6 +205,9 @@ export function parseRecord(text) {
             entry.title = String(payload.title ?? '');
             entry.status = String(payload.status ?? '');
             entry.toolKind = String(payload.toolKind ?? '');
+            if (Number.isFinite(payload.aspectRatio) && payload.aspectRatio >= 0.1 && payload.aspectRatio <= 10) {
+                entry.aspectRatio = Number(payload.aspectRatio);
+            }
         }
         if (entry.kind === 'end') {
             entry.stopReason = String(payload.stopReason ?? '');
@@ -274,7 +282,7 @@ export function addText(record, kind, text, at) {
 }
 
 /** 工具调用:同一个 id 出现多次是**改同一条**,不是新建(与界面同一条规则)。 */
-export function addTool(record, { id, title = '', status = '', toolKind = '', at } = {}) {
+export function addTool(record, { id, title = '', status = '', toolKind = '', aspectRatio = null, at } = {}) {
     const toolId = String(id ?? '');
     if (toolId === '') return record;
     const now = Number.isFinite(at) ? at : Date.now();
@@ -284,20 +292,24 @@ export function addTool(record, { id, title = '', status = '', toolKind = '', at
         if (entries[i].kind === 'tool' && entries[i].id === toolId) { at2 = i; break; }
     }
     if (at2 === -1) {
-        entries.push({
+        const entry = {
             kind: 'tool', at: now, id: toolId,
             title: String(title ?? '') || '工具调用',
             status: String(status ?? '') || 'pending',
             toolKind: String(toolKind ?? '') || 'other',
-        });
+        };
+        if (Number.isFinite(aspectRatio) && aspectRatio >= 0.1 && aspectRatio <= 10) entry.aspectRatio = aspectRatio;
+        entries.push(entry);
     } else {
         const prev = entries[at2];
-        entries[at2] = {
+        const entry = {
             ...prev,
             title: String(title ?? '') || prev.title,
             status: String(status ?? '') || prev.status,
             toolKind: String(toolKind ?? '') || prev.toolKind,
         };
+        if (Number.isFinite(aspectRatio) && aspectRatio >= 0.1 && aspectRatio <= 10) entry.aspectRatio = aspectRatio;
+        entries[at2] = entry;
     }
     return { ...record, entries, updatedAt: now };
 }
@@ -336,13 +348,19 @@ export function entryFromUpdate(update, at) {
     if (kind === 'agent_message_chunk') return text === '' ? null : { kind: 'reply', text, at };
     if (kind === 'agent_thought_chunk') return text === '' ? null : { kind: 'think', text, at };
     if (kind === 'tool_call' || kind === 'tool_call_update') {
-        return {
+        const title = String(update?.title ?? update?.rawInput?.title ?? '');
+        const entry = {
             kind: 'tool', at,
             id: String(update?.toolCallId ?? ''),
-            title: String(update?.title ?? update?.rawInput?.title ?? ''),
+            title,
             status: String(update?.status ?? ''),
             toolKind: String(update?.kind ?? ''),
         };
+        if (isImageGenerationTitle(title)) {
+            const aspectRatio = imageAspectRatioFromInput(update?.rawInput);
+            if (aspectRatio !== null) entry.aspectRatio = aspectRatio;
+        }
+        return entry;
     }
     return null;   // 别的增量(用量、计划…)这一版不记
 }
@@ -393,6 +411,7 @@ export function recordToSteps(record) {
                     update: {
                         sessionUpdate: 'tool_call', toolCallId: e.id,
                         title: e.title, status: e.status, kind: e.toolKind,
+                        ...(Number.isFinite(e.aspectRatio) ? { aspectRatio: e.aspectRatio } : {}),
                     },
                 },
             });

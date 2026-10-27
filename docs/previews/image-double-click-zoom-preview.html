@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 生图双击放大预览</title>
+<style>
+:root{color-scheme:dark;--bg:#141414;--panel:#1c1c1c;--line:#343434;--text:#e8e8e8;--muted:#949494;--accent:#8bcaff}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -18%,#29313b 0,transparent 48%),var(--bg);color:var(--text);font:14px/1.55 "Segoe UI","Microsoft YaHei",sans-serif}
+.page{width:min(880px,calc(100% - 36px));margin:0 auto;padding:44px 0 60px}
+.eyebrow{color:var(--accent);font:11px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
+h1{font-size:24px;letter-spacing:.01em;margin:11px 0 8px;font-weight:620}
+.intro{margin:0;color:var(--muted);font-size:13px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 235px;gap:22px;align-items:start;margin-top:30px}
+.chat{min-height:590px;border:1px solid #303030;border-radius:13px;background:#191919;box-shadow:0 18px 54px #0005;overflow:hidden}
+.chat-top{height:43px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid #2b2b2b;color:#a7a7a7;font-size:12px}
+.dot{width:7px;height:7px;border-radius:50%;background:#6fbf91;box-shadow:0 0 10px #6fbf9155}
+.messages{padding:20px 18px 26px}
+.user{width:max-content;max-width:84%;margin:0 0 21px auto;padding:9px 12px;border-radius:12px 12px 4px 12px;background:#25292d;color:#d9e7f0}
+.assistant{display:flex;gap:10px;align-items:flex-start}
+.avatar{flex:none;width:23px;height:23px;border-radius:8px;background:#24394a;display:grid;place-items:center;color:#a9dcff;font-size:13px;font-weight:700}
+.reply{min-width:0;flex:1;color:#d2d2d2}
+.reply p{margin:0 0 13px}
+.image-label{display:flex;align-items:center;gap:8px;margin:10px 0 9px;color:#9b9b9b;font-size:11px}
+.image-label::before{content:"";width:6px;height:6px;border-radius:50%;background:#72c99a;box-shadow:0 0 9px #72c99a88}
+.image-frame{width:min(100%,280px);aspect-ratio:2/3;border-radius:9px;overflow:hidden;background:#101318;box-shadow:0 8px 24px #0006;position:relative}
+.image-hit{display:block;width:100%;height:100%;padding:0;border:0;background:transparent;color:inherit;cursor:zoom-in;overflow:hidden}
+.image-hit img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .32s cubic-bezier(.2,.75,.25,1),filter .25s}
+.image-hit:hover img{transform:scale(1.025);filter:brightness(.78)}
+.zoom-tip{position:absolute;left:50%;bottom:12px;transform:translate(-50%,8px);display:flex;align-items:center;gap:7px;white-space:nowrap;padding:6px 10px;border:1px solid #ffffff35;border-radius:999px;background:#10151bcc;color:#f1f6fa;font-size:11px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;backdrop-filter:blur(8px)}
+.image-frame:hover .zoom-tip,.image-hit:focus-visible+.zoom-tip{opacity:1;transform:translate(-50%,0)}
+.zoom-glyph{font-size:15px;line-height:1}
+.image-hit:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.reply-note{margin-top:14px;color:#b8b8b8;font-size:13px}
+.reply-note strong{color:#e4e4e4;font-weight:550}
+.side{padding:16px 15px;border:1px solid var(--line);border-radius:11px;background:#1b1b1b}
+.side h2{margin:0 0 12px;font-size:13px;font-weight:600}
+.step{display:grid;grid-template-columns:23px 1fr;gap:9px;margin:13px 0;color:#b6b6b6;font-size:12px}
+.num{width:21px;height:21px;border:1px solid #424a50;border-radius:50%;display:grid;place-items:center;color:#a8d8fa;font:10px ui-monospace,Consolas,monospace}
+.side hr{border:0;border-top:1px solid #303030;margin:15px 0}
+.side .small{margin:0;color:#858585;font-size:11px}
+.pill{display:inline-block;margin-top:12px;padding:4px 8px;border:1px solid #384d5d;border-radius:999px;color:#a8d9fb;font-size:10px}
+dialog{width:min(96vw,1120px);height:min(92vh,850px);max-width:none;max-height:none;padding:0;border:1px solid #ffffff24;border-radius:14px;background:#101113;color:var(--text);overflow:hidden;box-shadow:0 30px 100px #000c}
+dialog::backdrop{background:#050607d9;backdrop-filter:blur(9px);animation:backdrop-in .24s ease-out both}
+.viewer{height:100%;display:grid;grid-template-rows:52px minmax(0,1fr)}
+.viewer-bar{display:flex;align-items:center;gap:7px;padding:0 13px;border-bottom:1px solid #ffffff18;background:#18191b}
+.viewer-title{margin-right:auto;display:flex;align-items:center;gap:9px;font-size:12px;color:#d4d4d4}
+.viewer-title i{width:6px;height:6px;border-radius:50%;background:#86c9f8;box-shadow:0 0 10px #86c9f8aa}
+.zoom-level{min-width:45px;text-align:center;color:#a3a3a3;font:11px ui-monospace,Consolas,monospace}
+.tool{height:30px;min-width:30px;padding:0 9px;border:1px solid #383a3d;border-radius:6px;background:#222427;color:#d0d0d0;font-size:12px;cursor:pointer;transition:background .16s,border-color .16s,color .16s}
+.tool:hover{background:#303338;border-color:#59636c;color:white}
+.tool.close{margin-left:4px;font-size:17px;line-height:1}
+.stage{position:relative;min-height:0;overflow:hidden;display:grid;place-items:center;background:radial-gradient(ellipse at center,#25282d 0,#17191c 47%,#0f1012 100%);cursor:grab;touch-action:none}
+.stage.dragging{cursor:grabbing}
+.large-image{display:block;max-width:min(88%,900px);max-height:calc(100% - 48px);object-fit:contain;border-radius:5px;box-shadow:0 12px 42px #0009;transform-origin:center;user-select:none;-webkit-user-drag:none;will-change:transform;transition:filter .18s}
+.drag-note{position:absolute;left:50%;bottom:13px;transform:translateX(-50%);padding:5px 9px;border:1px solid #ffffff19;border-radius:999px;background:#11151bc9;color:#aaa;font-size:10px;white-space:nowrap;pointer-events:none}
+dialog[open] .viewer{animation:viewer-in .26s cubic-bezier(.18,.78,.24,1) both}
+@keyframes viewer-in{from{opacity:0;transform:scale(.965) translateY(9px)}to{opacity:1;transform:none}}
+@keyframes backdrop-in{from{opacity:0}to{opacity:1}}
+@media(max-width:740px){.page{padding-top:30px}.layout{grid-template-columns:1fr;gap:13px}.chat{min-height:520px}.side{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.side h2,.side hr,.side .small,.pill{grid-column:1/-1}.step{margin:5px 0}dialog{width:100vw;height:100dvh;border:0;border-radius:0}.viewer{grid-template-rows:48px minmax(0,1fr)}.viewer-bar{padding:0 7px;gap:4px}.tool{min-width:28px;padding:0 7px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="eyebrow">KAIWU · IMAGE VIEWER</div>
+  <h1>双击放大生成图片</h1>
+  <p class="intro">在 AI 回复中双击图片打开大图层；保持原始比例，可缩放、拖动查看细节。</p>
+  <section class="layout" aria-label="双击放大预览">
+    <article class="chat">
+      <div class="chat-top"><span class="dot"></span><span>AI 对话</span><span style="margin-left:auto">当前会话</span></div>
+      <div class="messages">
+        <div class="user">生成一张温暖、自然光下的咖啡馆人像</div>
+        <div class="assistant">
+          <div class="avatar" aria-hidden="true">K</div>
+          <div class="reply">
+            <p>图片已经生成。双击图片可放大预览，不会离开当前对话。</p>
+            <div class="image-label">生成图片 · 2:3</div>
+            <div class="image-frame">
+              <button class="image-hit" id="imageHit" type="button" aria-label="双击放大生成图片" title="双击放大">
+                <img id="smallImage" alt="咖啡馆窗边的人像插画">
+              </button>
+              <span class="zoom-tip"><span class="zoom-glyph" aria-hidden="true">⌕</span>双击放大</span>
+            </div>
+            <p class="reply-note"><strong>交互说明：</strong>双击进入放大层；滚轮缩放，按住拖动平移，Esc 或右上角关闭。</p>
+          </div>
+        </div>
+      </div>
+    </article>
+    <aside class="side">
+      <h2>预览交互</h2>
+      <div class="step"><span class="num">01</span><span>双击图片，在当前窗口上方打开大图层。</span></div>
+      <div class="step"><span class="num">02</span><span>大图按可视区域适配，完整保留原图比例。</span></div>
+      <div class="step"><span class="num">03</span><span>滚轮缩放，拖动查看局部，Esc 关闭。</span></div>
+      <hr>
+      <p class="small">主对话仍留在原位置，关闭后回到刚才的阅读位置。示意图片为竖版 2:3。</p>
+      <span class="pill">原生比例 · 对话内查看</span>
+    </aside>
+  </section>
+</main>
+
+<dialog id="viewer" aria-label="生成图片放大预览">
+  <div class="viewer">
+    <header class="viewer-bar">
+      <div class="viewer-title"><i></i><span>生成图片</span></div>
+      <span class="zoom-level" id="zoomLevel" aria-live="polite">100%</span>
+      <button class="tool" id="zoomOut" type="button" aria-label="缩小">−</button>
+      <button class="tool" id="zoomIn" type="button" aria-label="放大">＋</button>
+      <button class="tool" id="resetZoom" type="button" aria-label="重置缩放">适配</button>
+      <button class="tool close" id="closeViewer" type="button" aria-label="关闭">×</button>
+    </header>
+    <div class="stage" id="stage">
+      <img class="large-image" id="largeImage" alt="咖啡馆窗边的人像插画放大预览">
+      <span class="drag-note">滚轮缩放 · 拖动查看 · Esc 关闭</span>
+    </div>
+  </div>
+</dialog>
+<script>
+const artwork = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1080">
+<defs>
+  <linearGradient id="wall" x2="0" y2="1"><stop stop-color="#b99c78"/><stop offset="1" stop-color="#765d48"/></linearGradient>
+  <linearGradient id="window" x2="0" y2="1"><stop stop-color="#d9e4dd"/><stop offset="1" stop-color="#718e8c"/></linearGradient>
+  <linearGradient id="shirt" x2="0" y2="1"><stop stop-color="#f4e9d8"/><stop offset="1" stop-color="#d8cabb"/></linearGradient>
+  <linearGradient id="skirt" x2="0" y2="1"><stop stop-color="#23364a"/><stop offset="1" stop-color="#111f2d"/></linearGradient>
+  <radialGradient id="sun"><stop stop-color="#fff6d5" stop-opacity=".9"/><stop offset="1" stop-color="#fff6d5" stop-opacity="0"/></radialGradient>
+  <filter id="soft"><feGaussianBlur stdDeviation="26"/></filter>
+</defs>
+<rect width="720" height="1080" fill="#b8a48d"/><rect width="355" height="1080" fill="url(#wall)"/>
+<rect x="365" y="0" width="355" height="1080" fill="url(#window)"/>
+<circle cx="540" cy="230" r="200" fill="url(#sun)"/>
+<g opacity=".62" filter="url(#soft)" fill="#45635f"><path d="M390 410h330v220H390z"/><path d="M440 95h88v420h-88z" fill="#e4eee7"/><circle cx="635" cy="540" r="130" fill="#617663"/></g>
+<path fill="#7b6551" d="M0 150h322v18H0zm0 196h322v17H0zm67-198h15v358H67zm171 0h15v358h-15z"/>
+<rect x="352" y="0" width="19" height="1080" fill="#554739"/><rect x="538" y="0" width="12" height="1080" fill="#d5d9cf" opacity=".6"/>
+<path fill="#4d4138" d="M0 662h720v418H0z"/><path fill="#aa8a69" d="M0 775h720v18H0z"/>
+<ellipse cx="376" cy="1005" rx="190" ry="42" fill="#101316" opacity=".27"/>
+<!-- person -->
+<path fill="#3b2922" d="M298 231c4-73 52-116 110-107 58 8 83 63 69 137l-16 91-145-11z"/>
+<ellipse cx="392" cy="273" rx="62" ry="78" fill="#eed3b9"/>
+<path fill="#3a2923" d="M328 252c-5-82 34-140 96-132 52 7 79 50 75 104-29-18-45-46-50-70-28 43-68 72-121 80z"/>
+<path fill="#d9b99b" d="M379 337h38v62h-38z"/>
+<path fill="url(#shirt)" d="M326 383q66-37 133 0l51 278-226 0z"/>
+<path fill="#c7b7a4" d="M329 402q-34 98-53 195l27 9q43-80 67-171zm124 0q39 98 58 196l-27 9q-44-80-69-171z"/>
+<path fill="#e4d4c3" d="m359 376 34 56 35-56 25 21-25 44h-71l-24-44z"/>
+<path fill="url(#skirt)" d="M284 658h226l-32 186q-80 36-164 0z"/>
+<path fill="#ecd2b7" d="M331 840h45l-7 158-39 4-13-12zm93 0h45l15 147-35 19-21-19z"/>
+<path fill="#302b29" d="M320 991q22 5 46 0l5 41q-38 19-78 1l-1-14zm135 0q19-5 38-1l26 29q12 19-7 21h-91q-11-11 1-24z"/>
+<path fill="#f4e8db" opacity=".75" d="M354 397q37 20 75 0l18 232H339z"/>
+<path fill="#fff2d9" opacity=".15" d="M0 0h720v1080H0z"/>
+</svg>`;
+const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(artwork)}`;
+const hit = document.getElementById('imageHit');
+const smallImage = document.getElementById('smallImage');
+const largeImage = document.getElementById('largeImage');
+const viewer = document.getElementById('viewer');
+const stage = document.getElementById('stage');
+const zoomLevel = document.getElementById('zoomLevel');
+let zoom = 1, x = 0, y = 0, drag = null;
+smallImage.src = largeImage.src = src;
+function paint(){largeImage.style.transform=`translate3d(${x}px,${y}px,0) scale(${zoom})`;zoomLevel.textContent=`${Math.round(zoom*100)}%`}
+function openViewer(){zoom=1;x=0;y=0;paint();viewer.showModal()}
+hit.addEventListener('dblclick',openViewer);
+hit.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openViewer()}});
+document.getElementById('closeViewer').addEventListener('click',()=>viewer.close());
+document.getElementById('zoomIn').addEventListener('click',()=>{zoom=Math.min(5,zoom*1.2);paint()});
+document.getElementById('zoomOut').addEventListener('click',()=>{zoom=Math.max(.5,zoom/1.2);paint()});
+document.getElementById('resetZoom').addEventListener('click',()=>{zoom=1;x=0;y=0;paint()});
+viewer.addEventListener('click',event=>{if(event.target===viewer)viewer.close()});
+stage.addEventListener('wheel',event=>{event.preventDefault();zoom=Math.max(.5,Math.min(5,zoom*(event.deltaY<0?1.12:1/1.12)));paint()},{passive:false});
+stage.addEventListener('pointerdown',event=>{if(event.button!==0)return;drag={x:event.clientX,y:event.clientY,ox:x,oy:y};stage.classList.add('dragging');stage.setPointerCapture(event.pointerId)});
+stage.addEventListener('pointermove',event=>{if(!drag)return;x=drag.ox+event.clientX-drag.x;y=drag.oy+event.clientY-drag.y;paint()});
+function endDrag(){drag=null;stage.classList.remove('dragging')}
+stage.addEventListener('pointerup',endDrag);stage.addEventListener('pointercancel',endDrag);
+</script>
+</body>
+</html>

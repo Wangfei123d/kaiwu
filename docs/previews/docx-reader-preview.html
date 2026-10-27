@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>开物 · DOCX 内置阅读器方案</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #100f0e;
+      --surface: #171615;
+      --surface-2: #1d1b19;
+      --paper: #f5f2ec;
+      --ink: #272521;
+      --line: #302d29;
+      --text: #e9e5e0;
+      --dim: #aaa39b;
+      --faint: #77716b;
+      --accent: #7ec8ff;
+      --accent-soft: rgba(126, 200, 255, .12);
+      --ok: #78c994;
+      font: 14px/1.5 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 760px; padding: 28px; background: radial-gradient(ellipse at 50% -20%, #22201d 0, var(--bg) 62%); }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    [hidden] { display: none !important; }
+    .page { width: min(1420px, 100%); margin: 0 auto; }
+    .intro { margin: 0 0 18px; }
+    .eyebrow { color: var(--accent); font-size: 10px; letter-spacing: .15em; text-transform: uppercase; }
+    h1 { margin: 5px 0 6px; font-size: 23px; font-weight: 650; }
+    .intro p { margin: 0; color: var(--dim); font-size: 13px; }
+    .callouts { display: flex; flex-wrap: wrap; gap: 7px; margin: 13px 0 0; }
+    .chip { padding: 4px 9px; border: 1px solid #393531; border-radius: 999px; color: #bfb9b1; font-size: 11px; }
+    .chip strong { color: var(--accent); font-weight: 550; }
+    .window { overflow: hidden; border: 1px solid #393531; border-radius: 11px; background: #121110; box-shadow: 0 22px 65px #0009; }
+    .titlebar { position: relative; display: flex; align-items: center; height: 45px; padding: 0 12px; border-bottom: 1px solid var(--line); background: #141312; -webkit-app-region: drag; }
+    .titlebar button, .titlebar .filename { -webkit-app-region: no-drag; }
+    .brand { display: grid; width: 31px; height: 31px; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--accent); }
+    .brand:hover { background: var(--accent-soft); }
+    .brand svg { width: 21px; height: 21px; }
+    .filename { display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0 auto; color: #c9c4bd; font-size: 12px; }
+    .doc-icon { display: grid; width: 18px; height: 20px; place-items: center; border-radius: 3px; background: #4e77b8; color: white; font-size: 10px; font-weight: 700; }
+    .filename-text { overflow: hidden; max-width: 36vw; text-overflow: ellipsis; white-space: nowrap; }
+    .readonly { padding: 2px 7px; border: 1px solid rgba(126,200,255,.24); border-radius: 999px; color: var(--accent); font-size: 10px; white-space: nowrap; }
+    .window-controls { display: flex; align-items: center; gap: 3px; margin-left: auto; color: var(--dim); }
+    .winbtn { width: 31px; height: 27px; border: 0; border-radius: 4px; background: transparent; color: inherit; }
+    .winbtn:hover { background: #ffffff13; }
+    .winbtn.close:hover { background: #c42b1c; color: white; }
+    .tabs { display: flex; align-items: end; gap: 3px; height: 37px; padding: 0 10px; border-bottom: 1px solid var(--line); background: #161514; }
+    .tab { display: flex; align-items: center; gap: 7px; height: 31px; padding: 0 10px; border: 0; border-radius: 6px 6px 0 0; background: transparent; color: var(--dim); font-size: 11px; }
+    .tab.active { border-bottom: 2px solid var(--accent); background: #201e1c; color: var(--text); }
+    .tab .tab-close { margin-left: 3px; color: var(--faint); }
+    .toolbar { display: flex; align-items: center; gap: 7px; min-height: 45px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: #191817; }
+    .toolgroup { display: flex; align-items: center; gap: 4px; padding-right: 8px; border-right: 1px solid #34312d; }
+    .toolgroup:last-child { border: 0; }
+    .tool { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 30px; height: 29px; padding: 0 8px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: #c5bfb7; font-size: 11px; cursor: pointer; }
+    .tool:hover { border-color: #3b3834; background: #242220; color: var(--text); }
+    .tool:focus-visible, .outline button:focus-visible, .search:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .tool svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .searchbox { display: flex; align-items: center; gap: 6px; width: min(275px, 25vw); height: 29px; padding: 0 8px; border: 1px solid #3a3733; border-radius: 5px; background: #11100f; color: var(--faint); }
+    .searchbox svg { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; }
+    .search { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 11px; }
+    .search::placeholder { color: #817b74; }
+    .match-count { color: var(--faint); font-size: 10px; white-space: nowrap; }
+    .spacer { flex: 1; }
+    .zoom-label { min-width: 39px; color: var(--dim); text-align: center; font-size: 11px; }
+    .layout { display: grid; grid-template-columns: 220px minmax(360px, 1fr) 236px; height: min(650px, 68vh); min-height: 450px; }
+    .outline { overflow: auto; padding: 15px 11px; border-right: 1px solid var(--line); background: #171615; }
+    .pane-heading { display: flex; align-items: center; justify-content: space-between; margin: 0 0 12px; color: #ddd8d1; font-size: 11px; font-weight: 600; }
+    .pane-heading small { color: var(--faint); font-size: 9px; font-weight: 400; }
+    .outline button { display: block; width: 100%; margin: 2px 0; padding: 7px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--dim); text-align: left; font-size: 11px; cursor: pointer; }
+    .outline button:hover { background: #242220; color: var(--text); }
+    .outline button.active { background: var(--accent-soft); color: #e7e2db; }
+    .outline .sub { padding-left: 20px; color: var(--faint); font-size: 10px; }
+    .source-card { margin-top: 20px; padding: 10px; border: 1px solid #34312e; border-radius: 7px; background: #1b1917; }
+    .source-label { color: var(--faint); font-size: 9px; letter-spacing: .05em; }
+    .source-name { margin-top: 5px; overflow-wrap: anywhere; color: #d4cec6; font-size: 10px; }
+    .source-note { margin-top: 8px; color: var(--faint); font-size: 9px; line-height: 1.6; }
+    .viewer { position: relative; overflow: auto; background: #252321; scroll-behavior: smooth; }
+    .viewer-top { position: sticky; z-index: 2; top: 0; display: flex; align-items: center; justify-content: space-between; height: 34px; padding: 0 13px; border-bottom: 1px solid #373330; background: rgba(31,29,27,.95); color: var(--faint); font-size: 10px; backdrop-filter: blur(8px); }
+    .page-stack { display: flex; flex-direction: column; align-items: center; gap: 17px; min-width: max-content; padding: 24px 34px 52px; }
+    .paper { width: 595px; min-height: 770px; padding: 63px 66px; background: var(--paper); color: var(--ink); box-shadow: 0 8px 26px #0006; transform-origin: top center; transition: transform 180ms ease; }
+    .paper + .paper { min-height: 770px; }
+    .paper-kicker { margin-bottom: 8px; color: #777167; font-size: 10px; letter-spacing: .08em; }
+    .paper h2 { margin: 0 0 14px; font-size: 25px; line-height: 1.3; font-weight: 700; }
+    .paper h3 { margin: 25px 0 10px; font-size: 16px; line-height: 1.45; }
+    .paper h4 { margin: 20px 0 7px; font-size: 13px; }
+    .paper p { margin: 0 0 13px; font-size: 12px; line-height: 1.85; text-align: justify; }
+    .paper .meta { margin: 0 0 24px; color: #777167; font-size: 10px; }
+    .paper ul { margin: 4px 0 15px; padding-left: 19px; font-size: 11px; line-height: 1.8; }
+    .paper table { width: 100%; margin: 11px 0 17px; border-collapse: collapse; font-size: 10px; }
+    .paper th, .paper td { padding: 7px; border: 1px solid #c9c4bb; text-align: left; }
+    .paper th { background: #e9e5dc; font-weight: 650; }
+    .paper .figure { display: grid; height: 108px; place-items: center; margin: 13px 0; border: 1px solid #d5d0c6; background: linear-gradient(135deg, #e4e0d8, #f1eee7); color: #918a7e; font-size: 10px; }
+    .paper-footer { display: flex; justify-content: space-between; margin-top: 48px; border-top: 1px solid #d3cec4; padding-top: 8px; color: #8b8479; font-size: 9px; }
+    mark { border-radius: 2px; background: #f5de88; color: #272521; }
+    .details { overflow: auto; padding: 15px 13px; border-left: 1px solid var(--line); background: #171615; }
+    .detail-block { margin: 0 0 17px; padding-bottom: 15px; border-bottom: 1px solid #302d29; }
+    .detail-title { margin: 0 0 9px; color: var(--dim); font-size: 10px; font-weight: 550; }
+    .detail-row { display: flex; justify-content: space-between; gap: 9px; margin: 7px 0; color: var(--faint); font-size: 10px; }
+    .detail-row strong { color: #c7c1b8; font-weight: 450; text-align: right; }
+    .readonly-card { padding: 10px; border: 1px solid rgba(126,200,255,.16); border-radius: 7px; background: rgba(126,200,255,.055); color: #b8cddd; font-size: 10px; line-height: 1.65; }
+    .readonly-card svg { width: 15px; height: 15px; margin-right: 5px; vertical-align: -3px; fill: none; stroke: var(--accent); stroke-width: 1.6; }
+    .toast { position: fixed; right: 24px; bottom: 22px; padding: 10px 13px; border: 1px solid #45413c; border-radius: 7px; background: #252220; box-shadow: 0 8px 25px #0008; color: var(--text); font-size: 11px; opacity: 0; transform: translateY(8px); pointer-events: none; transition: .2s ease; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .footnote { margin: 10px 2px 0; color: var(--faint); font-size: 10px; }
+    @media (max-width: 1050px) { .layout { grid-template-columns: 185px minmax(330px,1fr); } .details { display: none; } }
+    @media (max-width: 760px) { body { min-width: 0; padding: 15px; } .layout { grid-template-columns: 145px minmax(320px,1fr); height: 70vh; } .searchbox { width: 155px; } .tool span { display: none; } .paper { width: 520px; padding: 52px 48px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="intro">
+      <div class="eyebrow">Kaiwu · Document reader</div>
+      <h1>DOCX 内置阅读器</h1>
+      <p>从笔记树打开 DOCX 后，在开物内部以只读标签阅读。左侧目录可跳转章节，工具栏提供文内搜索与缩放，原文件保持不变。</p>
+      <div class="callouts"><span class="chip"><strong>内部标签</strong> · 不离开工作台</span><span class="chip"><strong>只读预览</strong> · 不改动原件</span><span class="chip"><strong>可交互样例</strong> · 目录 / 搜索 / 缩放</span></div>
+    </header>
+
+    <section class="window" aria-label="DOCX 阅读器预览">
+      <div class="titlebar">
+        <button class="brand" aria-label="开物" type="button"><svg viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M28 20V80M28 50L72 21M28 50L72 79"/></g><circle cx="28" cy="50" r="14" fill="currentColor"/></svg></button>
+        <div class="filename"><span class="doc-icon">W</span><span class="filename-text">项目实施方案.docx</span><span class="readonly">只读</span></div>
+        <div class="window-controls" aria-label="窗口控制"><button class="winbtn" aria-label="最小化">—</button><button class="winbtn" aria-label="最大化">□</button><button class="winbtn close" aria-label="关闭">×</button></div>
+      </div>
+      <nav class="tabs" aria-label="工作台标签">
+        <button class="tab" type="button">AI 会话</button><button class="tab" type="button">笔记</button><button class="tab active" type="button"><span class="doc-icon">W</span>项目实施方案.docx <span class="tab-close">×</span></button>
+      </nav>
+      <div class="toolbar" role="toolbar" aria-label="文档阅读工具">
+        <div class="toolgroup"><label class="searchbox" aria-label="搜索文档"><svg viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input class="search" id="searchInput" placeholder="在文档中搜索…" autocomplete="off"><span class="match-count" id="matchCount"></span></label></div>
+        <div class="toolgroup"><button class="tool" id="zoomOut" type="button" aria-label="缩小">−</button><span class="zoom-label" id="zoomLabel">100%</span><button class="tool" id="zoomIn" type="button" aria-label="放大">＋</button><button class="tool" id="fitPage" type="button" title="适合页面"><svg viewBox="0 0 20 20"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4"/></svg><span>适合页面</span></button></div>
+        <div class="spacer"></div><div class="toolgroup"><button class="tool" id="prevPage" type="button" title="上一页">↑</button><span class="zoom-label" id="pageLabel">1 / 2 页</span><button class="tool" id="nextPage" type="button" title="下一页">↓</button></div>
+      </div>
+
+      <div class="layout">
+        <aside class="outline" aria-label="文档目录">
+          <h2 class="pane-heading">文档目录 <small>4 个章节</small></h2>
+          <button class="active" data-target="sec-overview" type="button">1　项目概述</button>
+          <button class="sub" data-target="sec-goal" type="button">1.1　建设目标</button>
+          <button data-target="sec-scope" type="button">2　实施范围</button>
+          <button data-target="sec-plan" type="button">3　实施计划</button>
+          <button data-target="sec-risk" type="button">4　风险与保障</button>
+          <div class="source-card"><div class="source-label">源文件位置</div><div class="source-name">项目 / 2026 / 项目实施方案.docx</div><div class="source-note">打开的是笔记库中的原始文件。阅读与搜索不会写入文件。</div></div>
+        </aside>
+
+        <section class="viewer" id="viewer" aria-label="文档页面">
+          <div class="viewer-top"><span>项目 / 2026 / 项目实施方案.docx</span><span>阅读预览</span></div>
+          <div class="page-stack" id="pageStack">
+            <article class="paper" id="page1">
+              <div class="paper-kicker">开物项目组 · 内部方案</div>
+              <h2 id="sec-overview">项目实施方案</h2>
+              <p class="meta">版本 1.3　|　2026 年 10 月　|　项目负责人：林知远</p>
+              <p>本方案说明项目的建设目标、实施范围、交付节奏与验收方式。开物阅读器保留 DOCX 的常见段落层级、列表和表格结构，便于在工作台中快速查阅。</p>
+              <h3 id="sec-goal">1.1 建设目标</h3>
+              <p>建立统一、可扩展的桌面工作台，让资料浏览、笔记整理与工具操作能够在同一工作空间完成。文档阅读采用只读模式，确保查看过程不会改变源文件。</p>
+              <ul><li>从笔记库中的文件列表直接打开 DOCX；</li><li>按照文档标题生成可点击的章节目录；</li><li>搜索关键词并定位到正文中的匹配位置。</li></ul>
+              <h3 id="sec-scope">2. 实施范围</h3>
+              <p>首期支持常见 DOCX 文本、标题、项目符号、编号列表、表格和内嵌图片。文档按章节组织，保留适合阅读的页面宽度，并可在大纲与正文之间快速切换。</p>
+              <table><thead><tr><th>模块</th><th>支持内容</th><th>状态</th></tr></thead><tbody><tr><td>正文</td><td>标题、段落、列表</td><td>支持</td></tr><tr><td>表格</td><td>单元格、边框、底色</td><td>支持</td></tr><tr><td>复杂排版</td><td>分栏、浮动对象、宏</td><td>按兼容说明处理</td></tr></tbody></table>
+              <div class="paper-footer"><span>开物 · DOCX 阅读预览</span><span>1</span></div>
+            </article>
+            <article class="paper" id="page2">
+              <div class="paper-kicker">项目实施方案 · 续</div>
+              <h3 id="sec-plan">3. 实施计划</h3>
+              <p>阅读器分为文件识别、DOCX 内容解析和工作台呈现三个环节。点击笔记树中的 DOCX 后，开物读取文件并在新的内部标签展示预览，不覆盖、不另存，也不把文件内容发送到外部服务。</p>
+              <table><thead><tr><th>阶段</th><th>主要工作</th><th>交付物</th></tr></thead><tbody><tr><td>解析</td><td>读取文档结构与资源</td><td>标题、段落、表格</td></tr><tr><td>呈现</td><td>建立页视图与目录联动</td><td>内置阅读标签</td></tr><tr><td>校验</td><td>展示兼容性提示</td><td>清晰的阅读反馈</td></tr></tbody></table>
+              <div class="figure">DOCX 内嵌图片预览区域</div>
+              <h3 id="sec-risk">4. 风险与保障</h3>
+              <p>遇到复杂排版或不支持的对象时，阅读器保留可解析的正文并提示兼容情况。加密文档、损坏文件或无法识别的内容会显示明确错误，并提供重新打开入口。</p>
+              <p>大文档采用按需呈现，目录跳转与搜索保持响应。原始文件位置始终可见，帮助用户确认正在查看的文档来源。</p>
+              <div class="paper-footer"><span>开物 · DOCX 阅读预览</span><span>2</span></div>
+            </article>
+          </div>
+        </section>
+
+        <aside class="details" aria-label="文档信息">
+          <div class="detail-block"><h2 class="detail-title">文档信息</h2><div class="detail-row"><span>格式</span><strong>Word 文档</strong></div><div class="detail-row"><span>页数</span><strong>2 页</strong></div><div class="detail-row"><span>段落</span><strong>12</strong></div><div class="detail-row"><span>图片</span><strong>1 张</strong></div></div>
+          <div class="detail-block"><h2 class="detail-title">阅读状态</h2><div class="detail-row"><span>当前位置</span><strong id="positionLabel">第 1 页</strong></div><div class="detail-row"><span>缩放</span><strong id="sideZoom">100%</strong></div></div>
+          <div class="readonly-card"><svg viewBox="0 0 20 20"><rect x="4" y="8" width="12" height="9" rx="2"/><path d="M7 8V5a3 3 0 0 1 6 0v3m-3 4v2"/></svg>只读阅读。原始 DOCX 不会被修改。</div>
+        </aside>
+      </div>
+    </section>
+    <p class="footnote">交互说明：点目录定位章节；输入关键词可在正文中搜索；缩放和页码按钮用于检查阅读状态。</p>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script>
+    (() => {
+      const viewer = document.getElementById('viewer');
+      const papers = [...document.querySelectorAll('.paper')];
+      const zoomLabel = document.getElementById('zoomLabel');
+      const sideZoom = document.getElementById('sideZoom');
+      const matchCount = document.getElementById('matchCount');
+      const searchInput = document.getElementById('searchInput');
+      const toast = document.getElementById('toast');
+      let zoom = 100;
+      let toastTimer;
+      const announce = (message) => {
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 2100);
+      };
+      const applyZoom = () => {
+        papers.forEach((paper) => paper.style.transform = `scale(${zoom / 100})`);
+        zoomLabel.textContent = `${zoom}%`;
+        sideZoom.textContent = `${zoom}%`;
+      };
+      document.getElementById('zoomOut').addEventListener('click', () => { zoom = Math.max(70, zoom - 10); applyZoom(); });
+      document.getElementById('zoomIn').addEventListener('click', () => { zoom = Math.min(140, zoom + 10); applyZoom(); });
+      document.getElementById('fitPage').addEventListener('click', () => { zoom = 100; applyZoom(); announce('已适合页面'); });
+      document.getElementById('prevPage').addEventListener('click', () => viewer.scrollTo({ top: 0, behavior: 'smooth' }));
+      document.getElementById('nextPage').addEventListener('click', () => document.getElementById('page2').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      document.querySelectorAll('.outline button[data-target]').forEach((button) => button.addEventListener('click', () => {
+        document.querySelectorAll('.outline button').forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+        document.getElementById(button.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }));
+      const clearMarks = () => document.querySelectorAll('mark[data-search]').forEach((mark) => mark.replaceWith(document.createTextNode(mark.textContent)));
+      const runSearch = () => {
+        clearMarks();
+        const query = searchInput.value.trim();
+        if (!query) { matchCount.textContent = ''; return; }
+        const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        let count = 0;
+        papers.forEach((paper) => {
+          const walker = document.createTreeWalker(paper, NodeFilter.SHOW_TEXT, { acceptNode(node) {
+            return node.parentElement?.closest('mark, .paper-footer') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+          }});
+          const nodes = [];
+          while (walker.nextNode()) if (regex.test(walker.currentNode.nodeValue)) { regex.lastIndex = 0; nodes.push(walker.currentNode); }
+          nodes.forEach((node) => {
+            const fragment = document.createDocumentFragment();
+            let last = 0;
+            for (const match of node.nodeValue.matchAll(regex)) {
+              if (match.index > last) fragment.append(node.nodeValue.slice(last, match.index));
+              const mark = document.createElement('mark'); mark.dataset.search = 'true'; mark.textContent = match[0]; fragment.append(mark); count++; last = match.index + match[0].length;
+            }
+            if (last < node.nodeValue.length) fragment.append(node.nodeValue.slice(last));
+            node.replaceWith(fragment);
+          });
+        });
+        matchCount.textContent = count ? `${count} 处` : '无匹配';
+        document.querySelector('mark[data-search]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+      searchInput.addEventListener('input', runSearch);
+      document.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); searchInput.focus(); searchInput.select(); }
+      });
+      document.getElementById('pageStack').addEventListener('scroll', () => {});
+      viewer.addEventListener('scroll', () => {
+        const secondPage = document.getElementById('page2').getBoundingClientRect().top < viewer.getBoundingClientRect().top + viewer.clientHeight * .45;
+        document.getElementById('pageLabel').textContent = secondPage ? '2 / 2 页' : '1 / 2 页';
+        document.getElementById('positionLabel').textContent = secondPage ? '第 2 页' : '第 1 页';
+      }, { passive: true });
+    })();
+  </script>
+</body>
+</html>

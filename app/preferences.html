@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="Content-Security-Policy"
+              content="default-src 'self' toolbox:; img-src 'self' toolbox: data: blob: https:; style-src 'self' toolbox: 'unsafe-inline'; script-src 'self' toolbox:; connect-src 'self' toolbox: http://localhost:* http://127.0.0.1:*">
+        <title>首选项 — 开物</title>
+        <link rel="stylesheet" href="toolbox://shell/styles/tokens.css">
+        <link rel="stylesheet" href="toolbox://shell/styles/base.css">
+        <link rel="stylesheet" href="toolbox://shell/styles/shell.css">
+        <link rel="stylesheet" href="toolbox://shell/styles/settings-page.css">
+    </head>
+    <body class="preferences-window">
+        <main class="pane-settings" id="paneSettings">
+            <div class="settings-head">
+                <input type="search" class="settings-search" id="settingsSearch"
+                       placeholder="搜索设置项(试试:密钥 / 布局 / 服务 / 动效)"
+                       aria-label="搜索设置项">
+                <span class="settings-overview" id="settingsOverview"></span>
+            </div>
+            <div class="settings-split">
+                <nav class="settings-nav" id="settingsNav" role="tablist"
+                     aria-label="设置分区"></nav>
+                <div class="settings-body" id="settingsBody"></div>
+            </div>
+        </main>
+        <script type="module" src="toolbox://shell/preferences.js"></script>
+    </body>
+</html>

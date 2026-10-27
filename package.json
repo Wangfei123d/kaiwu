@@ -12,6 +12,13 @@
     "selftest": "node electron/run-selftest.js",
     "selftest:acceptance": "node electron/run-selftest.js --acceptance"
   },
-  "engines": { "node": ">=22.12.0" },
-  "devDependencies": { "electron": "44.4.1" }
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "electron": "44.4.1"
+  },
+  "dependencies": {
+    "mammoth": "^1.13.0"
+  }
 }

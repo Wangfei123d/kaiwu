@@ -8,6 +8,7 @@ import { createSession } from './session.js';
 
 const imagePath = file => /\.(png|jpe?g|webp|gif|bmp)$/i.test(file);
 const notePath = file => /\.(md|txt)$/i.test(file);
+const canvasPath = file => typeof file === 'string' && /^画布\/[^/]+\.canvas$/.test(file);
 const safeUrl = value => { try { return ['http:','https:'].includes(new URL(value).protocol); } catch { return false; } };
 const uid = () => crypto.randomUUID();
 const contained = (a,b) => b.x>=a.x && b.y>=a.y && b.x+b.width<=a.x+a.width && b.y+b.height<=a.y+a.height;
@@ -83,6 +84,7 @@ export function mountCanvas(host,ctx) {
         loadingPath=path;let result;try{result=await ctx.canvas.read(path,vault);}finally{if(stamp===epoch)loadingPath=null;}if(dead||stamp!==epoch||vault!==library.vault||result.vault!==vault)return;
         session?.dispose();session=createSession({...result,write:ctx.canvas.write,changed:updateStatus});vaultMismatch=false;selected.clear();resources.clear();clearConnection();
         title.textContent=path.split('/').pop().replace(/\.canvas$/i,'');const viewport=session.graph.viewport??{x:40,y:40,scale:1};zoomLayout.sync(viewport.scale);nav.set(viewport);renderLibrary();renderGraph();updateStatus();
+        globalThis.dispatchEvent(new CustomEvent('kaiwu:canvas-opened',{detail:{path}}));
         const draft=session.extras.editor;if(draft)openEditorDraft(draft);
     }
     function closeModal(){modal?.remove();modal=null;}
@@ -95,6 +97,8 @@ export function mountCanvas(host,ctx) {
         await flushActive();stopMotion();const vault=library.vault,stamp=++epoch,result=await ctx.canvas.create(name.trim(),vault);
         if(dead||stamp!==epoch||vault!==library.vault||result.vault!==vault)return;
         session?.dispose();session=createSession({...result,write:ctx.canvas.write,changed:updateStatus});selected.clear();resources.clear();clearConnection();vaultMismatch=false;title.textContent=name.trim();zoomLayout.sync(1);nav.set({x:40,y:40,scale:1});renderGraph();updateStatus();await refreshLibrary();
+        globalThis.dispatchEvent(new CustomEvent('kaiwu:canvas-opened',{detail:{path:result.path}}));
+        globalThis.dispatchEvent(new Event('kaiwu:canvas-list-changed'));
     },{action:'创建',placeholder:'画布名称'});}
     function addNode(type,fields={},point){
         let origin;
@@ -289,6 +293,13 @@ export function mountCanvas(host,ctx) {
         if(action.kind==='pan'){saveViewport();if(action.started && performance.now()-action.lastTime<80)nav.coast(action.vx,action.vy);}
         else if(action.kind==='port'&&action.started){const port=doc.elementFromPoint(event.clientX,event.clientY)?.closest('.nc-port');clearConnection();if(port){portSource={node:action.node,side:action.side};connect(port.closest('.nc-node').dataset.nodeId,port.dataset.side);}}
     }
+    async function openCanvasFromList(path){
+        if(!canvasPath(path))throw Error('画布路径无效');
+        if(!library.boards.some(board=>board.path===path))await refreshLibrary();
+        if(!library.boards.some(board=>board.path===path))throw Error('当前笔记库中找不到该画布');
+        await openBoard(path);
+    }
+    listen(globalThis,'kaiwu:open-canvas',event=>{void openCanvasFromList(event.detail?.path).catch(showError);});
     listen(pane,'pointerdown',event=>{const target=event.target,insideNode=target.closest?.('.nc-node');if(inlineEditId){const surface=cardById(inlineEditId)?.querySelector('.live-markdown-content');if(!surface?.contains(target))exitInlineEdit();}if(!insideNode)clickCandidate=null;});
     listen(canvas,'pointerdown',pointerDown);listen(canvas,'pointermove',pointerMove);listen(canvas,'pointerup',pointerUp);listen(canvas,'click',nodeClick);listen(canvas,'dblclick',createTextAtDoubleClick);listen(canvas,'pointerleave',clearNearbyPort);listen(canvas,'pointercancel',stopMotion);listen(canvas,'contextmenu',contextMenu);
     listen(canvas,'wheel',event=>{event.preventDefault();wheelNavigation(event);},{passive:false});

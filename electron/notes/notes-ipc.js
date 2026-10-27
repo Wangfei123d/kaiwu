@@ -12,6 +12,7 @@ import {
 } from './note-index.js';
 import { resolveInsideReal, isNotePath, isMarkdownPath, noteKindOf } from '../../app/lib/vault-path.js';
 import { readFrontmatter } from '../../app/lib/frontmatter.js';
+import { convertDocxBuffer } from './docx-reader.js';
 
 // 全局设置的命名空间(不属于任何插件)。与 main.js 的 GLOBAL_NS 保持一致。
 const GLOBAL_NS = '__global';
@@ -26,6 +27,7 @@ const LAST_VAULT_KEY = 'lastVault';
  * 在**动盘之前**给出人话,而不是等 fs 抛出那句不含标题的 ENOENT。
  */
 const MAX_TITLE_LENGTH = 100;
+const MAX_DOCX_BYTES = 64 * 1024 * 1024;
 
 /**
  * Windows 保留设备名。Win32 把它们当设备而不是文件,而且**忽略扩展名**
@@ -402,6 +404,38 @@ export function registerNotesIpc({ ipcMain, dialog, settings, getWindow, shell =
             return readNote(root, relPath);
         },
 
+        // ---- 只读 DOCX 转换 ----
+        // 渲染层只递 Vault 内相对路径；绝对路径、文件读取与转换都留在主进程。
+        'notes:readDocx': async (_event, { path: relPath } = {}) => {
+            const root = requireVault();
+            if (typeof relPath !== 'string' || relPath === '') throw new Error('path 必填');
+            if (path.extname(relPath).toLowerCase() !== '.docx') throw new Error('只支持 .docx 文档');
+            const abs = resolveInsideReal(root, relPath);
+            if (abs === null) throw new Error('路径越出笔记库');
+
+            const stat = await fs.promises.stat(abs).catch(() => null);
+            if (!stat?.isFile()) throw new Error(`找不到 DOCX 文档:${relPath}`);
+            if (stat.size > MAX_DOCX_BYTES) throw new Error('DOCX 文件超过 64 MiB，暂不支持在开物中预览');
+
+            try {
+                const buffer = await fs.promises.readFile(abs);
+                if (buffer.byteLength > MAX_DOCX_BYTES) throw new Error('DOCX 文件超过 64 MiB，暂不支持在开物中预览');
+                const converted = await convertDocxBuffer(buffer);
+                const latest = await fs.promises.stat(abs);
+                if (latest.size > MAX_DOCX_BYTES) throw new Error('DOCX 文件超过 64 MiB，暂不支持在开物中预览');
+                return {
+                    ...converted,
+                    size: latest.size,
+                    mtimeMs: latest.mtimeMs,
+                };
+            } catch (err) {
+                const message = String(err?.message ?? err);
+                if (/password|encrypt/i.test(message)) throw new Error('文档受密码保护，开物无法预览');
+                if (message.includes('超过 64 MiB')) throw new Error(message);
+                throw new Error(`DOCX 文档无法解析:${message}`);
+            }
+        },
+
         'notes:write': async (_event, { path: relPath, text } = {}) => {
             const root = requireVault();
             if (typeof text !== 'string') throw new Error('text 必须是字符串');
@@ -507,10 +541,10 @@ export function registerNotesIpc({ ipcMain, dialog, settings, getWindow, shell =
             return { from, to };
         },
 
-        // ---- 用系统程序打开一个**非笔记文件** ----
+        // ---- 用系统程序打开一个**非笔记文件**(DOCX 除外,走只读转换器) ----
         //
         // 树里现在也列图片 / docx / json / txt(不列的话它们根本无从"拖进文件夹"),
-        // 而它们没有正文可编辑 —— 点一下的自然语义就是"用系统程序打开"。
+        // 这里负责图片 / json 等外部文件；DOCX 走只读转换通道。
         //
         // 边界与其它 notes:* 通道一致:渲染进程只递**相对路径**,由主进程过
         // resolveInsideReal 的真实路径层(挡 ../ 与符号链接逃逸)再交给 shell。

@@ -21,6 +21,8 @@ import {
 // 黏贴截图:判据(类型白名单 / 单张与总量上限 / 那一句中文原因)只有一份 ——
 // 渲染层用同一份做**即时反馈**,主进程用同一份做**权威校验**。
 import { validateImageCandidate, imagePromptFailureHint, imageCapabilityRefusal, stripIpcWrapper } from '../lib/agent-image.js';
+import { createImageGenerationPreview, disposeImageGenerationViewer, showGeneratedImages } from './image-generation-preview.js';
+import { failedImageTool, planGeneratedImages } from '../lib/agent-generated-images.js';
 import {
     MODEL_CONFIG_ID, REASONING_CONFIG_ID, chipLabel, configOptionOf, effortIndexOf,
     effortLevels, modelGroups,
@@ -35,6 +37,7 @@ import {
 // Markdown 走**建节点**那一版渲染器:面板的规矩是"绝不 innerHTML 拼字符串",而这里的
 // 内容来自模型。同一条解析也喂着笔记预览(那边出 HTML 字符串),规则只有一份。
 import { renderMarkdownNodes } from '../lib/markdown.js';
+import { createReplyPlayback } from './reply-playback.js';
 // 「接着聊」:对端**不重放旧消息**,所以历史由开物自己的台账铺回来 ——
 // 记录 → 步骤(用户消息 / 归约事件)那一层是纯函数,单测钉着(会话记录格式也在那里)。
 import { recordToSteps } from '../lib/session-record.js';
@@ -399,18 +402,19 @@ export function createAgentPanel({
 } = {}) {
     const doc = els.panel?.ownerDocument ?? globalThis.document;
     const {
-        panel, statusEl, retryBtn, messagesEl, inputEl, sendBtn, credentialEl, killBtn = null,
+        panel, statusEl, retryBtn, messagesEl, inputEl, sendBtn, credentialEl,
         // 思考强度 / 模型那枚胶囊(与它外面那层锚点)。**可选**:旧外壳/测试替身没有它时,
-        // 面板照常工作 —— 只是没有这一枚控件(与 killBtn 同一条规矩)。
+        // 面板照常工作。
         configBtn = null, configWrap = null,
     } = els;
 
     let state = initialStreamState();
     let renderQueued = false;
+    let disposed = false;
     let credentials = null;
     let started = false;              // 挂载时自动 start 只做一次(重试走按钮)
     let starting = false;             // start() 在飞,防连点
-    let killRequested = false;        // 刚按过「停止进程」:提示卡要留一个「重试」出口(见 killProcess)
+    let killRequested = false;        // 进程被用户停止后:提示卡要留一个「重试」出口
     let footerEl = null;              // 输入区那张卡片(机器可读的 data-ctx 挂在它上面)
     let noticeEl = null;              // 连接失败时对话里那张提示卡(懒建)
     // 思考条与工具摘要行的"用户展开过"状态按 id / 组键记(不再是一个全局布尔:现在
@@ -489,7 +493,7 @@ export function createAgentPanel({
 
     // ---------- 骨架:状态区 / 消息流 / 权限卡 / 凭证卡 / 输入区 ----------
     //
-    // 状态区与输入区在 index.html 里已经带了按钮(#agentRetry / #agentKill /
+    // 状态区与输入区在 index.html 里已经带了按钮(#agentRetry /
     // #agentInput / #agentSend —— 发送与取消已经合成**一颗球**,见下面的 ensureOrb),
     // 所以这里只**补齐**缺的部分:
     // 状态文字插在最前面(按钮留在后面),输入框与球若已经存在就不再造一个。
@@ -558,9 +562,7 @@ export function createAgentPanel({
     }
     // ⚠️ 这里**不再补任何 placeholder**(用户要求输入区没有任何可见引导文字)。
 
-    // ⚠️ 卡片顶端那一行现在**什么都不常驻**(用户要求:密钥按钮、停止按钮、上下文文字、
-    // 最后连那个状态点也删掉了)。这一行只剩一个用途:Agent 不正常时「停止进程」的落点 ——
-    // 平时整行 `hidden`(不占高度、不占间距),所以聊天框上面是干净的。
+    // 卡片顶端只在连接中显示提示，其余状态整行 `hidden`(不占高度、不占间距)。
     // 上下文信息不丢,改挂在**输入框**上(placeholder 短句 + title 全句,见 renderContext)。
     // 所以这里不再建任何节点,只在渲染时把那一行按需显隐(见 renderStatus)。
 
@@ -606,13 +608,6 @@ export function createAgentPanel({
         }
         if (retryBtn.textContent === '') retryBtn.textContent = '重试';
     }
-    if (killBtn) {
-        if (typeof killBtn.getAttribute === 'function' && killBtn.getAttribute('aria-label') === null) {
-            setAria(killBtn, 'aria-label', '停止 Agent 进程');
-        }
-        if (killBtn.textContent === '') killBtn.textContent = '停止进程';
-    }
-
     const inputRow = el(doc, 'div', 'agent-input-row');
     if (input.parentNode === null) inputRow.appendChild(input);
     for (const b of [sendBtn]) {
@@ -655,11 +650,10 @@ export function createAgentPanel({
         const existingFooter = (input.parentNode !== null) ? findFooter(input) : null;
         const footer = existingFooter ?? el(doc, 'footer', 'agent-footer');
         if (existingFooter === null) {
-            // 现场造一个空的骨架时也要有那一行:它是「正在连接…」与「停止进程」的落点(平时 hidden)
+            // 现场造一个空的骨架时也要有连接提示行(平时 hidden)
             const row = el(doc, 'div', 'agent-ctx-row');
             row.hidden = true;
             row.appendChild(el(doc, 'span', 'agent-ctx-hint', ''));
-            row.appendChild(el(doc, 'button', 'agent-ctx-stop', '停止进程'));
             footer.appendChild(row);
             footer.appendChild(inputRow);
             footer.appendChild(el(doc, 'div', 'agent-act-row'));
@@ -1764,8 +1758,79 @@ export function createAgentPanel({
         credentialEl.dataset.state = kind;
     }
 
-    /** 流式正文里"还在显影"的那几个字(渐变擦除的宽度,与 shell.css 的 .agent-tail 一致)。 */
-    const TAIL_CHARS = 8;
+    // 每条消息的显示游标独立于归约状态，结构重画、收尾都不重置播放器。
+    const replyViews = new Map();
+    const imageGenerationViews = new Map();
+    let imageGenerationPlan = { generations: [], omittedByMessage: new Map(), currentTurn: 0 };
+    let imageGenerationShape = '';
+
+    function toolsOfUnit(unit) {
+        return unit.kind === 'group' ? unit.tools : unit.kind === 'tool' ? [unit.tool] : [];
+    }
+
+    function clearImageGenerationViews() {
+        for (const view of imageGenerationViews.values()) view.parentNode?.removeChild(view);
+        imageGenerationViews.clear();
+    }
+
+    function syncImageGenerationViews() {
+        const running = state.busy === true && (state.status.state === 'ready' || state.status.state === 'starting');
+        const active = imageGenerationPlan.generations.filter(call => call.images.length > 0
+            || (running && call.turn === imageGenerationPlan.currentTurn && !failedImageTool(call.tool)));
+        const ids = new Set(active.map(call => call.toolCallId));
+        for (const [id, view] of imageGenerationViews) {
+            if (ids.has(id)) continue;
+            view.parentNode?.removeChild(view);
+            imageGenerationViews.delete(id);
+        }
+        for (const call of active) {
+            if (!imageGenerationViews.has(call.toolCallId)) {
+                imageGenerationViews.set(call.toolCallId, createImageGenerationPreview({ doc, toolCallId: call.toolCallId }));
+            }
+            showGeneratedImages({ doc, preview: imageGenerationViews.get(call.toolCallId), images: call.images, aspectRatio: call.aspectRatio });
+        }
+        imageGenerationShape = JSON.stringify(active.map(call => [call.toolCallId, call.aspectRatio ?? null, call.images.map(image => image.url)]));
+    }
+
+    function imageViewsOfUnit(unit) {
+        return toolsOfUnit(unit).map(tool => imageGenerationViews.get(tool.toolCallId)).filter(Boolean);
+    }
+    function paintReplyEntry(entry) {
+        if (entry.textEl) entry.textEl.hidden = entry.player.text === '';
+        if (entry.copyButton) entry.copyButton.hidden = entry.player.active;
+        if (entry.bubble) {
+            if (entry.player.active) entry.bubble.setAttribute('data-streaming', 'true');
+            else entry.bubble.removeAttribute?.('data-streaming');
+        }
+    }
+    function clearReplyViews() {
+        for (const entry of replyViews.values()) entry.player.dispose();
+        replyViews.clear();
+    }
+    function syncReplyViews() {
+        imageGenerationPlan = planGeneratedImages(timelineOf(state));
+        const ids = new Set(asArray(state.messages).map(message => message.id));
+        for (const [id, entry] of replyViews) {
+            if (!ids.has(id)) { entry.player.dispose(); replyViews.delete(id); }
+        }
+        for (const message of asArray(state.messages)) {
+            if (message.role !== 'assistant') continue;
+            let entry = replyViews.get(message.id);
+            if (!entry && (message.done === true || message.text === '')) continue;
+            if (!entry) {
+                entry = { player: null, bubble: null, textEl: null };
+                entry.player = createReplyPlayback({ doc, onPaint: () => {
+                    paintReplyEntry(entry);
+                    scrollToBottom();
+                    scheduleRailFrame();
+                }, renderMarkdown: (targetDoc, text, options) => renderMarkdownNodes(targetDoc, text, {
+                    ...options, omitImageUrls: imageGenerationPlan.omittedByMessage.get(message.id),
+                }), getRenderKey: () => JSON.stringify([...(imageGenerationPlan.omittedByMessage.get(message.id) ?? [])]) });
+                replyViews.set(message.id, entry);
+            }
+            entry.player.update(message.text, message.done);
+        }
+    }
 
     /**
      * 增量渲染的缓存(见 renderMessages 顶上的快速通道)。
@@ -1816,7 +1881,7 @@ export function createAgentPanel({
      * ⚠️ 它现在是从**渲染单元**算出来的,不是从三个数组:时间线的顺序、分组的边界、
      * 以及"哪个工具进了哪一组"都会改变结构,漏掉任何一项,快速通道就会拿旧节点
      * 凑合新结构(表现是新增的卡片不出现)。
-     * 正文长度跨过 TAIL_CHARS 会让尾巴那一层出现/消失,所以那个布尔算结构变化。
+     * 正文由独立播放器增量协调，文字长度不再影响列表结构。
      */
     function shapeOf(units) {
         return JSON.stringify(units.map((unit) => {
@@ -1838,7 +1903,6 @@ export function createAgentPanel({
             //    漏了就会当场抛(整条消息列表画不出来)。
             if (unit.kind === 'noReply') return ['noreply', unit.tools, unit.thoughts];
             return ['msg', unit.message.id, unit.message.role, unit.message.done === true,
-                unit.message.text.length > TAIL_CHARS,
                 // 四段状态行的**结构**指纹:有哪些行、每行什么状态。
                 // ⚠️ 刻意**不含百分比/秒数/字数** —— 那些每 60ms 就变一次,放进指纹
                 // 就等于每来一片正文都重建整条消息列表(扫光动画会一遍遍从头开始)。
@@ -1849,8 +1913,7 @@ export function createAgentPanel({
 
     /** 快速通道:结构没变,只把变了的文本写进去(节点不动 → 动画不会重来)。 */
     function paintLive(live) {
-        if (liveNodes.thinkCount !== null && live.thought !== null) {
-            liveNodes.thinkCount.textContent = `${live.thought.text.length} 字`;
+        if (liveNodes.thinkBody !== null && live.thought !== null) {
             liveNodes.thinkBody.textContent = live.thought.text;
         }
         // 秒数由计时器驱动重画(见 syncThinkTicker),所以这里每次都要按**当前时刻**重算
@@ -1861,14 +1924,6 @@ export function createAgentPanel({
         if (live.stages !== null && live.stages !== undefined && liveNodes.stages !== null
             && liveNodes.stages !== undefined) {
             paintVideoStages(live.stages, liveNodes.stages.refs);
-        }
-        const msg = live.message;
-        if (liveNodes.sweep === null || msg === null) return;
-        if (liveNodes.sweepTail !== null) {
-            liveNodes.sweepHead.textContent = msg.text.slice(0, -TAIL_CHARS);
-            liveNodes.sweepTail.textContent = msg.text.slice(-TAIL_CHARS);
-        } else {
-            liveNodes.sweep.textContent = msg.text;
         }
     }
 
@@ -1965,10 +2020,8 @@ export function createAgentPanel({
         //    所以这里只负责把它画出来,不按下秒表。
         const timeEl = el(doc, 'span', 'agent-think-time', thinkElapsedText(thought));
         sum.appendChild(timeEl);
-        // 「译」只给**收尾**的思考条:还在流的那条翻了也是白翻(后面还会变长)。
-        if (!live) sum.appendChild(translationChips(thought, translation, lang));
-        const countEl = el(doc, 'span', 'agent-think-count', `${bodyText.length} 字`);
-        sum.appendChild(countEl);
+        // 翻译入口只给收尾的思考；一个图标同时承担翻译和原文/中文切换。
+        if (!live) sum.appendChild(translationIcon(thought, translation, lang));
         box.appendChild(sum);
         // ⚠️ 按**换行**把正文切成一行一枚 .agent-think-line:只有切成独立元素,
         //    才可能做到"逐行 + 每行从左到右"(一行一枚才有各自的擦除边)。
@@ -1989,9 +2042,8 @@ export function createAgentPanel({
         const grow = el(doc, 'div', 'agent-think-grow');
         grow.appendChild(bodyEl);
         box.appendChild(grow);
-        // 字数、正文与秒数会随增量/时间变:交给快速通道原地改(见 paintLive)
+        // 正文与秒数随增量/时间原地更新，右侧不显示字数。
         if (live) {
-            liveNodes.thinkCount = countEl;
             liveNodes.thinkBody = bodyEl;
             liveNodes.thinkTime = timeEl;
         }
@@ -2005,11 +2057,23 @@ export function createAgentPanel({
                     //    那块内容会自己一鼓一鼓地动(典型的"动画没做成一次性"的坑)。
                     if (!live && typeof box.setAttribute === 'function') {
                         box.setAttribute('data-reveal', '1');
-                        const clear = () => {
+                        const revealLineCount = String(bodyText).split('\n').length;
+                        let revealEnded = 0;
+                        let fallbackTimer = null;
+                        const clear = (event) => {
+                            if (event !== undefined) {
+                                if (event.animationName !== 'agent-think-bright') return;
+                                revealEnded += 1;
+                                if (revealEnded < revealLineCount) return;
+                            }
                             if (typeof box.removeAttribute === 'function') box.removeAttribute('data-reveal');
+                            box.removeEventListener?.('animationend', clear);
+                            if (fallbackTimer !== null && typeof clearTimeout === 'function') clearTimeout(fallbackTimer);
                         };
-                        box.addEventListener('animationend', clear, { once: true });
-                        if (typeof setTimeout === 'function') setTimeout(clear, 1200);
+                        box.addEventListener('animationend', clear);
+                        if (typeof setTimeout === 'function') {
+                            fallbackTimer = setTimeout(() => clear(), Math.max(1200, revealLineCount * 70 + 800));
+                        }
                     }
                 } else thinkOpenIds.delete(thought.id);
             });
@@ -2017,51 +2081,215 @@ export function createAgentPanel({
         return box;
     }
 
-    /**
-     * 思考条上的翻译控件:未译 → 「译」;译中 → 「翻译中…」;译好 → 「中文 / 原文」;
-     * 失败 → 「重译」(点一次就是重来)。全是叶子字段的展示,不在这里做协议判断。
-     */
-    function translationChips(thought, translation, lang) {
+    /** 双向换译：纯 SVG 笔画，不使用字体图标或不可信 HTML。 */
+    function translationSvg() {
+        const svg = svgEl('svg');
+        attr(svg, 'viewBox', '0 0 32 32');
+        attr(svg, 'aria-hidden', 'true');
+        attr(svg, 'focusable', 'false');
+        const group = (name, paths) => {
+            const node = svgEl('g');
+            setClass(node, name, true);
+            for (const [className, d] of paths) {
+                const path = svgEl('path');
+                if (className) setClass(path, className, true);
+                attr(path, 'd', d);
+                node.appendChild(path);
+            }
+            svg.appendChild(node);
+        };
+        group('agent-translate-cn', [['', 'M4.5 11h11m-5.5-3v3m-3 0c.3 4.8 3.4 8.2 8.2 10M13 11c-.8 4.7-3.6 8-8 10']]);
+        group('agent-translate-en', [['', 'm17 23 4-11 4 11m-6.6-3.7h5.2']]);
+        group('agent-translate-arrows', [
+            ['agent-translate-upper', 'M17 5h9l-2.7-2.5'],
+            ['agent-translate-lower', 'M15 27H6l2.7 2.5'],
+        ]);
+        return svg;
+    }
+
+    /** 复制图标：纸页描边，复制成功时路径逐笔收成勾。 */
+    function copySvg() {
+        const svg = svgEl('svg');
+        attr(svg, 'viewBox', '0 0 28 28');
+        attr(svg, 'aria-hidden', 'true');
+        attr(svg, 'focusable', 'false');
+        const mark = svgEl('g');
+        setClass(mark, 'agent-copy-mark', true);
+        const back = svgEl('path');
+        setClass(back, 'agent-copy-back', true);
+        attr(back, 'd', 'M17 6V5.5A1.5 1.5 0 0 0 15.5 4h-9A1.5 1.5 0 0 0 5 5.5v12A1.5 1.5 0 0 0 6.5 19H8');
+        mark.appendChild(back);
+        const outline = svgEl('path');
+        setClass(outline, 'agent-copy-outline', true);
+        attr(outline, 'pathLength', '1');
+        attr(outline, 'd', 'M10.5 8H19a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-8.5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2Z');
+        mark.appendChild(outline);
+        const lines = svgEl('path');
+        setClass(lines, 'agent-copy-lines', true);
+        attr(lines, 'd', 'M12 13h6m-6 4h6');
+        mark.appendChild(lines);
+        svg.appendChild(mark);
+        const check = svgEl('path');
+        setClass(check, 'agent-copy-check', true);
+        attr(check, 'pathLength', '1');
+        attr(check, 'd', 'm6.5 14.5 4.2 4.1 10-10');
+        svg.appendChild(check);
+        return svg;
+    }
+
+    function copyBySelection(text) {
+        if (!doc.body || typeof doc.execCommand !== 'function') return false;
+        const focused = doc.activeElement;
+        const selection = typeof doc.getSelection === 'function' ? doc.getSelection() : null;
+        const ranges = [];
+        if (selection) {
+            for (let i = 0; i < selection.rangeCount; i++) ranges.push(selection.getRangeAt(i).cloneRange());
+        }
+        const field = doc.createElement('textarea');
+        field.value = text;
+        field.readOnly = true;
+        attr(field, 'aria-hidden', 'true');
+        attr(field, 'tabindex', '-1');
+        field.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;';
+        doc.body.appendChild(field);
+        let copied = false;
+        try {
+            field.focus({ preventScroll: true });
+            field.select();
+            copied = doc.execCommand('copy') === true;
+        } catch {
+            copied = false;
+        } finally {
+            field.remove();
+            if (selection) {
+                try {
+                    selection.removeAllRanges();
+                    for (const range of ranges) selection.addRange(range);
+                } catch { /* 剪贴板结果不应被选区恢复失败覆盖。 */ }
+            }
+            try { focused?.focus?.({ preventScroll: true }); } catch { /* 尽量恢复焦点。 */ }
+        }
+        return copied;
+    }
+
+    async function copyAssistantReply(button, text) {
+        if (button.disabled) return;
+        if (button.copyResetTimer !== undefined) clearTimeout(button.copyResetTimer);
+        button.disabled = true;
+        button.dataset.state = 'copying';
+        attr(button, 'aria-busy', 'true');
+        attr(button, 'aria-label', '正在复制 AI 回复');
+        attr(button, 'title', '正在复制 AI 回复');
+        attr(button, 'data-tooltip', '正在复制');
+        const startedAt = globalThis.performance?.now?.() ?? Date.now();
+        let copied = false;
+        try {
+            const clipboard = globalThis.navigator?.clipboard;
+            if (typeof clipboard?.writeText === 'function') {
+                try {
+                    await clipboard.writeText(text);
+                    copied = true;
+                } catch {
+                    copied = copyBySelection(text);
+                }
+            } else copied = copyBySelection(text);
+        } catch {
+            copied = false;
+        }
+        const elapsed = (globalThis.performance?.now?.() ?? Date.now()) - startedAt;
+        if (elapsed < 200) await new Promise(resolve => setTimeout(resolve, 200 - elapsed));
+        if (button.isConnected === false) return;
+        const state = copied ? 'copied' : 'error';
+        const label = copied ? '已复制 AI 回复' : '复制失败，请重试';
+        button.disabled = false;
+        button.dataset.state = state;
+        attr(button, 'aria-busy', 'false');
+        attr(button, 'aria-label', label);
+        attr(button, 'title', label);
+        attr(button, 'data-tooltip', copied ? '已复制' : '复制失败，请重试');
+        button.copyResetTimer = setTimeout(() => {
+            if (button.isConnected === false) return;
+            button.dataset.state = 'idle';
+            attr(button, 'aria-label', '复制 AI 回复');
+            attr(button, 'title', '复制 AI 回复');
+            attr(button, 'data-tooltip', '复制 AI 回复');
+            delete button.copyResetTimer;
+        }, copied ? 1600 : 4200);
+    }
+
+    function renderCopyButton(text) {
+        const row = el(doc, 'div', 'agent-msg-copy-row');
+        const button = el(doc, 'button', 'agent-msg-copy');
+        button.type = 'button';
+        button.dataset.state = 'idle';
+        attr(button, 'aria-label', '复制 AI 回复');
+        attr(button, 'title', '复制 AI 回复');
+        attr(button, 'data-tooltip', '复制 AI 回复');
+        attr(button, 'aria-busy', 'false');
+        button.appendChild(copySvg());
+        button.addEventListener('click', () => { void copyAssistantReply(button, text); });
+        row.appendChild(button);
+        return { row, button };
+    }
+
+    /** 一个入口：首次翻译、忙态、切换缓存语言和失败重试。 */
+    function translationIcon(thought, translation, lang) {
         const wrap = el(doc, 'span', 'agent-think-actions');
         const status = translation?.status ?? 'none';
-
-        const chip = (act, label, on) => {
-            const btn = el(doc, 'button', on ? 'agent-think-chip on' : 'agent-think-chip', label);
-            btn.type = 'button';
-            if (typeof btn.setAttribute === 'function') btn.setAttribute('data-act', act);
-            btn.addEventListener('click', (event) => {
-                // ⚠️ 它在 <summary> 里:不拦住的话点一下会**顺带把这条折叠块开合一次**。
-                event?.preventDefault?.();
-                event?.stopPropagation?.();
-                if (act === 'translate') translate(thought);
-                else {
-                    if (act === 'src') showSourceIds.add(thought.id);
-                    else showSourceIds.delete(thought.id);
-                    render();
-                }
-            });
-            return btn;
-        };
-
-        if (status === 'pending') {
-            wrap.appendChild(el(doc, 'span', 'agent-think-chip busy', '翻译中…'));
-            return wrap;
-        }
-        if (status === 'done') {
-            wrap.appendChild(chip('zh', '中文', lang === 'zh'));
-            wrap.appendChild(chip('src', '原文', lang === 'src'));
-            return wrap;
-        }
-        wrap.appendChild(chip('translate', status === 'error' ? '重译' : '译', false));
+        const busy = status === 'pending';
+        const done = status === 'done';
+        const act = done ? (lang === 'zh' ? 'src' : 'zh') : 'translate';
+        const iconState = busy ? 'busy' : status === 'error' ? 'error' : done && lang === 'zh' ? 'zh' : 'source';
+        const label = busy ? '正在翻译为中文' : status === 'error'
+            ? `翻译失败：${translation.error || '原因未知'}。点击重试`
+            : done ? (lang === 'zh' ? '当前为中文，点击查看原文' : '当前为原文，点击查看中文') : '翻译为中文';
+        const btn = el(doc, 'button', 'agent-think-translate');
+        btn.type = 'button';
+        btn.disabled = busy;
+        attr(btn, 'data-act', act);
+        attr(btn, 'data-state', iconState);
+        attr(btn, 'data-thought-id', thought.id);
+        attr(btn, 'aria-label', label);
+        attr(btn, 'title', label);
+        attr(btn, 'aria-busy', String(busy));
+        attr(btn, 'aria-pressed', String(done && lang === 'zh'));
+        btn.appendChild(translationSvg());
+        btn.addEventListener('click', (event) => {
+            // 控件位于 summary 内，点击图标不能同时开合思考块。
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            if (busy) return;
+            if (act === 'translate') { void translate(thought); return; }
+            const focused = doc.activeElement === btn;
+            if (act === 'src') showSourceIds.add(thought.id);
+            else showSourceIds.delete(thought.id);
+            render();
+            if (focused) {
+                const next = Array.from(messagesEl.querySelectorAll?.('.agent-think-translate') ?? [])
+                    .find(button => button.getAttribute('data-thought-id') === thought.id);
+                next?.focus?.();
+            }
+        });
+        wrap.appendChild(btn);
         return wrap;
     }
 
-    /** 点「译」:把这一条交给主进程(它再请桥翻一次)。失败不抛,状态由事件回填。 */
+    /** 先进入忙态防止重复请求；翻译结果由主进程事件回填。 */
     async function translate(thought) {
+        const status = state.translations?.[thought.id]?.status;
+        if (status === 'pending' || status === 'done') return;
+        const session = state.sessionId;
+        state = reduceAgentEvent(state, { kind: 'translation', thoughtId: thought.id, status: 'pending' });
+        render();
         try {
             await calls('agent:translate', { thoughtId: thought.id, text: thought.text });
         } catch (err) {
             log.warn?.('[agent] 翻译失败', err);
+            if (disposed || state.sessionId !== session || !asArray(state.thoughts).includes(thought)
+                || state.translations?.[thought.id]?.status !== 'pending') return;
+            state = reduceAgentEvent(state, { kind: 'translation', thoughtId: thought.id, status: 'error',
+                error: stripIpcWrapper(String(err?.message ?? err)) });
+            render();
         }
     }
 
@@ -2305,39 +2533,23 @@ export function createAgentPanel({
             if (liveNodes !== null) liveNodes.stages = { stages, refs: rendered.refs };
         }
         const textEl = el(doc, 'div', 'agent-msg-text');
-        // 流式中的正文:整段再包一层 `.agent-sweep`,让扫光只作用在**文字**上。
-        // ⚠️ 为什么不能直接给 `.agent-msg-text` 加 background-clip:text:
-        // 那一下会把气泡自己的底也一起裁进字形里 —— 气泡背景"消失",看起来像
-        // 流式中途换了一套样式(实测踩到过)。扫光层与气泡层必须分开。
-        // (.agent-sweep 在 CSS 里是 display:block —— 百分比 background-position
-        //  要有个确定参照宽度,行内折行后光带落点会随文字长度乱跳,见 shell.css。)
-        // 最后几个字再单独包一层,交给 .agent-tail 显影:它自己裁一层**半透明**罩子
-        // 画在父层文字之上,所以扫光的亮带仍然透得出来(用 mask 是无效的,已实测推翻)。
-        // 一律用 textContent 赋值(正文来自模型,不解析标记)。
-        if (msg.done !== true) {
-            const sweep = el(doc, 'span', 'agent-sweep');
-            if (msg.text.length > TAIL_CHARS) {
-                const head = el(doc, 'span', '', msg.text.slice(0, -TAIL_CHARS));
-                const tail = el(doc, 'span', 'agent-tail', msg.text.slice(-TAIL_CHARS));
-                sweep.appendChild(head);
-                sweep.appendChild(tail);
-                liveNodes.sweepHead = head;
-                liveNodes.sweepTail = tail;
-            } else {
-                sweep.textContent = msg.text;
-            }
-            textEl.appendChild(sweep);
-            // 这一层与它的两个子节点会一直被原地改文字(见 paintLive)——
-            // 重建就等于把扫光/光标动画从头开始,所以只在这一条流式消息上留引用。
-            liveNodes.sweep = sweep;
-        } else if (msg.role === 'assistant') {
-            // 收尾后的助手回复:渲染常用子集的 Markdown。
-            // ⚠️ 走的是**建节点**那条路(createElement / createTextNode),面板里依然一个
-            // innerHTML 都没有 —— 模型给的 `<img onerror=...>` 只会是一段文字。
-            // ⚠️ 为什么只在收尾后做:流式期间那套扫光/末字显影是直接切文本节点的,
-            // 中途插进 <strong>/<p> 会把动画每次都从头开始,也破坏"增量不重建 DOM"。
+        let replyEntry = null;
+        if (msg.role === 'assistant') {
             textEl.className = 'agent-msg-text md';
-            for (const node of renderMarkdownNodes(doc, msg.text)) textEl.appendChild(node);
+            const entry = replyViews.get(msg.id);
+            if (entry) {
+                replyEntry = entry;
+                entry.copyButton = null;
+                entry.bubble = bubble;
+                entry.textEl = textEl;
+                textEl.appendChild(entry.player.element);
+                paintReplyEntry(entry);
+            } else {
+                // 历史回复直接显示；实时回复由播放器只解析已显示的前缀。
+                for (const node of renderMarkdownNodes(doc, msg.text, {
+                    tables: true, omitImageUrls: imageGenerationPlan.omittedByMessage.get(msg.id),
+                })) textEl.appendChild(node);
+            }
         } else {
             // 用户气泡**不排版**:那是用户自己说的话,而且自检夹具回显的那条带着
             // `当前笔记:…` + frontmatter 的 `---` 与 `# 甲篇`,排版会把它画成标题与分隔线。
@@ -2348,6 +2560,14 @@ export function createAgentPanel({
         // 方案 C 的状态行占位同理(它此刻还没有正文)。
         // 纯文字那条路完全不变(没有图也没有状态行时这个条件恒真,与从前逐像素一致)。
         if (msg.text !== '' || (images.length === 0 && stages.length === 0)) bubble.appendChild(textEl);
+        if (msg.role === 'assistant' && msg.done === true && msg.text !== '') {
+            const renderedCopy = renderCopyButton(msg.text);
+            if (replyEntry !== null) {
+                replyEntry.copyButton = renderedCopy.button;
+                renderedCopy.button.hidden = replyEntry.player.active;
+            }
+            bubble.appendChild(renderedCopy.row);
+        }
         // 视频理解那一轮的成本读数(只有带 usage 的消息才有;其余消息形状不变)。
         if (msg.usage !== null && typeof msg.usage === 'object') {
             for (const node of renderMessageUsage(msg.usage, msg.timings ?? null)) bubble.appendChild(node);
@@ -2408,29 +2628,31 @@ export function createAgentPanel({
     }
 
     function renderMessages() {
+        syncReplyViews();
         // 快速通道:只有文本在长(结构一个字节都没变)时,别把 DOM 推倒重来。
         const units = planTimeline(state);
-        const shape = shapeOf(units);
+        syncImageGenerationViews();
+        const shape = `${shapeOf(units)}|${imageGenerationShape}`;
         if (shape === renderedShape && liveNodes !== null) {
             paintLive(liveOf(units));
             return;
         }
-        liveNodes = { thinkCount: null, thinkBody: null, thinkTime: null, sweep: null, sweepHead: null, sweepTail: null, stages: null };
+        liveNodes = { thinkBody: null, thinkTime: null, stages: null };
         // 按**有序时间线**画:思考内联在它那段输出前面、工具与中间回复折成一行。
         // ⚠️ 外面还要按**轮**包一层 `.agent-turn`:轮次轨要拿每一轮的盒子算 offset
         // 与跳转,没有这一层就只能按"第几条消息"猜边界。分包是纯函数(groupTurns)。
         const parts = [];
         const { pre, turns } = groupTurns(units);
-        for (const unit of pre) parts.push(renderUnit(unit));
+        for (const unit of pre) parts.push(renderUnit(unit), ...imageViewsOfUnit(unit));
         turns.forEach((turn, i) => {
             const box = el(doc, 'div', 'agent-turn');
             if (typeof box.setAttribute === 'function') box.setAttribute('data-turn', String(i));
-            for (const unit of turn) box.appendChild(renderUnit(unit));
+            for (const unit of turn) {
+                box.appendChild(renderUnit(unit));
+                for (const view of imageViewsOfUnit(unit)) box.appendChild(view);
+            }
             parts.push(box);
         });
-        if (parts.length === 0) {
-            parts.push(el(doc, 'p', 'hint', '还没有对话。直接问吧 —— 问题会带上当前打开的笔记。'));
-        }
         replaceChildren(streamEl, parts);
         // 记下这一版的结构:下一次只有文本变长时就不再重建(见函数开头的快速通道)
         renderedShape = shape;
@@ -2700,7 +2922,7 @@ export function createAgentPanel({
         // 重试按钮是"把人接上"的入口,所以三种情形都得可用:
         //   自动连过(autoStart=true)—— 只有出了错才需要它(连上了再点没有意义);
         //   不自动连(autoStart=false,自检走这条)—— 它**就是**唯一入口,一直可点;
-        //   刚按过「停止进程」—— 进程是自己停掉的,没有"失败"可看,但也得能再接上。
+        //   进程刚由用户停止——没有"失败"可看,但也得能再接上。
         const retryAvailable = autoStart ? (broken || starting || killRequested) : true;
         // ⚠️ 「发送」在**有视频草稿**时必须可点,哪怕 Agent 没连上:视频理解根本
         // 不经过 Agent(它由主进程直接 POST 给 DashScope)。照着"没连上就禁用"写,
@@ -2746,26 +2968,8 @@ export function createAgentPanel({
             growInput();                                    // 输入区高度永远跟着值走(清空就收回去)
         }
         setDisabled(retryBtn, !retryAvailable);
-        // ⚠️ 「停止进程」是**出事才出现**的按钮(用户要求:那一行平时是空的、连状态点都没有)。
-        // 判据是"现在有没有东西可停":
-        //   · 正在起(starting)—— 起的过程就可能卡住,这正是要停的时刻;
-        //   · 正在跑一次(state.busy)—— 正常从眼前消失;卡住时它就是唯一出路;
-        //   · 已经坏了(failed/crashed)—— 进程可能还在,得能收尸。
-        // 反过来,`ready` 且手上没活、以及用户自己停掉的 `stopped`,都**不显示** ——
-        // 那时点它没有任何意义。它出现的**位置不变**(还是输入卡片顶端那一行),
-        // 所以"卡住了去哪儿按"这件事不需要重新学。
-        // 另一条常驻入口在「设置 → AI 与 Agent → 停止 Agent 进程」(找不到这一行时用)。
-        //
-        // ⚠️ **整行的显隐跟着按钮走**:那一行平时只有这个按钮,按钮不在场时它必须 `hidden`
-        // (CSS 里是 display:none)—— 否则它会留一条 20px 空行加一段下间距,
-        // 而用户要的是"聊天框上面干净"。按钮在场时这一行才有 20px(上一轮钉的不变量:
-        // 出现时 20、不出现时不占位)。
-        const killNeeded = status.state === 'starting' || broken || (running && state.busy);
-        setHidden(killBtn, !killNeeded);
-        setDisabled(killBtn, !killNeeded);
         // ⚠️ 「正在连接 Agent…」:握手超时是 35 秒(见 agent-runtime 的
         // DEFAULT_HANDSHAKE_TIMEOUT_MS),那段时间里面板**不能是一片静止** ——
-        // 否则用户只会看见一个没头没尾的「停止进程」按钮,以为界面坏了。
         // 只说"正在连接",**不写数字也不画进度条**:分母(这一台机器这次要多久)
         // 根本不存在,写了就是把猜的数字当承诺(与项目里"没有真分母就不画"同一条规矩)。
         // 只在 `starting` 时出现:失败/崩了有对话里的提示卡说原因,那比这句更有信息。
@@ -2776,7 +2980,7 @@ export function createAgentPanel({
             }
             setHidden(ctxHintEl, !connecting);
         }
-        setHidden(ctxRowEl, !killNeeded);
+        setHidden(ctxRowEl, !connecting);
         // 提示卡两种来由:连不上(broken)或**用户自己刚把进程停掉**(killRequested)。
         // 后者不是错误,但同样"什么都不能做" —— 所以同样要在对话里给出「重试」。
         renderNotice(broken || killRequested, detail, killRequested && !broken);
@@ -2862,6 +3066,7 @@ export function createAgentPanel({
     }
 
     function render() {
+        if (disposed) return;
         renderQueued = false;
         // 先把**已经没有任何消息引用**的气泡图片 URL 回收掉(清空会话 / 换会话)。
         // 还留在状态里的一个都不碰 —— 撤销了就是破图(见 handOffImages 的归属说明)。
@@ -2892,7 +3097,7 @@ export function createAgentPanel({
     }
 
     function scheduleRender() {
-        if (renderQueued) return;
+        if (disposed || renderQueued) return;
         renderQueued = true;
         if (typeof queueMicrotask === 'function') queueMicrotask(() => { if (renderQueued) render(); });
         else render();
@@ -3037,11 +3242,9 @@ export function createAgentPanel({
         if (images === null) return;
 
         const note = readNote();
-        // ⚠️ **发图之前**先看对端广告的能力:ACP 规定"只有对方广告了才准发内联图片"。
-        //    装机那份桥钉的模型(deepseek-v4-flash)没有声明图片输入,握手时就广告了
-        //    `image:false`;照发的结果是 -32602 + 一句英文(用户实测看到的就是它),
-        //    而且图片与文字是一起发的 —— 被拒就是**整条提示都没发出去**,还白等一轮。
-        //    所以在这里就停住,并说清"为什么 / 怎么办"。caps 为 null(还不知道)不拦。
+        // ⚠️ **发图之前**先看对端当前模型的图片能力:图片与文字一起发,不支持时整条提示都会被拒。
+        //    新会话会优先自动选已配置的图片模型,用户也可以在模型清单中手动切换。
+        //    caps 为 null(还不知道)不拦。
         if (images.length > 0 && state.caps !== null && state.caps.image !== true) {
             showImageNotice(imageCapabilityRefusal(state.caps, currentModelValue()));
             return;
@@ -3115,38 +3318,6 @@ export function createAgentPanel({
         }
     }
 
-    /**
-     * 重连 Agent 进程(停掉再起)。
-     *
-     * 为什么需要它 —— 唯一一件**必须重连才能生效**的事:图片能力。
-     * 桥在 `initialize` 那一刻算一次 `imagePromptEnabled`(判据是"当前模型有没有声明
-     * 图片输入"),之后整条连接都用那个值,连 `set_config_option` 换模型也不重算。
-     * 所以:换到视觉模型之后,想真的发得出去图,就得让它重新握一次手。
-     *
-     * ⚠️ 代价要**说在前面**:ACP 的会话随进程一起消失(上下文清零),面板里的聊天记录还在,
-     *    但新的一轮不再记得之前聊过什么。所以这是个**用户自己按的按钮**,不替用户决定。
-     */
-    async function restartAgent() {
-        if (cfgRestarting) return false;
-        cfgRestarting = true;
-        cfgPaint();
-        try {
-            await calls('agent:stop', {});
-            await loadCredentials();
-            applyCredentialVisibility();
-            // 重连之后能力要重新学:先把"已知能力"清成"还不知道",避免界面拿旧值继续拦。
-            state = reduceAgentEvent(state, { kind: 'caps', caps: null });
-            await start();
-            return true;
-        } catch (err) {
-            log.warn?.('[agent] 重连失败', err);
-            return false;
-        } finally {
-            cfgRestarting = false;
-            render();
-        }
-    }
-
     async function killProcess() {
         // ⚠️ 停掉之后**必须留一个再连的出口**:进程没了,面板就停在 stopped,
         // 而 stopped 下「发送」是灰的、「重试」本来也不出现 —— 用户会以为只能重启开物。
@@ -3183,6 +3354,7 @@ export function createAgentPanel({
 
     /** 主进程推来一个事件。kind 契约见 M3-B 计划(与 B1 共用,冻结)。 */
     function onEvent(event) {
+        if (disposed) return;
         if (event === null || typeof event !== 'object') return;
         // 别的会话的增量不该进这个面板(多会话并存时会把两条回复搅在一起)。
         //
@@ -3194,11 +3366,17 @@ export function createAgentPanel({
             && event.sessionId !== state.sessionId) return;
 
         // ⚠️ 判据取**这一次事件之前**的状态:进程从"在跑"掉到"没在跑"之后,
-        // 「发送」是灰的、「重试」本来也不出现 —— 那一行上的「停止进程」也不再显示
-        // (它只在有东西可停时出现)。所以这一刻必须在对话里留一个再连的出口。
-        // 不绑定到"谁按的按钮":面板那一行、设置页那一项、外部把进程干掉,都算。
+        // 「发送」是灰的、「重试」本来也不出现。设置页停止进程或外部停掉都要留一个再连出口。
         const wasRunning = state.status.state === 'ready' || state.status.state === 'starting';
+        const previousSession = state.sessionId;
         state = reduceAgentEvent(state, event);
+        if (event.kind === 'session' && state.sessionId !== previousSession) {
+            clearReplyViews();
+            clearImageGenerationViews();
+            disposeImageGenerationViewer(doc);
+        }
+        // 在事件边界收进缓冲：同一帧里连续收到 chunk 和 prompt-end 也不丢逐字进度。
+        syncReplyViews();
         // 「接着聊」接回来的会话:对端不重放旧消息,历史得由**开物自己的台账**铺回来。
         // 放在 reduce 之后:此刻 sessionId / configOptions / caps 都已经归位。
         if (event.kind === 'session' && event.resumed === true && typeof event.sessionId === 'string') {
@@ -3244,6 +3422,7 @@ export function createAgentPanel({
      *    换一条会话不等于换了连接,连接该是 ready 就还是 ready。
      */
     function clearConversation() {
+        clearReplyViews();
         releaseMessageImages(true);
         state = {
             ...state,
@@ -3285,6 +3464,7 @@ export function createAgentPanel({
                 ? beginPrompt(next, step.text, step.images)
                 : reduceAgentEvent(next, step.event);
         }
+        clearReplyViews();
         state = {
             ...state,
             messages: next.messages,
@@ -3313,8 +3493,7 @@ export function createAgentPanel({
     let cfgEls = null;           // 浮层里的节点(懒建一次,之后只改文本/类名 —— 见 cfgPaint 的说明)
     let cfgStopsKey = '';        // 档位那次构建的指纹(数据没变就不重建,否则动效会一遍遍重播)
     let cfgModelsKey = '';
-    let cfgDrag = null;          // 拖动中:落点档位(松手才提交)
-    let cfgRestarting = false;   // 正在重连(按钮要禁用,别连点两次把进程来回停) 
+    let cfgDrag = null;          // 拖动中:连续预览档位位置(松手吸附并提交最近档)
 
     const reasonOption = () => configOptionOf(state.configOptions, REASONING_CONFIG_ID);
     const modelOption = () => configOptionOf(state.configOptions, MODEL_CONFIG_ID);
@@ -3365,8 +3544,7 @@ export function createAgentPanel({
         const nowVal = cfgNode('span', 'v');
         const nowGo = cfgNode('span', 'go', '›');
         nowBtn.append(nowVal, nowGo);
-        const tip = cfgNode('span', 'agent-cfg-tip', '点上面的字可换模型');
-        head.append(nowBtn, tip);
+        head.appendChild(nowBtn);
 
         const track = cfgNode('div', 'agent-cfg-track');
         track.tabIndex = 0;
@@ -3378,17 +3556,7 @@ export function createAgentPanel({
         track.append(rail, fill, knob);
 
         const stops = cfgNode('div', 'agent-cfg-stops');
-        const desc = cfgNode('p', 'agent-cfg-desc');
-        const foot = cfgNode('div', 'agent-cfg-foot');
-        const footText = cfgNode('span', 'agent-cfg-foot-text', '松手即生效(续聊,不丢上下文)');
-        // 重连按钮:只在"图片能力与当前模型不一致"时出现(见 cfgPaint)。
-        // 文案带代价 —— 会话上下文会随进程一起消失,用户有权知道。
-        const renew = cfgNode('button', 'agent-cfg-renew', '重连以启用图片');
-        renew.type = 'button';
-        renew.title = '图片能力是连接建立时确定的,换模型后要重新握手才生效。重连会清空这次对话的上下文(聊天记录还在)。';
-        renew.addEventListener('click', () => { void restartAgent(); });
-        foot.append(footText, renew);
-        pane1.append(head, track, stops, desc, foot);
+        pane1.append(head, track, stops);
 
         // —— 第 2 层:模型 ——
         const pane2 = cfgNode('div', 'agent-cfg-pane');
@@ -3401,8 +3569,8 @@ export function createAgentPanel({
         configWrap.appendChild(pop);
 
         cfgEls = {
-            pop, pane1, pane2, head, nowBtn, nowVal, tip, track, rail, fill, knob,
-            stops, desc, foot, footText, back, list, renew,
+            pop, pane1, pane2, head, nowBtn, nowVal, track, rail, fill, knob,
+            stops, back, list,
         };
 
         // ---- 交互 ----
@@ -3434,7 +3602,7 @@ export function createAgentPanel({
             const box = typeof track.getBoundingClientRect === 'function' ? track.getBoundingClientRect() : null;
             if (box === null || box.width <= 0) return 0;
             const t = Math.max(0, Math.min(1, (clientX - box.left) / box.width));
-            return Math.round(t * (n - 1));
+            return t * (n - 1);
         };
         const preview = (i) => {
             // 拖动中只改视觉(不发请求):档位、填充、把手、说明
@@ -3454,7 +3622,7 @@ export function createAgentPanel({
         });
         const release = (e) => {
             if (cfgDrag === null) return;
-            const i = indexAt(e.clientX ?? 0);
+            const i = Math.round(indexAt(e.clientX ?? 0));
             track.classList.remove('dragging');
             cfgDrag = null;
             track.classList.add('settle');
@@ -3463,7 +3631,7 @@ export function createAgentPanel({
             const wanted = levels[i];
             cfgDrag = null;
             if (wanted !== undefined && wanted.value !== reasonOption()?.currentValue) {
-                void commitConfig(REASONING_CONFIG_ID, wanted.value, { label: wanted.short });
+                void commitConfig(REASONING_CONFIG_ID, wanted.value);
             } else {
                 cfgPaintStops();
             }
@@ -3476,7 +3644,7 @@ export function createAgentPanel({
             const go = (i) => {
                 const want = levels[Math.max(0, Math.min(levels.length - 1, i))];
                 if (want !== undefined && want.value !== reasonOption()?.currentValue) {
-                    void commitConfig(REASONING_CONFIG_ID, want.value, { label: want.short });
+                    void commitConfig(REASONING_CONFIG_ID, want.value);
                 }
                 e.preventDefault?.();
             };
@@ -3500,12 +3668,13 @@ export function createAgentPanel({
     /** 一把刷:胶囊 + 浮层(结构只在数据变了时重建)。 */
     function cfgPaint(force = false) {
         if (ensureConfig() === null) return;
-        const { pop, pane1, pane2, nowVal, track, stops, desc, footText, list, renew } = cfgEls;
+        const { pop, pane1, pane2, nowVal, track, stops, list } = cfgEls;
 
         const levels = reasonLevels();
         const current = reasonOption()?.currentValue ?? '';
         const at = cfgDrag !== null ? cfgDrag.index : effortIndexOf(levels, current);
-        const label = chipLabel({ expanded: cfgOpen !== 'none', level: levels[at] ?? null });
+        const nearest = Math.max(0, Math.min(levels.length - 1, Math.round(at)));
+        const label = chipLabel({ expanded: cfgOpen !== 'none', level: levels[nearest] ?? null });
 
         // 胶囊
         if (configBtn !== null) {
@@ -3524,21 +3693,11 @@ export function createAgentPanel({
                 : `思考强度:${cur.full}${cur.description !== '' ? ` · ${cur.name}` : ''}`;
         }
 
-        // 重连按钮:只在**这条连接不能发图片**时露出来。
-        // 它就是"换到视觉模型之后让图片真的能用"的唯一出口(见 restartAgent 的说明)。
-        // ⚠️ 用 `hidden` **属性**而不是类名:`.agent-cfg-renew` 那条规则不写 display,
-        //    于是 [hidden]{display:none} 能正常压住它(写了 display 就同权重、按顺序,会压不住)。
-        // 有会话、但能力不是明确的 true → 露出来(不知道 / 明确 false 都值得给一个出口)。
-        // 换到视觉模型之后 refreshCapabilities 会把 caps 刷成 true,它就自己藏起来。
-        renew.hidden = state.sessionId === null || state.caps?.image === true;
-        renew.disabled = cfgRestarting === true || cfgDisabled();
-        renew.textContent = cfgRestarting === true ? '正在重连…' : '重连以启用图片';
-
         // 浮层显示/隐藏(两层各自一个类,动画交给 CSS)
         pop.classList.toggle('open', cfgOpen !== 'none' && !cfgDisabled());
         pane1.classList.toggle('on', cfgOpen === 'effort');
         pane2.classList.toggle('on', cfgOpen === 'models');
-        nowVal.textContent = levels[at]?.short ?? '默';
+        nowVal.textContent = levels[nearest]?.short ?? '默';
 
         // 档位:数据变了才重建(否则每帧重建会把入场动效一遍遍重播)
         const key = JSON.stringify(levels.map((l) => [l.value, l.name, l.short, l.full, l.description]));
@@ -3555,7 +3714,7 @@ export function createAgentPanel({
                 // 点某一档也能直接切(不必拖):与"拖动松手"走同一条提交路。
                 s.addEventListener('click', () => {
                     if (cfgDisabled() || lv.value === reasonOption()?.currentValue) return;
-                    void commitConfig(REASONING_CONFIG_ID, lv.value, { label: lv.short });
+                    void commitConfig(REASONING_CONFIG_ID, lv.value);
                 });
                 stops.appendChild(s);
             });
@@ -3603,7 +3762,7 @@ export function createAgentPanel({
                     row.addEventListener('click', () => {
                         if (cfgDisabled()) return;
                         if (m.value === modelOption()?.currentValue) { setCfgOpen('none'); return; }
-                        void commitConfig(MODEL_CONFIG_ID, m.value, { label: m.name });
+                        void commitConfig(MODEL_CONFIG_ID, m.value);
                     });
                     list.appendChild(row);
                 }
@@ -3629,25 +3788,17 @@ export function createAgentPanel({
         const idx = at !== null ? at : effortIndexOf(levels, current);
         const n = levels.length;
         const pct = n <= 1 ? 0 : (idx / (n - 1)) * 100;
+        const nearest = Math.max(0, Math.min(n - 1, Math.round(idx)));
         cfgEls.fill.style.width = `${pct}%`;
         cfgEls.knob.style.left = `${pct}%`;
-        const lv = levels[idx] ?? null;
+        const lv = levels[nearest] ?? null;
         cfgEls.nowVal.textContent = lv?.short ?? '默';
-        cfgEls.track.setAttribute('aria-valuenow', String(idx));
+        cfgEls.track.setAttribute('aria-valuenow', String(nearest));
         cfgEls.track.setAttribute('aria-valuetext', lv?.full ?? '');
-        cfgEls.desc.textContent = lv === null
-            // ⚠️ 两种"空"必须分开说(实测冤枉过对端):**还没建会话**时状态里根本没有
-            //    configOptions(正常启动时它会由主进程在 ready 那一刻自动建出来,见 noSessionText)
-            //    —— 那不是"对端没给";只有会话已经建好、而对端那份里确实没有这一条,
-            //    才该说"没有广告"。
-            ? (state.sessionId === null
-                ? noSessionText('档位与模型都是对端在 session/new 里给的,发一条消息之后才会出现。')
-                : '这条连接没有广告思考强度(当前模型没声明 reasoning 档位)。')
-            : `${lv.full} · ${lv.name}${lv.description === '' ? '' : ` —— ${lv.description}`}`;
         if (typeof cfgEls.stops.querySelectorAll === 'function') {
             for (const s of cfgEls.stops.querySelectorAll('span')) {
                 const i = Number(s.dataset?.i ?? -1);
-                s.classList.toggle('on', i === idx);
+                s.classList.toggle('on', i === nearest);
             }
         }
     }
@@ -3658,14 +3809,13 @@ export function createAgentPanel({
      * ⚠️ 失败时**抖动 + 把原因写在浮层脚下**,并且把档位显示退回对端那一份
      *    (state.configOptions 没变,所以 cfgPaint 自然画回旧值)—— 绝不假装改成了。
      */
-    async function commitConfig(configId, value, { label = '' } = {}) {
+    async function commitConfig(configId, value) {
         if (cfgDisabled()) return;
         try {
             await calls('agent:setConfig', { configId, value });
             if (configBtn !== null) {
                 configBtn.classList.remove('pulse'); void configBtn.offsetWidth; configBtn.classList.add('pulse');
             }
-            if (cfgEls !== null) cfgEls.footText.textContent = `已切到「${label}」`;
             // ⚠️ 换了模型就要**重新问一次图片能力**:
             //   · 先把已知能力清成"还不知道" —— 否则界面会拿**旧模型**的能力继续拦
             //     (实测:换到视觉模型之后,发图仍被自己的 pre-flight 挡住);
@@ -3685,7 +3835,6 @@ export function createAgentPanel({
             if (configBtn !== null) {
                 configBtn.classList.remove('shake'); void configBtn.offsetWidth; configBtn.classList.add('shake');
             }
-            if (cfgEls !== null) cfgEls.footText.textContent = `没改成:${why}`;
             cfgPaint(true);
         }
     }
@@ -4189,7 +4338,6 @@ export function createAgentPanel({
     //    所以"busy 就取消"与旧行为一一对应。输入框的 Enter 那条路**不变**(见下面 keydown)。
     sendBtn?.addEventListener('click', () => (state.busy === true ? cancel() : send()));
     retryBtn?.addEventListener('click', () => start());
-    killBtn?.addEventListener('click', () => killProcess());
     /* ⚠️ 中文输入法(IME)组合态:多行输入里 Enter 有两个含义 —— **确认候选字** vs 发送。
        组合期间绝不能把"选字"当成发送。三重判据(缺一条都可能漏):
          e.isComposing === true   标准字段;
@@ -4311,6 +4459,11 @@ export function createAgentPanel({
         /** 外壳在笔记打开/切换时调一次,刷新"这次会带上哪篇笔记"。 */
         syncNote: () => { renderContext(); },
         dispose() {
+            disposed = true;
+            renderQueued = false;
+            clearReplyViews();
+            clearImageGenerationViews();
+            disposeImageGenerationViewer(doc);
             if (typeof unsubscribe === 'function') safe(unsubscribe, log);
             unsubscribe = null;
             if (typeof videoProgressUnsub === 'function') safe(videoProgressUnsub, log);

@@ -347,7 +347,7 @@ export function renderMarkdown(markdown, options = {}) {
 // 表格、[[wiki]]、#标签 在对话里保持字面文字 —— 面板不碰笔记频道,[[x]] 点了也去不了,
 // 画成一个"还没写的虚线链接"是骗人。
 
-function inlineNodes(doc, nodes) {
+function inlineNodes(doc, nodes, options) {
     const out = [];
     for (const node of nodes) {
         switch (node.type) {
@@ -360,13 +360,13 @@ function inlineNodes(doc, nodes) {
             }
             case 'strong': {
                 const el = doc.createElement('strong');
-                for (const child of inlineNodes(doc, node.children)) el.appendChild(child);
+                for (const child of inlineNodes(doc, node.children, options)) el.appendChild(child);
                 out.push(el);
                 break;
             }
             case 'em': {
                 const el = doc.createElement('em');
-                for (const child of inlineNodes(doc, node.children)) el.appendChild(child);
+                for (const child of inlineNodes(doc, node.children, options)) el.appendChild(child);
                 out.push(el);
                 break;
             }
@@ -383,6 +383,7 @@ function inlineNodes(doc, nodes) {
             }
             case 'br': out.push(doc.createElement('br')); break;
             case 'image': {
+                if (options.omitImageUrls?.has(node.url)) break;
                 // ⚠️ 建节点、**不拼 HTML**:src/alt 都是显式属性,不存在"注入进标签"这回事。
                 // 只认 http(s)(规则层已经卡住),`javascript:` / `data:` 到不了这里。
                 const img = doc.createElement('img');
@@ -401,7 +402,7 @@ function inlineNodes(doc, nodes) {
     return out;
 }
 
-function blockNodes(doc, block) {
+function blockNodes(doc, block, options) {
     switch (block.type) {
         case 'blank': {
             const el = doc.createElement('p'), placeholder = doc.createElement('br');
@@ -412,14 +413,14 @@ function blockNodes(doc, block) {
         }
         case 'heading': {
             const el = doc.createElement(`h${block.level}`);
-            for (const child of inlineNodes(doc, block.inlines)) el.appendChild(child);
+            for (const child of inlineNodes(doc, block.inlines, options)) el.appendChild(child);
             return [el];
         }
         case 'paragraph': {
             const el = doc.createElement('p');
             block.lines.forEach((line, index) => {
                 if (index > 0) el.appendChild(doc.createElement('br'));
-                for (const child of inlineNodes(doc, line)) el.appendChild(child);
+                for (const child of inlineNodes(doc, line, options)) el.appendChild(child);
             });
             return [el];
         }
@@ -434,7 +435,7 @@ function blockNodes(doc, block) {
             const el = doc.createElement(block.ordered ? 'ol' : 'ul');
             for (const item of block.items) {
                 const li = doc.createElement('li');
-                for (const child of inlineNodes(doc, item)) li.appendChild(child);
+                for (const child of inlineNodes(doc, item, options)) li.appendChild(child);
                 el.appendChild(li);
             }
             return [el];
@@ -442,7 +443,7 @@ function blockNodes(doc, block) {
         case 'quote': {
             const el = doc.createElement('blockquote');
             for (const child of block.blocks) {
-                for (const node of blockNodes(doc, child)) el.appendChild(node);
+                for (const node of blockNodes(doc, child, options)) el.appendChild(node);
             }
             return [el];
         }
@@ -455,7 +456,7 @@ function blockNodes(doc, block) {
             const headerRow = doc.createElement('tr');
             for (const cell of block.head) {
                 const th = doc.createElement('th');
-                for (const node of inlineNodes(doc, cell)) th.appendChild(node);
+                for (const node of inlineNodes(doc, cell, options)) th.appendChild(node);
                 headerRow.appendChild(th);
             }
             thead.appendChild(headerRow);
@@ -465,7 +466,7 @@ function blockNodes(doc, block) {
                 const tr = doc.createElement('tr');
                 for (const cell of row) {
                     const td = doc.createElement('td');
-                    for (const node of inlineNodes(doc, cell)) td.appendChild(node);
+                    for (const node of inlineNodes(doc, cell, options)) td.appendChild(node);
                     tr.appendChild(td);
                 }
                 tbody.appendChild(tr);
@@ -483,13 +484,13 @@ function blockNodes(doc, block) {
  *
  * @param {Document} doc 造节点用的 document(注入,便于单测)
  * @param {string} markdown
- * @param {{resolveLink?:Function, wikilinks?:boolean, tags?:boolean, tables?:boolean}} [options]
+ * @param {{resolveLink?:Function, wikilinks?:boolean, tags?:boolean, tables?:boolean, omitImageUrls?:Set<string>}} [options]
  * @returns {Node[]}
  */
 export function renderMarkdownNodes(doc, markdown, options = {}) {
     const opts = { wikilinks: false, tags: false, tables: false, ...options };
     const blocks = parseMarkdown(markdown, opts);
     const out = [];
-    for (const block of blocks) out.push(...blockNodes(doc, block));
+    for (const block of blocks) out.push(...blockNodes(doc, block, opts));
     return out;
 }

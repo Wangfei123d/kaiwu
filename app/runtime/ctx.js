@@ -307,7 +307,7 @@ export function buildCtx({ descriptor, bridge, registries, log = console }) {
     // 判据在 app/lib/agent-sessions.js(纯函数、单测钉着)。
     //
     // ⚠️ `activate` 是这里唯一的**动手**能力:它会把当前会话换成另一条(上下文随之换掉)。
-    //    与"重连以启用图片"同一口径:按钮上必须把代价写在明面上。
+    //    切换会话会改变当前上下文,所以调用方必须把代价写明。
     // ⚠️ 递不进路径:读写哪一份记录由主进程按**当前笔记库**算(<笔记库>/AI会话/),
     //    插件只能递会话 id。
     if (permissions.includes('sessions')) {
