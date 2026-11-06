@@ -17,6 +17,8 @@ export function createAcpClient({ transport, log = console, protocolVersion = PR
     // 通知(没有 id)的订阅者。prompt() 只在自己那个会话的增量上回调 ——
     // 多会话并存时,增量不能串到别的会话去。
     const updateListeners = new Set();
+    // 会话标题可能在首轮 prompt 结束后才生成,所以不能只跟随 prompt 生命周期订阅。
+    const sessionTitleListeners = new Set();
 
     const off = transport.onMessage((msg) => {
         // 1) 对端发来的请求(有 id **且有 method**)—— 必须排在最前面判。
@@ -63,6 +65,15 @@ export function createAcpClient({ transport, log = console, protocolVersion = PR
             return;
         }
         // 3) 通知(没有 id):session/update 之类,交给订阅者
+        if (msg.method === METHODS.SESSION_UPDATE) {
+            const update = msg.params?.update;
+            if (update?.sessionUpdate === 'session_info_update' && typeof update.title === 'string') {
+                const event = { sessionId: String(msg.params?.sessionId ?? ''), title: update.title };
+                for (const fn of sessionTitleListeners) {
+                    try { fn(event); } catch (err) { log.warn?.('[acp] 会话标题监听器抛错', err); }
+                }
+            }
+        }
         for (const fn of updateListeners) {
             try { fn(msg); } catch (err) { log.warn?.('[acp] update 监听器抛错', err); }
         }
@@ -265,6 +276,13 @@ export function createAcpClient({ transport, log = console, protocolVersion = PR
             return () => requestHandlers.delete(entry);
         },
 
+        /** 订阅跨 prompt 生命周期的会话标题更新。 */
+        onSessionTitle(listener) {
+            if (typeof listener !== 'function' || disposed) return () => {};
+            sessionTitleListeners.add(listener);
+            return () => sessionTitleListeners.delete(listener);
+        },
+
         // 释放的同时把在飞请求一并拒掉:这时候连接已经拆了,不会再有响应回来,
         // 留着它们就是永远不会落地的 spinner。之后来的请求由 call() 那道
         // disposed 闸当场拒绝(幂等:重复 dispose 不抛)。
@@ -273,6 +291,7 @@ export function createAcpClient({ transport, log = console, protocolVersion = PR
             disposed = true;
             off();
             updateListeners.clear();
+            sessionTitleListeners.clear();
             requestHandlers.clear();
             failPending('客户端已释放(dispose)');
         },

@@ -16,7 +16,7 @@
 //   回答者,而 ACP 没有"问用户"这个方法 —— 能借的只有 session/request_permission。
 //   桥没接这一路,于是模型即便有这个工具也没人能回答它。
 //
-// 补丁做八件事(都尽量小):
+// 补丁做九件事(都尽量小):
 //   1) AcpSession 上记三个字段:已流出的正文 / 已流出的思考 / 已实时宣告过的工具 id
 //   2) 接 agent/assistant-stream,按 chunk 类型分三路发 ACP 增量
 //   3) 工具调用的**第一个** delta 就把卡片建出来(不再等整条消息提交)
@@ -27,6 +27,7 @@
 //      session/request_permission(多选/无选项**不硬凑**,交给下一个回答者)
 //   8) 提供非标准的 `kaiwu/translate`:按需用 ctx.llm 把一段文字译成中文
 //      (思考条上的「译」,一次补全,不新增进程、不占当前那一轮)
+//   9) 把 Harness 异步生成的首条消息标题转成 ACP session_info_update,交给开物落盘
 //
 // 用法:
 //   node tools/patch-dsh-acp-streaming.mjs            打补丁(已打过则只报告)
@@ -198,6 +199,16 @@ const TOOLCALL_ANCHOR = 'update: toolCallUpdate(event)';
 const TOOLCALL_REPL = 'update: this.liveToolCallUpdate(event)';
 const TOOLRESULT_ANCHOR = 'update: await toolResultUpdate(this.ctx, event)';
 const TOOLRESULT_REPL = 'update: this.finishLiveToolCall(await toolResultUpdate(this.ctx, event))';
+
+// DSH 首条消息标题事件 → ACP 标准会话信息更新,从而让 Kaiwu 收到异步生成的标题。
+const TITLE_ANCHOR = '} else if (event.type === "tool/call") {';
+const TITLE_REPL = [
+    '} else if (event.type === "session/title") {',
+    T + T + T + T + 'const title = typeof event.data?.title === "string" ? event.data.title.trim() : "";',
+    T + T + T + T + 'if (title !== "") this.enqueueUpdate({ sessionUpdate: "session_info_update", title });',
+    T + T + T + '} else if (event.type === "tool/call") {',
+].join(N);
+const TITLE_CHECK = 'sessionUpdate: "session_info_update", title';
 
 // 第七处:当 `user-questions/request` 的回答者。插在现成的 approval/request 回答者**之前**
 // (两者是同一类东西:都是"瀑布上由桥来回答",放在一起便于对照)。
@@ -429,6 +440,7 @@ const PARTS = [
     { name: '接上 agent/assistant-stream', anchor: LISTEN_ANCHOR, repl: LISTEN_INSERT + LISTEN_ANCHOR },
     { name: '耐久 tool/call 降级成更新', anchor: TOOLCALL_ANCHOR, repl: TOOLCALL_REPL },
     { name: '工具结果到达时收起实时记录', anchor: TOOLRESULT_ANCHOR, repl: TOOLRESULT_REPL },
+    { name: '首条消息生成的标题转成 ACP 会话更新', anchor: TITLE_ANCHOR, repl: TITLE_REPL },
     { name: '当 user-questions/request 的回答者', anchor: ANSWER_ANCHOR, repl: ANSWER_INSERT + ANSWER_ANCHOR },
     { name: '挂上 ' + TRANSLATE_METHOD + ' 与 ' + CAPABILITIES_METHOD + ' 处理器', anchor: CONNECT_ANCHOR, repl: CONNECT_REPL },
     { name: 'prompt 现算图片能力(换模型后立刻生效)', anchor: PROMPT_ANCHOR, repl: PROMPT_REPL },
@@ -444,6 +456,7 @@ const CHECKS = [
     'ctx.on("agent/assistant-stream"',
     'update: this.liveToolCallUpdate(event)',
     'update: this.finishLiveToolCall(await toolResultUpdate(this.ctx, event))',
+    TITLE_CHECK,
     'ctx.on("user-questions/request"',
     'async function translateThought(',
     '.onRequest("kaiwu/translate"',
@@ -460,7 +473,7 @@ const CHECKS = [
  * @param {{target?:string, mode?:'patch'|'check'|'revert'}} [options]
  * @returns {{ok:boolean, code:number, output:string}}
  */
-export function applyDshAcpPatch({ target = defaultTarget(), mode = 'patch' } = {}) {
+function applyDshAcpSourcePatch({ target = defaultTarget(), mode = 'patch' } = {}) {
     const backup = target + '.kaiwu-orig';
     if (!fs.existsSync(target)) return { ok: false, code: 1, output: '目标文件不存在:' + target };
 
@@ -477,6 +490,7 @@ export function applyDshAcpPatch({ target = defaultTarget(), mode = 'patch' } = 
     const legacy = !patched && before.includes(LEGACY_MARK);
     const needsInitializeUpgrade = patched && before.includes(INITIALIZE_IMAGE_PROBE);
     const partial = patched && !CHECKS.every((s) => before.includes(s));
+    const needsTitleUpgrade = patched && !before.includes(TITLE_CHECK);
 
     if (mode === 'check') {
         const counts = PARTS.map((p) => ({ name: p.name, n: before.split(p.anchor).length - 1 }));
@@ -492,15 +506,22 @@ export function applyDshAcpPatch({ target = defaultTarget(), mode = 'patch' } = 
     }
 
     if (patched && !partial && !needsInitializeUpgrade) return { ok: true, code: 0, output: '已经打过补丁,不动它:' + target };
-    if (patched && needsInitializeUpgrade && !CHECKS.filter((s) => s !== INITIALIZE_IMAGE_PROBE_REPL).every((s) => before.includes(s))) {
-        return {
-            ok: false,
-            code: 1,
-            output: '现有 ACP 补丁不完整，拒绝只改握手逻辑。请先检查安装包完整性:' + target,
-        };
-    }
-    if (patched && needsInitializeUpgrade) {
-        const upgraded = before.replace(INITIALIZE_IMAGE_PROBE, INITIALIZE_REPL);
+    if (patched && (needsInitializeUpgrade || needsTitleUpgrade)) {
+        const upgradeOnlyChecks = new Set([TITLE_CHECK, INITIALIZE_IMAGE_PROBE_REPL]);
+        const required = CHECKS.filter((s) => !upgradeOnlyChecks.has(s));
+        const missingRequired = required.filter((s) => !before.includes(s));
+        const titleAnchorCount = before.split(TITLE_ANCHOR).length - 1;
+        if (missingRequired.length > 0 || (needsTitleUpgrade && titleAnchorCount !== 1)) {
+            return {
+                ok: false,
+                code: 1,
+                output: '现有 ACP 补丁与可升级版本不匹配，拒绝改写。缺少 ' + JSON.stringify(missingRequired)
+                    + (needsTitleUpgrade ? '；标题锚点命中 ' + titleAnchorCount + ' 次' : '') + ':' + target,
+            };
+        }
+        let upgraded = before;
+        if (needsInitializeUpgrade) upgraded = upgraded.replace(INITIALIZE_IMAGE_PROBE, INITIALIZE_REPL);
+        if (needsTitleUpgrade) upgraded = upgraded.replace(TITLE_ANCHOR, TITLE_REPL);
         fs.writeFileSync(target, upgraded, 'utf8');
         const check = fs.readFileSync(target, 'utf8');
         const missing = CHECKS.filter((s) => !check.includes(s));
@@ -508,7 +529,7 @@ export function applyDshAcpPatch({ target = defaultTarget(), mode = 'patch' } = 
         return {
             ok,
             code: ok ? 0 : 1,
-            output: '已更新 initialize 握手补丁:' + target + '\n自检:' + (ok ? '通过' : '**失败**,缺 ' + JSON.stringify(missing)),
+            output: '已更新 ACP 桥接补丁:' + target + '\n自检:' + (ok ? '通过' : '**失败**,缺 ' + JSON.stringify(missing)),
         };
     }
     if (legacy || partial) {
@@ -541,14 +562,66 @@ export function applyDshAcpPatch({ target = defaultTarget(), mode = 'patch' } = 
     for (const part of PARTS) after = after.replace(part.anchor, part.repl);
     fs.writeFileSync(target, after, 'utf8');
 
-    // 写完自检:标记在、八处改动都在(缺哪一条就把它打出来,别只说一句"失败")
+    // 写完自检:标记在、所有改动都在(缺哪一条就把它打出来,别只说一句"失败")
     const check = fs.readFileSync(target, 'utf8');
     const missing = CHECKS.filter((s) => !check.includes(s));
     const ok = check.includes(MARK) && missing.length === 0;
     output.push('已写入:' + target);
-    output.push('自检:' + (ok ? '通过(标记 + 八处改动都在)' : '**失败**,缺 ' + JSON.stringify(missing)));
+    output.push('自检:' + (ok ? '通过(标记 + 所有改动都在)' : '**失败**,缺 ' + JSON.stringify(missing)));
     output.push('用 node .agent-probe/acp-stream-timing.mjs 可以量出增量条数与到达时间。');
     return { ok, code: ok ? 0 : 1, output: output.join('\n') };
+}
+
+const TITLE_PROFILE_MARK = '# kaiwu: leave the dsh-base first-prompt title provider enabled';
+
+function titleProfileTargetOf(acpTarget) {
+    return path.resolve(path.dirname(acpTarget), '..', '..', 'dsh-acp-app', 'cordis.patch.yml');
+}
+
+function applyDshTitleProfile({ target, mode }) {
+    const backup = target + '.kaiwu-orig';
+    if (!fs.existsSync(target)) {
+        // Custom --target fixtures may only include the ACP bridge. The managed runtime always has this sibling.
+        return { ok: true, code: 0, output: '标题插件配置未随自定义 target 提供,略过:' + target };
+    }
+    const before = fs.readFileSync(target, 'utf8');
+    const disabledPattern = /^- id: session-title-llm\r?\n[ \t]+disabled: true[ \t]*\r?\n?/m;
+    const disabled = disabledPattern.test(before);
+
+    if (mode === 'check') {
+        return {
+            ok: !disabled,
+            code: disabled ? 2 : 0,
+            output: '标题生成插件:' + target + '\n已启用:' + !disabled
+                + (fs.existsSync(backup) ? '\n备份:' + backup : ''),
+        };
+    }
+    if (mode === 'revert') {
+        if (!fs.existsSync(backup)) return { ok: true, code: 0, output: '标题插件配置没有开物备份,不动它:' + target };
+        fs.copyFileSync(backup, target);
+        return { ok: true, code: 0, output: '已还原标题插件配置:' + target };
+    }
+    if (!disabled) return { ok: true, code: 0, output: '首条消息标题生成已启用:' + target };
+
+    if (!fs.existsSync(backup)) fs.copyFileSync(target, backup);
+    const after = before.replace(disabledPattern, `${TITLE_PROFILE_MARK}\n`);
+    if (after === before) return { ok: false, code: 1, output: '找不到标题插件的停用项,拒绝改写:' + target };
+    fs.writeFileSync(target, after, 'utf8');
+    const check = fs.readFileSync(target, 'utf8');
+    const ok = !disabledPattern.test(check);
+    return { ok, code: ok ? 0 : 1, output: '已启用首条消息标题生成:' + target + '\n自检:' + (ok ? '通过' : '失败') };
+}
+
+/** ACP 桥接与默认配置成对更新:启用 Harness 首条提问命名,并把标题推到 Kaiwu。 */
+export function applyDshAcpPatch({ target = defaultTarget(), mode = 'patch' } = {}) {
+    const source = applyDshAcpSourcePatch({ target, mode });
+    if (mode === 'patch' && !source.ok) return source;
+    const profile = applyDshTitleProfile({ target: titleProfileTargetOf(target), mode });
+    return {
+        ok: source.ok && profile.ok,
+        code: source.ok && profile.ok ? 0 : Math.max(source.code, profile.code),
+        output: source.output + '\n' + profile.output,
+    };
 }
 
 function runCli() {

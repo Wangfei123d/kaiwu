@@ -623,12 +623,20 @@ export function createAgentRuntime({
             canHandle: (method) => method === METHODS.REQUEST_PERMISSION,
             handle: (msg) => handlePermissionRequest(msg),
         });
+        const titleClient = makeClient();
+        const offTitle = typeof titleClient.onSessionTitle === 'function'
+            ? titleClient.onSessionTitle(({ sessionId: titleSessionId, title }) => {
+                try { recorder.title?.({ id: titleSessionId, title }); }
+                catch (err) { log.warn?.('[agent] 会话标题没记进会话记录', err); }
+            })
+            : () => {};
 
         return {
             supervisor,
             client: makeClient(),
             offState,
             offRequest,
+            offTitle,
             // 权限请求挂在这里(而不是模块级):它天然属于"这一个进程"。
             pendingPermissions: new Map(),   // requestId -> { settle, timer, resolved }
             permissionSeq: 0,
@@ -651,7 +659,7 @@ export function createAgentRuntime({
         // 理由与 leaveReady 里那一段相同:请求方那个进程就是它自己。
         try { dropPermissionsOf(c); } catch (err) { log.warn?.('[agent] 丢弃挂起权限请求失败', err); }
         try { c.client.failPending('Agent 运行时已释放(dispose)'); } catch (err) { log.warn?.('[agent] 结掉在飞请求失败', err); }
-        try { c.offState(); c.offRequest(); } catch (err) { log.warn?.('[agent] 摘监听器失败', err); }
+        try { c.offState(); c.offRequest(); c.offTitle?.(); } catch (err) { log.warn?.('[agent] 摘监听器失败', err); }
         try { c.client.dispose(); } catch (err) { log.warn?.('[agent] 释放客户端失败', err); }
         try { await c.supervisor.stop(); } catch (err) { log.warn?.('[agent] 停止 Agent 失败', err); }
     }

@@ -8,7 +8,7 @@ import { applyDshAcpPatch } from '../../tools/patch-dsh-acp-streaming.mjs';
 
 const mkdirAsync = promisify(mkdir);
 const KAIWU_DSH_VERSION = '0.1.5-rc.2';
-const DEPENDENCY_REVISION = 5;
+const DEPENDENCY_REVISION = 6;
 const MANAGED_RUNTIME_NAME = 'kaiwu-deepseek-harness-runtime';
 
 // 0.1.5-rc.2 的发布包有几处未声明运行依赖，且 npm 会把部分内部包浮动到

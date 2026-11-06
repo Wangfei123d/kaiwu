@@ -64,6 +64,17 @@ export function titleFrom(text, max = TITLE_MAX) {
     return chars.length <= max ? flat : `${chars.slice(0, max).join('')}…`;
 }
 
+/** Harness 生成的会话名:压成一行并限制长度,但不改变会话最近活动时间。 */
+export function withTitle(record, title, max = 64) {
+    const flat = String(title ?? '').replace(/\s+/g, ' ').trim();
+    if (flat === '') return record;
+    const limit = Number.isInteger(max) && max > 0 ? max : 64;
+    const chars = [...flat];
+    const nextTitle = chars.length <= limit ? flat : `${chars.slice(0, limit - 1).join('')}…`;
+    if (nextTitle === record.title) return record;
+    return { ...record, title: nextTitle };
+}
+
 /** 本地时间 `2026-09-26 13:02` 这种口径统一在这里,别处不要再拼。 */
 export function stampOf(ms) {
     const d = new Date(ms);

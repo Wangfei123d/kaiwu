@@ -16,7 +16,7 @@ import fsDefault from 'node:fs';
 import path from 'node:path';
 import {
     SESSION_DIR, addEnd, addText, addTool, addUser, entryFromUpdate, fileNameOf, newRecord,
-    parseRecord, renderRecord, rowOf, withModel,
+    parseRecord, renderRecord, rowOf, withModel, withTitle,
 } from '../../app/lib/session-record.js';
 
 /** meta 行读多少字节就够:标题(24 字)+ 路径 + 模型值,远小于这个数。 */
@@ -41,6 +41,7 @@ export const nullLedger = Object.freeze({
     user: () => null,
     text: () => null,
     update: () => null,
+    title: () => null,
     end: () => null,
     model: () => null,
     peek: () => null,
@@ -319,6 +320,17 @@ export function createSessionLedger({
             if (entry === null) return record;
             const next = entry.kind === 'tool' ? addTool(record, entry) : addText(record, entry.kind, entry.text, entry.at);
             live.set(sid, next);
+            return next;
+        },
+        /** Agent 异步生成的会话名。 */
+        title({ id, title } = {}) {
+            const sid = String(id ?? '');
+            const record = live.get(sid);
+            if (record === undefined) return null;
+            const next = withTitle(record, title);
+            if (next === record) return record;
+            live.set(sid, next);
+            schedule(sid);
             return next;
         },
         /** 这一轮收尾(带 error 就是"最后一条错")。 */
