@@ -456,6 +456,7 @@ export function createAgentPanel({
     let videoBusy = false;        // 一次理解在飞:防连点、防重入
     let ctxRowEl = null;          // 输入卡片顶端那一行(平时 hidden,只在"连接中/有东西可停"时出现)
     let ctxHintEl = null;         // 那一行里那句「正在连接 Agent…」(只在 connecting 时写出来)
+    let setupHint = '';           // 缺 Harness 时显示检测 / 自动安装进度
 
     // ---------- 方案 C:四段状态行的**本地**那几样 ----------
     //
@@ -2975,8 +2976,9 @@ export function createAgentPanel({
         // 只在 `starting` 时出现:失败/崩了有对话里的提示卡说原因,那比这句更有信息。
         const connecting = status.state === 'starting';
         if (ctxHintEl !== null) {
-            if (connecting === true && String(ctxHintEl.textContent ?? '') === '') {
-                ctxHintEl.textContent = '正在连接 Agent…';
+            const hint = setupHint || '正在连接 Agent…';
+            if (connecting === true && String(ctxHintEl.textContent ?? '') !== hint) {
+                ctxHintEl.textContent = hint;
             }
             setHidden(ctxHintEl, !connecting);
         }
@@ -3356,6 +3358,11 @@ export function createAgentPanel({
     function onEvent(event) {
         if (disposed) return;
         if (event === null || typeof event !== 'object') return;
+        if (event.kind === 'setup') {
+            setupHint = typeof event.message === 'string' ? event.message : '';
+        } else if (event.kind === 'state' && event.status?.state !== 'starting') {
+            setupHint = '';
+        }
         // 别的会话的增量不该进这个面板(多会话并存时会把两条回复搅在一起)。
         //
         // ⚠️ 但 `session` 事件**必须放行**:它正是"当前会话换成了谁"的公告 ——

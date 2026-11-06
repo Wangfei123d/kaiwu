@@ -11,13 +11,6 @@
 //
 // ⚠️ 纪律:**绝不 innerHTML**。内容来自模型(回复/title)与用户,一律 textContent。
 
-/** 时间戳 → `13:02`。 */
-function clockOf(ms) {
-    const d = new Date(Number(ms) || 0);
-    const p = (n) => String(n).padStart(2, '0');
-    return `${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
 /**
  * @param {HTMLElement} host 外壳造好的宿主
  * @param {object} ctx 插件上下文(只用到 sessions / log)
@@ -127,13 +120,6 @@ export function setup(host, ctx) {
         // 0 轮 = 已经建好但一句话都还没说(「点了立刻建」会造出来的那种)。
         const label = Number(row.turns ?? 0) > 0 ? (row.title || '(没有标题)') : '新会话(还没说话)';
         node.append(el('div', 'ses-title', label));
-        const meta = el('div', 'ses-meta');
-        meta.append(el('span', '', clockOf(row.updatedAt)));
-        if (Number(row.turns ?? 0) > 0) meta.append(el('span', '', `${row.turns} 轮`));
-        else meta.append(el('span', 'ses-empty-turn', '0 轮'));
-        if (row.model !== '') meta.append(el('span', 'ses-model', row.model));
-        if (row.stateLabel !== '') meta.append(el('span', `ses-badge ${row.state}`, row.stateLabel));
-        node.append(meta);
         const err = rowErrs.get(row.id);
         if (err !== undefined && err !== '') node.append(el('div', 'ses-row-err', err));
         // 左键 / 回车 / 空格:三条路都走"切过去"
@@ -155,20 +141,27 @@ export function setup(host, ctx) {
     function renderList() {
         listCol.replaceChildren();
         const head = el('div', 'ses-lhead');
-        head.append(el('span', '', '历次对话'), el('span', 'ses-count', String(rows.length)));
-        // 「＋ 新建会话」:点了**立刻**让对端开一条新的。
-        const create = el('button', 'ses-new', '＋ 新建会话');
+        // 新建会话图标按钮:点了**立刻**让对端开一条新的。
+        const create = el('button', 'ses-new');
         create.type = 'button';
+        create.setAttribute('aria-label', '新建会话');
+        create.setAttribute('data-action', 'new-session');
+        const createIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        createIcon.setAttribute('viewBox', '0 0 20 20');
+        createIcon.setAttribute('aria-hidden', 'true');
+        createIcon.setAttribute('focusable', 'false');
+        const bubble = document.createElementNS(createIcon.namespaceURI, 'path');
+        bubble.setAttribute('d', 'M4.25 4.25h11.5v8.5h-6l-3.5 3v-3H4.25z');
+        const plus = document.createElementNS(createIcon.namespaceURI, 'path');
+        plus.setAttribute('d', 'M10 6.5v4.5M7.75 8.75h4.5');
+        createIcon.append(bubble, plus);
+        create.append(createIcon);
         create.disabled = busyTurn || busy;
         create.title = busyTurn
             ? '这一轮还没结束 —— 等它跑完(或取消)再新建'
             : '立刻开一条全新的会话(对端当场建,台账里立刻会出现一条 0 轮的记录)';
         create.addEventListener('click', () => { void createSession(); });
         head.append(create);
-        const refresh = el('button', 'ses-refresh', '刷新');
-        refresh.type = 'button';
-        refresh.addEventListener('click', () => { void load(); });
-        head.append(refresh);
         listCol.append(head);
 
         // 清单级的话(读不到台账之类)。成功路径上它必须是空的 —— 自检钉着这一条。
@@ -183,11 +176,7 @@ export function setup(host, ctx) {
             listCol.append(empty);
             return;
         }
-        let day = null;
-        for (const row of rows) {
-            if (row.day !== day) { day = row.day; listCol.append(el('div', 'ses-day', day)); }
-            listCol.append(rowNode(row));
-        }
+        for (const row of rows) listCol.append(rowNode(row));
     }
 
     // ---------------------------------------------------------------- 数据

@@ -1,5 +1,5 @@
 // 唯一的 CommonJS 文件。sandbox: true 下预加载不支持 ESM,所以扩展名必须是 .cjs。
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 // 频道路由表。渲染进程侧的第一道约束 —— 主进程对未注册的频道本来也会拒绝,
 // 但在这里挡住能让错误更早、更清楚地暴露出来。
@@ -16,6 +16,7 @@ const ALLOWED_INVOKE = [
     'kaiwu:dialog:openFile',
     // 选目录(插件想把数据放到笔记库之外时才用得上)。只回用户选中的那一个路径。
     'kaiwu:dialog:openDirectory',
+    'kaiwu:music:download',
     'kaiwu:shell:openExternal',
     // 「登录一次,自动记住 Cookie」:只递 pluginId,登录页/域名/投递目标全部来自
     // 插件清单,主进程还会把 Cookie 直接 POST 给该插件自己的服务(值不经过这里)。
@@ -122,11 +123,13 @@ const ALLOWED_INVOKE = [
     // 项目面板的两条:改名、删除(删除走系统回收站,可恢复)。
     'drama:rename',
     'drama:remove',
-    // 「＋ 导入」:把一个文本文件抽成纯文本交给面板(**只读**,不往项目里拷东西)。
+    // 可导入文本框的只读文件解析(**不往项目里拷东西**)。
     // 从前的 'drama:import'(拷进项目 + 在节点上记路径)与 source/useSource 两个参数一起删了。
     'drama:readText',
-    // 从系统拖进画布的 Word:只递文件名与字节,不递磁盘路径。
-    'drama:readDroppedText',
+    'drama:importOfficeFile',
+    'drama:openOfficeFile',
+    'drama:openGeneratedOutput',
+    // 读取项目内画面素材；导入与读取的路径校验都由主进程处理。
     'drama:media',
     'drama:importImage',
     // 「AI 会话」:会话台账(记录写在 <笔记库>/AI会话/ 里)。
@@ -164,6 +167,18 @@ const bridge = {
             return Promise.reject(new Error('未授权的 IPC 频道: ' + channel));
         }
         return ipcRenderer.invoke(channel, payload);
+    },
+    importDroppedOfficeFile(project, file) {
+        if (typeof project !== 'string' || !project.trim()) {
+            return Promise.reject(new Error('请先选择项目'));
+        }
+        let filePath = '';
+        try { filePath = webUtils.getPathForFile(file); }
+        catch { return Promise.reject(new Error('无法读取拖入文件的本地路径')); }
+        if (typeof filePath !== 'string' || filePath === '') {
+            return Promise.reject(new Error('拖入的文件不在本地磁盘上'));
+        }
+        return bridge.invoke('drama:importOfficeFile', { project, path: filePath });
     },
     /**
      * 单向通报(没有返回值)。白名单与 invoke 那一份是同一个作用:挡住没登记过的频道,

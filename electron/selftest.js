@@ -2725,17 +2725,16 @@ export async function runSelftest({
         r.ok('短剧画布·拖入:接收路径的**逐步轨迹**(红的时候这里写着停在哪一步,以及判定用的 rect)',
             dropTrace.last !== null, JSON.stringify(dropTrace));
 
-        // 落下的那个新节点当场是**选中**的(createNode 的规矩)→ 记下它的 id:
-        // ① 断言里能看到它真的在画布上;② 这一段结束时要把这两次拖入新建的节点删掉
-        // (后面的断言默认"自检项目里还是那 3 个节点",多留两个会把它们全带红)。
+        // 文本文件拖入画布已禁用:文本节点只接受手动输入的纯文本。
         const textSelId = await win.webContents.executeJavaScript(`(() => {
             const host = document.querySelector('${DROP_HOST}');
             const sel = host?.querySelector('.drama-node.sel');
             return sel?.dataset?.nodeId ?? null;
         })()`);
-        r.ok('短剧画布·拖入:从笔记列表拖一个 .md 到画布 → 图上真的多了一个「文本 / 剧本」节点,正文就是那篇笔记',
-            droppedText.ok === true && textNode !== undefined
-            && textNodes.length > nodesOfType(graphBefore, 'text').length,
+        r.ok('短剧画布·拖入:文本文件不会导入为文本节点,文本节点只支持手动输入纯文本',
+            droppedText.ok === true && textNode === undefined
+            && textNodes.length === nodesOfType(graphBefore, 'text').length
+            && /只支持手动输入纯文本/.test(String(dropTrace.status ?? '')),
             JSON.stringify({
                 droppedText, textSelId, trace: dropTrace, facts: graphFacts(),
                 textCountBefore: nodesOfType(graphBefore, 'text').length,

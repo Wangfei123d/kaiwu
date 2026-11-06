@@ -17,6 +17,8 @@ import { inputEdgeGroups } from '../../../app/lib/drama-connections.js';
 import { buildImagePrompt } from '../../../app/lib/drama-image-prompt.js';
 import { planSkillExecution } from './skill-plan.js';
 import { readProjectImages } from './skill-resources.js';
+import { MAX_OFFICE_FILE_BYTES, resolveProjectOfficeFile } from './office-files.js';
+import { createWordDocument } from './word-docx.js';
 import { admitImagePayload } from '../../../app/lib/agent-image.js';
 import { extractText } from './text.js';
 import { configFile as imageConfigFile, imageEdit, imageListModels, imageStatus, readImageConfig, writeImageConfig } from './image.js';
@@ -30,6 +32,57 @@ const API_BASE = '/dsh-ai-drama/api';
 const MAX_TEXT = 20000;
 const MAX_GENERATED_BYTES = 2 * 1024 * 1024;
 export const MAX_SKILL_INPUT_BYTES = 16 * 1024 * 1024;
+
+const PROMPT_EXPORT_FORMATS = [
+    { format: 'docx', label: 'Word', pattern: /\.docx\b|\bword\b|word格式|word文档/ig },
+    { format: 'md', label: 'Markdown', pattern: /\.md\b|\bmarkdown\b|\bmd格式\b/ig },
+    { format: 'txt', label: 'TXT', pattern: /\.txt\b|\btxt\b|纯文本(?:格式|文件)?/ig },
+    { format: 'html', label: 'HTML', pattern: /\.html?\b|\bhtml格式\b/ig },
+    { format: 'json', label: 'JSON', pattern: /\.json\b|\bjson格式\b/ig },
+    { format: 'csv', label: 'CSV', pattern: /\.csv\b|\bcsv格式\b/ig },
+    { format: 'unsupported-doc', label: '旧版 Word DOC', pattern: /\.doc\b|\bdoc格式\b/ig },
+    { format: 'unsupported-pdf', label: 'PDF', pattern: /\.pdf\b|\bpdf格式\b/ig },
+    { format: 'unsupported-xlsx', label: 'Excel', pattern: /\.xlsx?\b|\bxlsx?格式\b|excel\s*(?:格式|文件)/ig },
+    { format: 'unsupported-pptx', label: 'PowerPoint', pattern: /\.pptx?\b|\bpptx?格式\b|powerpoint\s*(?:格式|文件)/ig },
+    { format: 'unsupported-wps', label: 'WPS', pattern: /\.wps\b|\bwps\s*(?:格式|文件|文档)/ig },
+];
+
+/** 仅当提示词提出导出/输出/文件格式要求时，动态识别目标格式。 */
+function detectRequestedExport(prompt) {
+    const source = text(prompt);
+    const actions = [...source.matchAll(/导出|输出|保存|生成|交付|提供|创建|转换|转成/gi)];
+    const directFormat = /(?:\.docx?\b|\.md\b|\.txt\b|\.html?\b|\.json\b|\.csv\b|\.pdf\b|\.xlsx?\b|\.pptx?\b|\.wps\b|\b(?:word|markdown|md|txt|html|json|csv|pdf|xlsx?|pptx?|wps|doc)\s*(?:格式|文档|文件))/i.test(source);
+    if (actions.length === 0 && !directFormat) return null;
+    const actionTail = actions.length > 0 ? source.slice(actions.at(-1).index) : '';
+    const scanSource = actionTail && PROMPT_EXPORT_FORMATS.some((item) => {
+        item.pattern.lastIndex = 0;
+        return item.pattern.test(actionTail);
+    }) ? actionTail : directFormat ? source : '';
+    if (scanSource === '') return null;
+    const found = [];
+    for (const item of PROMPT_EXPORT_FORMATS) {
+        item.pattern.lastIndex = 0;
+        for (const match of scanSource.matchAll(item.pattern)) found.push({ ...item, index: match.index ?? 0 });
+    }
+    found.sort((a, b) => a.index - b.index);
+    return found.at(-1) ?? null;
+}
+
+function serializeRequestedExport(format, value) {
+    if (format === 'docx') return createWordDocument(value);
+    if (format === 'html') {
+        const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');
+        return Buffer.from(`<!doctype html><html><head><meta charset="utf-8"><title>生成结果</title></head>` +
+            `<body><pre style="white-space:pre-wrap;font:16px/1.7 sans-serif">${escaped}</pre></body></html>`, 'utf8');
+    }
+    if (format === 'json') {
+        const json = value.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+        try { JSON.parse(json); } catch { throw new Error('模型返回的内容不是有效 JSON，无法按 JSON 格式导出；请在提示词中要求只输出有效 JSON 后重试'); }
+        return Buffer.from(json, 'utf8');
+    }
+    return Buffer.from(value, 'utf8');
+}
 /**
  * 一次导入的字节上限。**200 KB**。
  *
@@ -101,6 +154,19 @@ export function readTextContainer(node, project) {
     }
     const value = text(node?.params?.value);
     return { text: value, from: value.trim() === '' ? 'empty' : 'value', file: '' };
+}
+
+/** 读取项目内 Word 节点的 DOCX 正文，并以文件内容参与运行缓存指纹。 */
+function readWordDocument(node, projectDir) {
+    const file = text(node?.params?.file).trim();
+    if (!/\.docx$/i.test(file)) throw new Error('Word 文件节点只支持 .docx');
+    const target = resolveProjectOfficeFile(projectDir, file);
+    const stat = fs.statSync(target);
+    if (stat.size > MAX_OFFICE_FILE_BYTES) throw new Error('Word 文件超过 50 MB 上限');
+    const buffer = fs.readFileSync(target);
+    const { text: content } = extractText('document.docx', buffer);
+    if (content.trim() === '') throw new Error('Word 文档没有可读取的正文');
+    return { text: content, signature: createHash('sha1').update(buffer).digest('hex') };
 }
 
 /**
@@ -237,15 +303,11 @@ export const TYPES = [
     {
         // 文本容器:既能手输,也能从文件导入(见 lib/text.js)。
         //
-        // ⚠️ 从前的三个参数(value / source / useSource)在 2026-09 收敛成一个:
-        //    「导入的文件」+「用导入文件 true/false」删掉了 —— 导入这件事改成把**内容**灌进
-        //    value(面板上那个 ＋),节点就只有一个正文,不再"节点记路径、正文在别处"。
-        //    老节点由 migrateLegacyTextNodes() 一次性搬过来(不搬的话稿子会静默变空)。
-        //    `importable: true` 是**参数级**标记:面板据此在标签行右边画那个 ＋;
-        //    别的 textarea(备注、提示词)没有这个标记,就不会长出这个按钮。
-        id: 'text', label: '文本 / 剧本', category: '输入', color: 'text', inputs: [], outputs: ['文本'],
+        // 文本节点仅保存面板里手动输入的纯文本；不提供文件导入入口。
+        // 老节点由 migrateLegacyTextNodes() 一次性搬过来(不搬的话稿子会静默变空)。
+        id: 'text', label: '文本', category: '输入', color: 'text', inputs: [], outputs: ['文本'],
         params: [
-            { key: 'value', label: '手输内容', type: 'textarea', default: '', importable: true },
+            { key: 'value', label: '手输内容', type: 'textarea', default: '' },
         ],
         run: (node, _inputs, ctx) => readTextContainer(node, ctx.project),
     },
@@ -258,6 +320,21 @@ export const TYPES = [
             if (files.length === 0) throw new Error('请先导入参考图片');
             return { text: `参考图片 ${files.length} 张`, media: files };
         },
+    },
+    {
+        // 只由 DOCX 导入器创建；正文在运行时抽取并作为纯文本输出，可直接接入「运行」。
+        id: 'word-file', internal: true, label: 'Word 文件', category: '输入', color: 'text',
+        inputs: [], outputs: ['文本'], params: [],
+        run: (node, _inputs, ctx) => {
+            const result = ctx.wordFileData ?? readWordDocument(node, ctx.projectDir);
+            return result.text;
+        },
+    },
+    {
+        // 仅由「导入 WPS 文件」创建；原文件保存在项目 files/ 内，节点不改写文件内容。
+        id: 'wps-file', internal: true, label: 'WPS 文件', category: '输入', color: 'text',
+        inputs: [], outputs: [], params: [],
+        run: (node) => text(node.params?.name),
     },
     {
         id: 'skill', label: '技能', category: '技能', color: 'text', inputs: ['文本', '图集'],
@@ -274,6 +351,50 @@ export const TYPES = [
         id: 'template', label: '模板拼装', category: '文本', color: 'text', inputs: ['文本'], outputs: ['文本'],
         params: [{ key: 'template', label: '模板(用 {{0}} {{1}} 占位)', type: 'text', default: '{{input}}' }],
         run: (node, inputs) => text(fill(node.params?.template, inputs)),
+    },
+    {
+        id: 'run', label: '运行', category: '文本', color: 'text', inputs: ['文本'], outputs: ['文本'], multipleInputs: [0],
+        params: [],
+        run: async (_node, inputs, ctx) => {
+            if (typeof ctx.generateText !== 'function') throw new Error('文本生成服务尚未连接');
+            const source = inputs.map((value) => text(value).trim()).filter(Boolean).join('\n\n');
+            if (source.trim() === '') throw new Error('请先连接并填写上游文本节点');
+            const requestedExport = detectRequestedExport(source);
+            if (requestedExport?.format.startsWith('unsupported-')) {
+                throw new Error(`当前暂不支持导出 ${requestedExport.label} 文件；可在提示词中指定 Word/DOCX、Markdown、TXT、HTML、JSON 或 CSV`);
+            }
+            const generated = await ctx.generateText({ source, prompt: '', images: [] });
+            if (typeof generated !== 'string' || generated.trim() === '') throw new Error('模型没有返回文本');
+            if (Buffer.byteLength(generated, 'utf8') > MAX_GENERATED_BYTES) {
+                throw new Error('生成文本超过 2 MB，请让模型分段输出');
+            }
+            const dir = path.join(ctx.projectDir, 'outputs');
+            fs.mkdirSync(dir, { recursive: true });
+            const id = randomUUID();
+            const file = `${id}.txt`;
+            const textPath = path.join(dir, file);
+            fs.writeFileSync(textPath, generated, { encoding: 'utf8', flag: 'wx' });
+            let exportFile = null;
+            try {
+                if (requestedExport?.format === 'txt') {
+                    exportFile = `outputs/${file}`;
+                } else if (requestedExport) {
+                    const outputName = `${id}.${requestedExport.format}`;
+                    fs.writeFileSync(path.join(dir, outputName), serializeRequestedExport(requestedExport.format, generated), { flag: 'wx' });
+                    exportFile = `outputs/${outputName}`;
+                }
+            } catch (error) {
+                try { fs.unlinkSync(textPath); } catch { /* 保留原始写入错误 */ }
+                throw error;
+            }
+            return { text: generated, file: `outputs/${file}`, exportFile,
+                exportFormat: requestedExport?.format ?? null, exportLabel: requestedExport?.label ?? null };
+        },
+    },
+    {
+        id: 'result', internal: true, label: '运行结果', category: '文本', color: 'text',
+        inputs: ['文本'], outputs: ['文本'], params: [],
+        run: (_node, inputs) => text(inputs[0]),
     },
     {
         id: 'note', label: '备注', category: '文本', color: 'text', inputs: [], outputs: [],
@@ -296,7 +417,7 @@ export const TYPES = [
             if (typeof ctx.generateText !== 'function') throw new Error('文本生成模型尚未连接');
             const source = ctx.textSource ?? text(inputs[0]);
             const prompt = text(node.params?.prompt);
-            if (source.trim() === '' && prompt.trim() === '') throw new Error('请连接文本/剧本节点或填写提示词');
+            if (source.trim() === '' && prompt.trim() === '') throw new Error('请连接文本节点或填写提示词');
             const generated = await ctx.generateText({ source, prompt, images: ctx.images ?? [] });
             if (typeof generated !== 'string' || generated.trim() === '') throw new Error('模型没有返回文本');
             if (Buffer.byteLength(generated, 'utf8') > MAX_GENERATED_BYTES) {
@@ -390,7 +511,9 @@ export const typeOf = (id) => TYPES.find((t) => t.id === id);
  *    NOT_WIRED 那个桩",那只有这一侧知道(渲染进程拿到的是剥掉 run 的那一份)。
  *    不递的话插件只能自己再抄一份"哪几个没接线"的名单,那份名单迟早和这里漂移。
  */
-export const palette = () => TYPES.map((entry) => {
+export const palette = ({ includeInternal = false } = {}) => TYPES
+    .filter((entry) => includeInternal || entry.internal !== true)
+    .map((entry) => {
     const { run, ...rest } = entry;
     return { ...rest, wired: entry.wired !== false };
 });
@@ -488,7 +611,8 @@ async function runGraphInner(project, target, force = false, options = {}) {
         const type = typeOf(node.type);
         const groups = inputEdgeGroups(graph, node.id, type?.inputs?.length ?? 0, type?.multipleInputs);
         inputGroups.set(node.id, groups);
-        incomingOf.set(node.id, type?.id === 'image'
+        incomingOf.set(node.id, type?.id === 'run' ? (groups[0] ?? []).map((edge) => edge.from)
+            : type?.id === 'image'
             ? (groups[0] ?? []).map((edge) => edge.from)
             : type?.id === 'skill' ? (groups[0] ?? []).map(edge => edge.from)
                 : type?.id === 'llm' ? [groups[0]?.[0]?.from ?? null]
@@ -507,7 +631,12 @@ async function runGraphInner(project, target, force = false, options = {}) {
         let skillText = '';
         let skillFiles = [];
         let resourceSignature = '';
+        let wordFileData = null;
         try {
+            if (type?.id === 'word-file') {
+                wordFileData = readWordDocument(node, projectDir(project));
+                resourceSignature = wordFileData.signature;
+            }
             if (bundles.some(bundle => !bundle)) throw new Error('已选技能未完成读取，请检查技能连线');
             const seenFiles = new Set();
             for (const bundle of bundles) {
@@ -548,6 +677,8 @@ async function runGraphInner(project, target, force = false, options = {}) {
         const ordinaryPrompt = type?.id === 'image'
             ? buildImagePrompt(node.params?.prompt, ins, ups.map((from) => sourceTitles.get(from))) : '';
         const imagePrompt = [ordinaryPrompt, ...skillSections].filter(Boolean).join('\n\n');
+        const requestedExport = type?.id === 'run'
+            ? detectRequestedExport(ins.map((value) => text(value).trim()).filter(Boolean).join('\n\n')) : null;
         const fp = fingerprint(node, [...ups.map((from) => from ? hashes.get(from) : undefined),
             ...selected.map(item => hashes.get(item.id))], options.imageSignature, imagePrompt, resourceSignature);
         const prev = graph.runs?.[node.id];
@@ -556,12 +687,22 @@ async function runGraphInner(project, target, force = false, options = {}) {
         // 对出图节点就是**重新生成、重复花钱**,而且状态看起来还正常,极难发现。
         const cachedFile = type?.id === 'llm' && typeof prev?.file === 'string'
             ? path.resolve(projectDir(project), prev.file) : null;
+        const outputDir = path.resolve(projectDir(project), 'outputs');
+        const isExistingOutput = (file) => {
+            if (typeof file !== 'string') return false;
+            const targetFile = path.resolve(projectDir(project), file);
+            return targetFile.startsWith(outputDir + path.sep) && fs.existsSync(targetFile) && fs.statSync(targetFile).isFile();
+        };
+        const runCacheValid = type?.id === 'run' && prev?.exportFormat === (requestedExport?.format ?? null)
+            && isExistingOutput(prev?.file)
+            && (!requestedExport || isExistingOutput(prev?.exportFile));
         const canReuse = type?.id !== 'skill' && (type?.id !== 'llm' || (cachedFile !== null
             && cachedFile.startsWith(path.resolve(projectDir(project), 'outputs') + path.sep)
-            && fs.existsSync(cachedFile)));
+            && fs.existsSync(cachedFile))) && (type?.id !== 'run' || runCacheValid);
         if (!force && canReuse && prev !== undefined && (prev.status === 'ok' || prev.status === 'cached') && prev.fp === fp) {
             outputs.set(node.id, type?.id === 'llm' ? fs.readFileSync(cachedFile, 'utf8')
                 : type?.id === 'text' ? readTextContainer(node, project).text
+                    : type?.id === 'word-file' ? wordFileData.text
                     : type?.id === 'template' ? text(fill(node.params?.template, ins)) : prev.output);
             hashes.set(node.id, fp);
             graph.runs[node.id] = { ...prev, status: 'cached', at: Date.now() };
@@ -576,7 +717,7 @@ async function runGraphInner(project, target, force = false, options = {}) {
         }
         graph.runs[node.id] = { status: 'running', at: Date.now(), fp };
         graph = writeGraph(project, graph);
-        if (type.id === 'llm' || type.id === 'image') {
+        if (['llm', 'image', 'run'].includes(type.id)) {
             try { options.onNodeStatus?.({ nodeId: node.id, status: 'running' }); } catch { /* 进度通知不能中断生成 */ }
         }
         const t0 = Date.now();
@@ -598,7 +739,7 @@ async function runGraphInner(project, target, force = false, options = {}) {
             }
             const value = await type.run(node, ins, { project, projectDir: projectDir(project), graph,
                 generateText: options.generateText, generateImage: options.generateImage, imagePrompt,
-                textSource, images, skillText, skillFiles });
+                textSource, images, skillText, skillFiles, wordFileData });
             // 节点可以返回 { text, media } —— media 是产出的文件名列表(出图/改图用),
             // 画布拿它渲染缩略图;纯文本节点照旧只返回字符串。
             const rich = value !== null && typeof value === 'object' && typeof value.text === 'string';
@@ -609,11 +750,14 @@ async function runGraphInner(project, target, force = false, options = {}) {
                 output: clamp(text(rich ? value.text : value)),
                 media: rich && Array.isArray(value.media) ? value.media : [],
                 file: rich && typeof value.file === 'string' ? value.file : null,
+                exportFile: rich && typeof value.exportFile === 'string' ? value.exportFile : null,
+                exportFormat: rich && typeof value.exportFormat === 'string' ? value.exportFormat : null,
+                exportLabel: rich && typeof value.exportLabel === 'string' ? value.exportLabel : null,
                 ms: Date.now() - t0, at: Date.now(), fp,
                 ...(skillInput ? { skillInput } : {}),
             };
             graph = writeGraph(project, graph);
-            if (type.id === 'llm' || type.id === 'image') {
+            if (['llm', 'image', 'run'].includes(type.id)) {
                 try { options.onNodeStatus?.({ nodeId: node.id, status: 'ok' }); } catch { /* 同上 */ }
             }
             ran += 1;
@@ -622,7 +766,7 @@ async function runGraphInner(project, target, force = false, options = {}) {
             graph.runs[node.id] = { status: 'failed', error: message, ms: Date.now() - t0, at: Date.now(), fp,
                 ...(skillInput ? { skillInput } : {}) };
             writeGraph(project, graph);
-            if (type.id === 'llm' || type.id === 'image') {
+            if (['llm', 'image', 'run'].includes(type.id)) {
                 try { options.onNodeStatus?.({ nodeId: node.id, status: 'failed' }); } catch { /* 同上 */ }
             }
             return `失败于「${node.title ?? node.id}」:${message}`;

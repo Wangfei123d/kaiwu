@@ -62,7 +62,7 @@ function parentDir(relPath) {
 }
 
 export function createNotesView({
-    els, bridge, log = console, onOpenNote = null, onCloseDocx = null, onOpenCanvas = null,
+    els, bridge, log = console, onOpenNote = null, onCloseDocx = null, onOpenCanvas = null, onCreateCanvas = null,
     /**
      * 「删除笔记」两步确认里,"再点一次确认删除"这个告警态自动还原的毫秒数。
      *
@@ -856,7 +856,7 @@ export function createNotesView({
             visibleTexts = visibleTexts.filter(t => t.name.toLowerCase().includes(k) || t.path.toLowerCase().includes(k));
         }
 
-        // 画布属于独立文件类型，不参与笔记标签筛选；关键词搜索时与笔记一起拍平展示。
+        // 画布属于独立文件类型，不参与笔记标签筛选；在笔记目录根层与笔记并列显示。
         const allCanvases = (index?.others ?? []).filter(item => kindOf(item.name, item.path) === 'canvas');
         let visibleCanvases = allCanvases;
         if (tagFilter !== null) {
@@ -879,9 +879,10 @@ export function createNotesView({
 
         if (newFolderOpen) appendNewFolderRow();
 
-        const dirs = index?.folders ?? [];
-        const others = index?.others ?? [];
-        if (all.length === 0 && dirs.length === 0 && allTexts.length === 0 && others.length === 0) {
+        const dirs = (index?.folders ?? []).filter(dir => dir !== '画布' && !dir.startsWith('画布/'));
+        const others = (index?.others ?? []).filter(item => kindOf(item.name, item.path) !== 'canvas'
+            && item.path !== '画布' && !item.path.startsWith('画布/'));
+        if (all.length === 0 && dirs.length === 0 && allTexts.length === 0 && others.length === 0 && visibleCanvases.length === 0) {
             const li = document.createElement('li');
             li.className = 'hint';
             li.style.padding = '8px 10px';
@@ -890,6 +891,7 @@ export function createNotesView({
             return;
         }
         renderDir(buildTree(all, dirs, allTexts, others), 0);
+        for (const canvas of visibleCanvases) listEl.appendChild(otherItem(canvas, 0));
     }
 
     /**
@@ -1346,27 +1348,35 @@ export function createNotesView({
     /**
      * 列表空白处的右键浮层(产品原话:「右击空白处可以在菜单栏中新建笔记」)。
      *
-     * 两项都是既有动作的**同一个入口**,一个新动作都没有:
+     * 新建笔记与文件夹沿用现有动作；新建画布则转到画布面板显示名称窗口:
      *   · 新建笔记 = 搜索框旁边那枚 ＋(`newBtn` → `createNamed('未命名')`):
      *     落在库根、名字唯一化、建完打开编辑器,全都走同一条路;
      *   · 新建文件夹 = 顶栏那枚文件夹按钮(`newFolderOpen = true` → 列表顶部的内联输入行)。
      */
     function openBlankMenu(event) {
+        const items = [
+            {
+                label: '新建笔记',
+                menuRole: 'new-note',
+                onPick: () => createNamed('未命名'),
+            },
+            {
+                label: '新建文件夹',
+                menuRole: 'new-folder',
+                onPick: () => { newFolderOpen = true; renderList(); },
+            },
+        ];
+        if (typeof onCreateCanvas === 'function') {
+            items.push({
+                label: '新建画布',
+                menuRole: 'new-canvas',
+                onPick: () => onCreateCanvas(),
+            });
+        }
         return openMenu({
             kind: 'blank',
             event,
-            items: [
-                {
-                    label: '新建笔记',
-                    menuRole: 'new-note',
-                    onPick: () => createNamed('未命名'),
-                },
-                {
-                    label: '新建文件夹',
-                    menuRole: 'new-folder',
-                    onPick: () => { newFolderOpen = true; renderList(); },
-                },
-            ],
+            items,
         });
     }
 

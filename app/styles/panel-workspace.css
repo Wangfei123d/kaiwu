@@ -69,14 +69,14 @@
 /* 抓手(⠿):⚠️ 面板标题栏**已取消**,而"拖动整片容器"的手势在**第六轮按规格删掉了**
    (规格 §1.2:禁止用标题栏 / 抓手 / 标签条空白 / 任何"整组面板"来移动布局)。
    抓手与条上空白因此**只显示、不响应指针**:
-     · 它们是这一行的视觉语言与标签间留白,删掉会让标签紧贴 ＋;
+     · 它们是这一行的视觉语言与标签间留白,删掉会让标签挤在一起;
      · 但 `cursor` 不再是 `grab`(那会明确承诺一个不存在的手势),
        JS 侧也不再给 tabindex / aria-label(看着能拖、其实不能的可聚焦控件比不显示更糟)。*/
 .pw-grip {
     flex: none; font-family: var(--mono); font-size: 9px; color: var(--faint);
     cursor: default; user-select: none; pointer-events: none;
 }
-/* 条上空白:夹在标签与 ＋ 之间的喘息位。⚠️ 必须**撑开高度**(align-self:stretch),
+/* 条上空白:标签右侧的喘息位。⚠️ 必须**撑开高度**(align-self:stretch),
    否则它是一条 0 高的缝;`pointer-events:none` 让指针事件穿到标签条本身。 */
 .pw-grabpad {
     flex: 1 1 auto; min-width: 24px; align-self: stretch;
@@ -190,6 +190,8 @@
     min-width: 0; min-height: 0;
     transition: flex .22s cubic-bezier(.2, .75, .2, 1);
 }
+/* 侧栏折叠/展开需要过渡；拖分隔条时则必须即时跟手，否则连续的 flex 动画会追着指针抖动。 */
+.pw-resizing .pw-sidebar-branch { transition: none; }
 .pw-sidebar-toggle[hidden],
 .pw-sidebar-handle[hidden] { display: none; }
 .pw-sidebar-toggle {
@@ -310,17 +312,16 @@
     pointer-events: none;
 }
 .pw-grip { align-self: center; }
-.pw-tabs-add, .pw-tabs-more { align-self: center; }
+.pw-tabs-more { align-self: center; }
 /* 脏标记是一个**文字字符** *(不是圆点图标):设计稿 route-demo 就是这么标的 */
 .pw-tab.pw-tab-dirty .pw-tab-label::before { content: "*"; color: #ffc46b; margin-right: 3px; }
 
-.pw-tabs-add,
 .pw-tabs-more {
     flex: none; border: 0; background: transparent; color: var(--dim);
     font: inherit; font-size: 11.5px; cursor: pointer; padding: 4px 5px;
     white-space: nowrap;
 }
-.pw-tabs-add:hover, .pw-tabs-more:hover { color: var(--text); }
+.pw-tabs-more:hover { color: var(--text); }
 .pw-tabs-more { background: rgba(255, 255, 255, .05); border: 1px solid var(--border); border-radius: 999px; }
 
 /* ---- 窄栏(<220px):整条换成「当前视图名 ∨」下拉 ---- */

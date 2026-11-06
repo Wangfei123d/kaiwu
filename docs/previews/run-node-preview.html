@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>运行节点 · 交互预览</title>
+<style>
+:root{color-scheme:dark;--bg:#111213;--panel:#191a1b;--line:#383b3d;--text:#e8e9ea;--muted:#92979b;--blue:#79c9ff;--green:#91d7b0}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI","Microsoft YaHei",sans-serif}.page{max-width:1180px;margin:0 auto;padding:30px 24px 42px}.head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:16px}.eyebrow{color:var(--blue);font-size:11px;letter-spacing:.14em}.head h1{margin:4px 0 0;font-size:23px;font-weight:650}.description{color:var(--muted);font-size:13px}.viewport{overflow:auto;border:1px solid #2c2e30;border-radius:13px;background:#131415}.board{position:relative;width:980px;min-height:520px;background-color:#141516;background-image:linear-gradient(rgba(255,255,255,.027) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.027) 1px,transparent 1px);background-size:22px 22px}.wires{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}.wire{fill:none;stroke:rgba(121,201,255,.63);stroke-width:2}.wire.out{stroke:rgba(145,215,176,.62);stroke-dasharray:6 5;animation:flow 1.2s linear infinite}.wire-shadow{fill:none;stroke:rgba(121,201,255,.08);stroke-width:7}.wire-shadow.out{stroke:rgba(145,215,176,.08)}@keyframes flow{to{stroke-dashoffset:-22}}
+.node-wrap{position:absolute;width:260px}.source-wrap{left:48px;top:154px}.run-wrap{left:392px;top:192px;width:176px}.results{position:absolute;left:664px;top:118px;width:270px;display:flex;flex-direction:column;gap:22px}.name{display:block;width:max-content;max-width:100%;margin:0 0 7px;padding:0 1px;color:#dfe2e4;font-size:12px;line-height:18px}.name.input{width:100%;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-weight:500;font-size:12px;line-height:18px;caret-color:var(--blue)}
+.node{position:relative;border:1px solid #3a3d3f;border-radius:10px;background:rgba(27,28,29,.96);box-shadow:0 5px 18px rgba(0,0,0,.2)}.source{height:230px;overflow:visible}.source textarea{display:block;width:100%;height:100%;padding:12px;border:0;resize:none;outline:0;background:transparent;color:var(--text);font:13px/1.7 "Segoe UI","Microsoft YaHei",sans-serif;caret-color:var(--blue)}.source textarea:focus{outline:1px solid rgba(121,201,255,.28);outline-offset:-2px;border-radius:10px}.run-node{height:130px;display:flex;align-items:center;justify-content:center}.run-content{display:flex;flex-direction:column;align-items:center;gap:10px}.run-button{min-width:106px;padding:9px 20px;border:1px solid var(--blue);border-radius:8px;background:rgba(121,201,255,.13);color:var(--blue);font:inherit;font-weight:600;font-size:14px;cursor:pointer;transition:transform .16s,background .16s,box-shadow .16s}.run-button:hover{background:var(--blue);color:#101214;box-shadow:0 4px 18px rgba(121,201,255,.2)}.run-button:active{transform:scale(.97)}.run-button:disabled{opacity:.55;cursor:wait}.state{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}.state-dot{width:6px;height:6px;border-radius:50%;background:#686c70}.run-node.running .state-dot{background:var(--blue);box-shadow:0 0 8px rgba(121,201,255,.8);animation:pulse .65s ease-in-out infinite alternate}.run-node.done .state-dot{background:var(--green)}@keyframes pulse{to{opacity:.35;transform:scale(.7)}}.port{position:absolute;top:50%;width:11px;height:11px;border:1.5px solid var(--blue);border-radius:50%;background:#1a1c1d;transform:translateY(-50%);box-shadow:0 0 0 3px rgba(121,201,255,.08)}.source-port,.run-in{right:-6px}.run-in{left:-6px;right:auto}.run-out{right:-6px;border-color:var(--green);background:#18211c;box-shadow:0 0 0 3px rgba(145,215,176,.08)}
+.result{width:270px;min-height:176px;overflow:visible;border-color:#37423b;animation:resultIn .28s cubic-bezier(.2,.8,.2,1) both}.result .name{color:#c6e3d1}.result-body{padding:12px 13px;white-space:pre-wrap;overflow-wrap:anywhere;font:12.5px/1.7 "Segoe UI","Microsoft YaHei",sans-serif}.result-tag{margin-bottom:8px;color:#90cba7;font-size:10px}.result-text{color:#e5e9e6}.result-port{left:-6px;border-color:var(--green);box-shadow:0 0 0 3px rgba(145,215,176,.08);background:#18211c}@keyframes resultIn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+.note{display:flex;align-items:center;gap:8px;margin:13px 2px 0;color:var(--muted);font-size:12px}.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #333638;border-radius:99px;background:#171819;color:#adb2b6;font-size:11px}.badge b{color:var(--blue);font-weight:500}.example{margin-left:auto;color:#767c80}.empty{position:absolute;left:664px;top:185px;width:270px;text-align:center;color:#5f6468;font-size:12px}.empty[hidden]{display:none}
+@media(max-width:600px){.page{padding:22px 12px}.head{display:block}.description{margin-top:8px}.example{display:none}}
+</style>
+</head>
+<body>
+<main class="page">
+<header class="head"><div><div class="eyebrow">INTERACTIVE NODE PREVIEW</div><h1>运行节点</h1></div><div class="description">连接文本后运行，结果自动生成新节点</div></header>
+<div class="viewport" aria-label="节点画布预览">
+<div class="board" id="board">
+<svg class="wires" id="wires" viewBox="0 0 980 520" preserveAspectRatio="none" aria-hidden="true">
+<path class="wire-shadow" d="M308 294 C342 294 356 282 392 282"/><path class="wire" d="M308 294 C342 294 356 282 392 282"/>
+</svg>
+<div class="node-wrap source-wrap"><label class="name" for="prompt">提示词</label><div class="node source"><textarea id="prompt" spellcheck="false">写一段清晨海边的氛围描写。</textarea><span class="port source-port" aria-hidden="true"></span></div></div>
+<div class="node-wrap run-wrap"><div class="name">运行</div><div class="node run-node" id="runNode"><span class="port run-in" aria-hidden="true"></span><div class="run-content"><button class="run-button" id="runButton" type="button">运行</button><div class="state" id="runState"><span class="state-dot"></span><span>等待输入</span></div></div><span class="port run-out" aria-hidden="true"></span></div></div>
+<div class="empty" id="emptyHint">运行后，结果将在这里生成节点</div>
+<div class="results" id="results" aria-live="polite"></div>
+</div></div>
+<div class="note"><span class="badge"><b>提示词</b> 从左侧连接输入</span><span class="badge">运行节点 <b>无文本输入框</b></span><span class="example">预览用示例结果模拟生成过程</span></div>
+</main>
+<script>
+(function(){
+  var board=document.getElementById('board');
+  var wires=document.getElementById('wires');
+  var prompt=document.getElementById('prompt');
+  var runNode=document.getElementById('runNode');
+  var runButton=document.getElementById('runButton');
+  var state=document.getElementById('runState');
+  var results=document.getElementById('results');
+  var emptyHint=document.getElementById('emptyHint');
+  var count=0;
+  function setStatus(text,mode){state.lastElementChild.textContent=text;runNode.classList.remove('running','done');if(mode)runNode.classList.add(mode)}
+  function addWire(y){
+    var startX=568,startY=282,endX=664,endY=y;
+    var bend=Math.max(34,Math.abs(endX-startX)*.52);
+    var d='M'+startX+' '+startY+' C '+(startX+bend)+' '+startY+', '+(endX-bend)+' '+endY+', '+endX+' '+endY;
+    var shadow=document.createElementNS('http://www.w3.org/2000/svg','path');shadow.setAttribute('class','wire-shadow out');shadow.setAttribute('d',d);
+    var line=document.createElementNS('http://www.w3.org/2000/svg','path');line.setAttribute('class','wire out');line.setAttribute('d',d);wires.append(shadow,line);
+  }
+  function outputFor(text,index){
+    var wrap=document.createElement('article');wrap.className='result-wrap';wrap.style.position='relative';
+    var title=document.createElement('div');title.className='name';title.textContent='运行结果 '+(index+1);
+    var node=document.createElement('div');node.className='node result';
+    var port=document.createElement('span');port.className='port result-port';port.setAttribute('aria-hidden','true');
+    var body=document.createElement('div');body.className='result-body';
+    var tag=document.createElement('div');tag.className='result-tag';tag.textContent='已读取连接的提示词';
+    var quote=document.createElement('div');quote.className='result-text';quote.textContent='围绕“'+text+'”生成的示例内容：\n\n清晨的海面泛着一层淡淡的银光，潮声沿着安静的岸线缓缓漫开。薄雾尚未散尽，远处的天色正一点点亮起来。';
+    body.append(tag,quote);node.append(port,body);wrap.append(title,node);results.appendChild(wrap);
+    var top=index*220;
+    wrap.style.position='absolute';wrap.style.left='0';wrap.style.top=top+'px';wrap.style.width='270px';
+    var center=118+top+title.offsetHeight+7+node.offsetHeight/2;
+    board.style.height=Math.max(520,center+120)+'px';
+    wires.setAttribute('viewBox','0 0 980 '+Math.max(520,board.clientHeight));
+    addWire(center);
+    emptyHint.hidden=true;
+  }
+  runButton.addEventListener('click',function(){
+    var value=prompt.value.trim();
+    if(!value){setStatus('请先填写文本节点',null);prompt.focus();return}
+    runButton.disabled=true;setStatus('正在读取并运行…','running');
+    var captured=value;
+    window.setTimeout(function(){count+=1;outputFor(captured,count-1);runButton.disabled=false;setStatus('已创建结果节点','done')},720);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
-// 收"从笔记列表拖过来的文件"—— 全应用**拖拽总线**的接货方(方案丙)。
+// 收画布支持的图片 / 视频资源—— 全应用**拖拽总线**的接货方(方案丙)。
 //
 // 为什么单独一个模块:index.js 已经 1800 行,而"接货"这件事的判据(类型分派、图坐标换算、
-// 参考图要绝对路径)自成一套,抽出来既好读、又好单独钉。
+// 视频落点与图片导入提示)自成一套,抽出来既好读、又好单独钉。
 //
 // 总线在 app/lib/drag-bus.js(外壳侧);插件通过 toolbox://shell/lib/drag-bus.js 拿到同一份
 // 实例 —— 同一个 realm 里的模块单例,所以"谁在拖"这件事是共享的,不需要 IPC。
@@ -15,7 +15,7 @@
 //    库内相对路径在那条路上读不到图。总线载荷里已经带好 absPath。
 
 /** 画布认得的类型 → 中文名(其余一律拒绝,并说人话)。 */
-export const DROP_KINDS = Object.freeze({ text: '文本', image: '图片', video: '视频' });
+export const DROP_KINDS = Object.freeze({ image: '图片', video: '视频' });
 
 /**
  * @param {object} deps 全是 index.js 里现成的闭包(不新造状态)
@@ -29,7 +29,7 @@ export const DROP_KINDS = Object.freeze({ text: '文本', image: '图片', video
  * @returns {Promise<()=>void>} 退订函数(面板被拆掉时调)
  */
 export async function wireDrop({ ctx, el, state, nodeById, createNode,
-    scheduleSave, setStatus, preview, bus: suppliedBus }) {
+    scheduleSave, setStatus, bus: suppliedBus }) {
     let bus = suppliedBus ?? null;
     try {
         bus ??= await import('toolbox://shell/lib/drag-bus.js');
@@ -59,10 +59,6 @@ export async function wireDrop({ ctx, el, state, nodeById, createNode,
         return Number(clientX) >= r.left && Number(clientX) <= r.right
             && Number(clientY) >= r.top && Number(clientY) <= r.bottom;
     };
-    const selectedNode = () => {
-        for (const id of state.selection) return nodeById(id);
-        return null;
-    };
     // ⚠️ 踩过的坑:`createNode` 返回的是**字符串 id**,不是节点对象(见 index.js:1214)。
     //    照对象用(target.id)会拿到 undefined → nodeById(undefined) → null →
     //    每一步都"静默不落地"(现象和"接货逻辑没接上"一模一样)。这里只认 id;
@@ -81,26 +77,8 @@ export async function wireDrop({ ctx, el, state, nodeById, createNode,
         else el.canvas.removeAttribute('data-drop');
     };
 
-    /** 把一次落下的文件变成节点。 */
+    /** 把支持的图片 / 视频资源落到画布。 */
     async function applyDrop(payload, at) {
-        if (payload.kind === 'text') {
-            // 已选中的就是「文本 / 剧本」→ 导进它;否则**新建一个**再导(落点就是它的位置)
-            const sel = selectedNode();
-            const node = (sel !== null && sel.type === 'text') ? sel : makeNode('text', at);
-            if (node === null) return;
-            try {
-                setStatus('正在读取文件…');
-                const r = await ctx.drama.readText({ path: payload.absPath });
-                node.params = { ...(node.params ?? {}), value: r.text };
-                scheduleSave();
-                trace(`文本已落:${r.chars} 字 → 节点 ${node.id}`);
-                setStatus(`已导入 ${r.name} · ${r.chars} 字${r.note === '' || r.note === undefined ? '' : ` · ${r.note}`}`);
-            } catch (err) {
-                setStatus(`导入失败:${err?.message ?? err}`);
-            }
-            return;
-        }
-
         if (payload.kind === 'video') {
             // ⚠️ 引擎里**没有"视频输入"槽**(「图生视频」的输入是图集,不是视频文件)——
             //    所以这里只能诚实记一条备注 + 给出可复制的抽帧命令,不假装它能接进产物链。
@@ -115,7 +93,7 @@ export async function wireDrop({ ctx, el, state, nodeById, createNode,
             return;
         }
 
-        setStatus(`这种格式画布还用不了:${payload.name}`);
+        setStatus(`画布不导入文本文件；文本节点只支持手动输入纯文本:${payload.name}`);
     }
 
     // 拖动途中:指针进到画布范围就亮出"可以放这儿";离开 / 松手就收掉
@@ -124,8 +102,7 @@ export async function wireDrop({ ctx, el, state, nodeById, createNode,
         if (now !== null && now !== undefined && now.kind !== 'image'
             && DROP_KINDS[now.kind] !== undefined) arm(true);
     };
-    const hidePreviews = () => preview?.hide();
-    const onLeave = () => { arm(false); hidePreviews(); };
+    const onLeave = () => arm(false);
     // 笔记行拖动时持有 pointer capture，画布可能收不到 pointerenter/move。
     // document 上的坐标仍是实际指针位置；这里只更新临时 DOM，不改 graph。
     const onMove = (event) => {
@@ -133,16 +110,9 @@ export async function wireDrop({ ctx, el, state, nodeById, createNode,
         if (now === null || now === undefined || now.kind === 'image' || DROP_KINDS[now.kind] === undefined
             || !insideCanvas(event.clientX, event.clientY)) {
             arm(false);
-            hidePreviews();
             return;
         }
         arm(true);
-        if (now.kind === 'text' && String(now.ext ?? '').toLowerCase() === 'docx'
-            && state.graph !== null && state.graph !== undefined && selectedNode()?.type !== 'text') {
-            preview?.show(now.name, event.clientX, event.clientY);
-        } else {
-            hidePreviews();
-        }
     };
     const moveDoc = el.canvas.ownerDocument ?? globalThis.document;
     el.canvas.addEventListener('pointerenter', onEnter);
@@ -164,13 +134,14 @@ export async function wireDrop({ ctx, el, state, nodeById, createNode,
     };
     const off = bus.onEnd(({ payload, clientX, clientY, insideTree }) => {
         arm(false);
-        hidePreviews();
         trace(`onEnd kind=${payload?.kind ?? 'null'} insideTree=${insideTree} xy=${clientX},${clientY}`);
         // 松在树里 = 一次笔记移动(与画布无关);松在画布外 = 不关我的事
         if (insideTree === true || payload === null || payload === undefined) { trace('停:松在树里,或没有载荷'); return; }
         if (!insideCanvas(clientX, clientY)) { trace('停:落点不在画布范围内'); return; }
         if (DROP_KINDS[payload.kind] === undefined) {
-            setStatus(`这种格式画布还用不了:${payload.name}(只收文本 / 视频)`);
+            setStatus(payload.kind === 'text'
+                ? '文本节点只支持手动输入纯文本，不能从笔记或文件导入'
+                : `这种格式画布还用不了:${payload.name}(只收图片 / 视频)`);
             trace(`停:不认这种格式(${payload.kind})`);
             return;
         }
@@ -199,111 +170,64 @@ export async function wireDrop({ ctx, el, state, nodeById, createNode,
         el.canvas.removeEventListener('pointerleave', onLeave);
         moveDoc?.removeEventListener('pointermove', onMove);
         arm(false);
-        hidePreviews();
     };
 }
 
-/**
- * 接住资源管理器原生拖进来的 Word 文件。
- *
- * 与 wireDrop 的区别:这里没有可信的库内路径。File.arrayBuffer() 是浏览器给的实际字节,
- * 主进程再按大小与格式复核并抽正文;渲染进程不获得、也不递交任意磁盘路径。
- */
-export function wireNativeWordDrop({ ctx, el, state, nodeById, createNode, scheduleSave, setStatus, preview }) {
-    const toWorld = (clientX, clientY) => {
-        const rect = el.canvas.getBoundingClientRect();
-        const scale = state.view.scale || 1;
-        return {
-            x: (Number(clientX) - rect.left - state.view.x) / scale,
-            y: (Number(clientY) - rect.top - state.view.y) / scale,
-        };
-    };
+/** 仅将支持的 WPS/Office 文件导入为画布素材，阻止其他文件直接打开或灌入纯文本节点。 */
+export function wireNativeFileDrop({ el, setStatus, onOfficeFiles, extensions = [] }) {
     const filesOf = (event) => Array.from(event?.dataTransfer?.files ?? []);
+    const isOfficeFile = (file) => {
+        const configuredExtensions = typeof extensions === 'function' ? extensions() : extensions;
+        const acceptedExtensions = new Set((configuredExtensions ?? [])
+            .map(ext => String(ext).toLowerCase().replace(/^\./, '')));
+        const match = String(file?.name ?? '').match(/\.([^.]+)$/);
+        return match !== null && acceptedExtensions.has(match[1].toLowerCase());
+    };
     const arm = (on) => {
         if (on) el.canvas.setAttribute?.('data-drop', 'armed');
         else el.canvas.removeAttribute?.('data-drop');
     };
     const hasFiles = (event) => filesOf(event).length > 0
         || Array.from(event?.dataTransfer?.types ?? []).includes('Files');
-    const reject = (message) => { preview?.hide(); setStatus(message); };
-    const showPreview = (event) => {
-        if (state.graph === null || state.graph === undefined) return;
-        const [file] = filesOf(event);
-        preview?.show(file?.name || 'Word 文件', event.clientX, event.clientY);
+    const reject = (files) => {
+        const name = files.length === 1 ? String(files[0]?.name ?? '') : '';
+        if (/\.(?:txt|md|srt|json|csv|rtf|docx)$/i.test(name)) {
+            setStatus('文本节点只支持手动输入纯文本，不能导入或拖入文本文件');
+        } else {
+            setStatus('画布不支持直接导入文件');
+        }
     };
 
     const onDragEnter = (event) => {
         if (!hasFiles(event)) return;
         event.preventDefault?.();
         arm(true);
-        showPreview(event);
     };
     const onDragOver = (event) => {
         if (!hasFiles(event)) return;
         event.preventDefault?.();
         arm(true);
-        showPreview(event);
+        try { event.dataTransfer.dropEffect = 'copy'; } catch { /* read-only DataTransfer */ }
     };
     const onDragLeave = (event) => {
         // 划过画布子元素时也会触发 dragleave;仍在画布内就别让投放提示闪烁。
         if (event?.relatedTarget !== null && event?.relatedTarget !== undefined
             && el.canvas.contains?.(event.relatedTarget)) return;
         arm(false);
-        preview?.hide();
     };
-    const onDrop = async (event) => {
+    const onDrop = (event) => {
         const files = filesOf(event);
-        if (files.length === 0) { arm(false); preview?.hide(); return; }
+        if (files.length === 0) { arm(false); return; }
         event.preventDefault?.();
         arm(false);
-        if (files.length !== 1) {
-            reject('一次只能拖入一个 Word(.docx) 文件');
+        if (files.every(isOfficeFile) && typeof onOfficeFiles === 'function') {
+            Promise.resolve(onOfficeFiles(files, {
+                clientX: Number(event.clientX),
+                clientY: Number(event.clientY),
+            })).catch(error => setStatus(`导入 WPS 文件失败：${error?.message ?? error}`));
             return;
         }
-        const [file] = files;
-        const name = typeof file?.name === 'string' ? file.name.trim() : '';
-        if (/\.doc$/i.test(name)) {
-            reject('旧版 Word(.doc)不支持；请先在 Word / WPS 中另存为 .docx');
-            return;
-        }
-        if (!/\.docx$/i.test(name)) {
-            reject('画布只支持 Word(.docx) 文件');
-            return;
-        }
-        const size = Number(file?.size);
-        if (!Number.isFinite(size) || size <= 0) {
-            reject('文件为空，无法导入');
-            return;
-        }
-        if (size > 200 * 1024) {
-            reject('这个文件超过 200 KB 的导入上限；请先把不用的部分剪掉再导入');
-            return;
-        }
-        if (typeof file.arrayBuffer !== 'function') {
-            reject('浏览器没有提供这个文件的可读取字节');
-            return;
-        }
-        try {
-            preview?.reading();
-            setStatus('正在读取 Word 正文…');
-            const bytes = await file.arrayBuffer();
-            const result = await ctx.drama.readDroppedText({ name, bytes });
-            // 只有正文确实读出来之后才动图;损坏 / 超限 / 不支持都不会留下空节点。
-            preview?.hide();
-            const at = toWorld(event.clientX, event.clientY);
-            const made = createNode('text', at.x, at.y);
-            const id = typeof made === 'string' ? made : made?.id;
-            const node = nodeById(id);
-            if (node === null || node === undefined) {
-                reject('画布还没准备好(没有打开的项目?)');
-                return;
-            }
-            node.params = { ...(node.params ?? {}), value: result.text };
-            scheduleSave();
-            setStatus(`已导入 ${result.name} · ${result.chars} 字${result.note ? ` · ${result.note}` : ''}`);
-        } catch (err) {
-            reject(`导入失败:${err?.message ?? err}`);
-        }
+        reject(files);
     };
 
     el.canvas.addEventListener('dragenter', onDragEnter);
@@ -316,7 +240,6 @@ export function wireNativeWordDrop({ ctx, el, state, nodeById, createNode, sched
         el.canvas.removeEventListener('dragleave', onDragLeave);
         el.canvas.removeEventListener('drop', onDrop);
         arm(false);
-        preview?.hide();
     };
 }
 

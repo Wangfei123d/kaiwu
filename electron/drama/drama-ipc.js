@@ -15,6 +15,8 @@ import {
     runGraph, palette, projectDir, slug, migrateLegacyTextNodes, MAX_IMPORT_BYTES, MAX_SKILL_INPUT_BYTES,
 } from './lib/core.js';
 import { extractText, IMPORT_EXTENSIONS } from './lib/text.js';
+import { importProjectOfficeFile, OFFICE_FILE_EXTENSIONS, MAX_OFFICE_FILE_BYTES,
+    resolveProjectOfficeFile, resolveProjectGeneratedOutput } from './lib/office-files.js';
 import { importProjectImage } from './lib/skill-resources.js';
 // 删除出口与笔记共用一份:"能进回收站就进,不能就落库内 .trash"这条规矩只该有一个实现
 // (两处各写一遍,迟早有一处忘了跟进 —— 这次就是先只修了笔记那半边)。
@@ -36,12 +38,13 @@ export const DRAMA_INVOKE_CHANNELS = Object.freeze([
     // 项目面板的两条:改名、删除。删除走**系统回收站**(可恢复),不是 fs.rm。
     'drama:rename',
     'drama:remove',
-    // 「＋ 导入」:把一个文本文件抽成纯文本交给面板(**只读**,不往项目里拷任何东西)。
+    // 可导入文本框的只读文件解析(**不往项目里拷任何东西)。
     // 从前的 drama:import 是"把文件拷进项目 inputs/ + 在节点上记一个路径",那条路
     // 连同 source / useSource 两个参数一起删了 —— 现在内容进节点,不再有第二处真相。
     'drama:readText',
-    // 资源管理器拖到画布的 Word 文件:只递名字和字节,不让渲染进程声明任意磁盘路径。
-    'drama:readDroppedText',
+    'drama:importOfficeFile',
+    'drama:openOfficeFile',
+    'drama:openGeneratedOutput',
     'drama:media',
     'drama:importImage',
 ]);
@@ -195,10 +198,12 @@ export function registerDramaIpc({
             const state = statePayload(project);
             return {
                 ...state,
-                types: palette(),
+                // 内部结果节点需要供画布渲染器识别，但仍由面板菜单隐藏。
+                types: palette({ includeInternal: true }),
                 // 导入要用的两样都从**引擎**给:能读哪些格式只有 text.js 知道,
                 // 插件自己抄一份名单迟早漂移(对话框里会选不到其实支持的类型)。
                 textImport: { extensions: IMPORT_EXTENSIONS, maxBytes: MAX_IMPORT_BYTES },
+                officeFileImport: { extensions: OFFICE_FILE_EXTENSIONS, maxBytes: MAX_OFFICE_FILE_BYTES },
             };
         },
 
@@ -322,7 +327,7 @@ export function registerDramaIpc({
             return { text: fs.readFileSync(target, 'utf8'), file };
         },
 
-        // 「＋ 导入」:把一个文件抽成纯文本交给面板,面板把它填进节点的「手输内容」。
+        // 技能文本框的文件导入:把一个文件抽成纯文本交给面板。
         //
         // ⚠️ **只读**:不往项目里拷任何东西(从前的 drama:import 会拷进 inputs/ 并在节点上
         //    记 source/useSource —— 那套已删)。内容进了节点就是唯一真相,再留一份原件
@@ -349,26 +354,29 @@ export function registerDramaIpc({
             return { name: fileName, text: extracted, chars: extracted.length, kind, note };
         },
 
-        // 系统文件拖放不能复用 drama:readText:那条是用户主动选文件后的路径入口。
-        // 拖放这条只收 File.arrayBuffer() 的字节,这样渲染进程没有新增的任意路径读取能力。
-        'drama:readDroppedText': async (_event, { name, bytes } = {}) => {
-            const fileName = typeof name === 'string' ? name.trim() : '';
-            if (fileName === '') throw new Error('需要文件名');
-            if (path.extname(fileName).toLowerCase() !== '.docx') {
-                throw new Error('只支持 Word(.docx)；旧版 .doc 请先在 Word / WPS 中另存为 .docx');
-            }
-            if (!(bytes instanceof ArrayBuffer) && !ArrayBuffer.isView(bytes)) {
-                throw new Error('没有可读取的文件字节');
-            }
-            const buffer = Buffer.from(bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes);
-            if (buffer.length === 0) throw new Error('文件为空，无法导入');
-            if (buffer.length > MAX_IMPORT_BYTES) {
-                throw new Error(`这个文件 ${Math.round(buffer.length / 1024)} KB,超过 `
-                    + `${Math.round(MAX_IMPORT_BYTES / 1024)} KB 的导入上限 —— 请先把不用的部分剪掉,`
-                    + '或者只把需要的那一段存成一个小文件再导入。');
-            }
-            const { text: extracted, kind, note } = extractText(fileName, buffer);
-            return { name: fileName, text: extracted, chars: extracted.length, kind, note };
+        // WPS 文件作为项目素材导入：图中只保存相对路径与基本信息，原文件留在 files/。
+        'drama:importOfficeFile': async (_event, { project, path: sourcePath } = {}) => {
+            requireRoot();
+            if (typeof project !== 'string' || !project.trim()) throw new Error('请先选择项目');
+            return importProjectOfficeFile(projectDir(project), sourcePath);
+        },
+        'drama:openOfficeFile': async (_event, { project, file } = {}) => {
+            requireRoot();
+            if (typeof project !== 'string' || !project.trim()) throw new Error('请先选择项目');
+            if (typeof shell?.openPath !== 'function') throw new Error('当前环境无法打开本地文件');
+            const target = resolveProjectOfficeFile(projectDir(project), file);
+            const error = await shell.openPath(target);
+            if (error) throw new Error(error);
+            return { opened: true };
+        },
+        'drama:openGeneratedOutput': async (_event, { project, file } = {}) => {
+            requireRoot();
+            if (typeof project !== 'string' || !project.trim()) throw new Error('请先选择项目');
+            if (typeof shell?.openPath !== 'function') throw new Error('当前环境无法打开本地文件');
+            const target = resolveProjectGeneratedOutput(projectDir(project), file);
+            const error = await shell.openPath(target);
+            if (error) throw new Error(error);
+            return { opened: true };
         },
 
         // 取一张出图。只允许项目自己的 shots/ 目录内 —— 这条与 v1 的 /api/media 同口径。

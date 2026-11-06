@@ -1,30 +1,83 @@
 <div class="tool-block">
-    <h3>音乐搜索试听</h3>
-    <p class="tool-block-desc">
-        搜索、试听、下载。数据来自本地 QQMusicapi 服务。
-    </p>
-
-    <!-- 服务状态条:取代旧站那句"用之前要先双击 start-music-api.bat"。
-         内容由共享的 createServiceBadge 生成,这里只留容器。 -->
-    <div id="musicService" class="mt-sm"></div>
-
-    <!-- 搜索行:回车或点按钮都能触发 -->
-    <div class="tool-search mt-md">
-        <input type="text" id="musicKeyword" placeholder="输入歌名或歌手名,回车搜索">
-        <button class="tool-search-btn" id="musicSearchBtn" type="button">搜索</button>
+    <!-- QQ 音乐账号状态由本地 QQMusicapi 提供；面板仅显示状态并启动扫码流程。 -->
+    <div class="music-account" id="musicAccount">
+        <div class="music-account-copy">
+            <span class="music-account-indicator" id="musicAccountIndicator" aria-hidden="true"></span>
+            <span id="musicAccountStatus" role="status" aria-live="polite">正在读取登录状态…</span>
+        </div>
+        <button class="music-account-action" id="musicLoginButton" type="button" aria-label="音乐账号登录">账号</button>
     </div>
 
-    <!-- 播放器:点歌后显示,封面 + 信息 + 原生音频控件 -->
+    <!-- 搜索行:按回车触发 -->
+    <div class="tool-search mt-md">
+        <input type="text" id="musicKeyword" aria-label="搜索歌曲或歌手">
+    </div>
+
+    <!-- 播放器:轻量单行布局,原生音频控件由自定义控件替代 -->
     <div class="music-player" id="musicPlayer">
         <img id="musicCover" alt="歌曲封面">
         <div class="music-info">
-            <p id="musicTitle"></p>
-            <p id="musicArtist"></p>
-            <audio id="musicAudio" controls preload="none"></audio>
+            <div class="music-mainline">
+                <div class="music-track-copy">
+                    <p id="musicTitle"></p>
+                    <p id="musicArtist"></p>
+                </div>
+                <span class="music-time"><span id="musicCurrentTime">0:00</span><span aria-hidden="true"> / </span><span id="musicDuration">0:00</span></span>
+                <button class="music-play-toggle" id="musicPlayToggle" type="button" aria-label="暂停" title="暂停">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path class="music-play-icon" d="M4 2.5 13 8l-9 5.5z"></path><path class="music-pause-icon" d="M4 3h3v10H4zm5 0h3v10H9z"></path></svg>
+                </button>
+                <button class="music-download-button" id="musicDownloadCurrent" type="button" aria-label="下载当前歌曲" title="下载当前歌曲" disabled>
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7m-3-3 3 3 3-3M3 11.5v2h10v-2"></path></svg>
+                </button>
+            </div>
+            <div class="music-controls">
+                <input class="music-seek" id="musicSeek" type="range" min="0" max="1000" value="0" aria-label="播放进度" aria-valuetext="0:00 / 0:00">
+                <div class="music-quality" id="musicQualityControl">
+                    <button class="music-quality-trigger" id="musicQualityButton" type="button"
+                        aria-label="播放音质" aria-haspopup="listbox" aria-expanded="false" aria-controls="musicQualityMenu">
+                        <span id="musicQualityLabel">标准 128</span>
+                        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3"></path></svg>
+                    </button>
+                    <div class="music-quality-menu" id="musicQualityMenu" role="listbox" aria-label="选择播放音质" hidden></div>
+                    <select class="music-quality-native" id="musicQuality" aria-hidden="true" tabindex="-1">
+                        <option value="M500">标准 MP3 128</option>
+                        <option value="M800">高品 MP3 320</option>
+                        <option value="F000">无损 FLAC</option>
+                        <option value="AI00">臻品母带</option>
+                        <option value="C600">高品 AAC 192</option>
+                    </select>
+                </div>
+            </div>
             <p class="music-error" id="musicError"></p>
         </div>
+        <audio id="musicAudio" preload="none"></audio>
     </div>
 
     <!-- 搜索结果列表(JS 动态生成) -->
     <ul class="music-list" id="musicList"></ul>
+
+    <!-- 登录二维码直接由本地服务返回；凭证只保存在 QQMusicapi 服务端。 -->
+    <div class="music-login-backdrop" id="musicLoginDialog" hidden>
+        <section class="music-login-dialog" role="dialog" aria-modal="true" aria-labelledby="musicLoginHeading">
+            <header class="music-login-heading">
+                <div>
+                    <h4 id="musicLoginHeading">QQ 音乐扫码登录</h4>
+                    <p id="musicLoginMessage">请使用已开通会员的账号扫码。</p>
+                </div>
+                <button class="music-login-close" id="musicLoginClose" type="button" aria-label="关闭登录窗口">×</button>
+            </header>
+            <div class="music-login-content">
+                <div class="music-qr-frame">
+                    <img id="musicLoginQr" alt="QQ 音乐登录二维码" hidden>
+                    <span id="musicQrPlaceholder">点击“扫码登录”生成二维码</span>
+                </div>
+                <p id="musicQrStatus" class="music-qr-status" role="status" aria-live="polite">二维码由本地 QQMusicapi 服务提供。</p>
+            </div>
+            <footer class="music-login-actions">
+                <button class="music-login-refresh" id="musicQrRefresh" type="button">刷新二维码</button>
+                <button class="music-login-done" id="musicLoginDone" type="button">关闭</button>
+            </footer>
+            <p class="music-login-footnote">登录凭证由本地音乐服务保存，开物面板不会读取或显示凭证。</p>
+        </section>
+    </div>
 </div>

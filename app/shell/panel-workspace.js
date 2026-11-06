@@ -68,7 +68,7 @@ export const MORE_THRESHOLD = 4;
  * 整格都会消失(见 collapseIfEmpty)。这段占位只降级成两种兜底的显示:
  * 坏存档里本来就带着空叶子,以及"整棵树只剩这一格"时不许把它也摘掉。
  */
-export const EMPTY_PANE_HINT = '这个面板还没有视图 —— 点 ＋ 加一个';
+export const EMPTY_PANE_HINT = '这个面板还没有视图';
 
 /** 标签条自己的左右 padding(与 CSS 里 .pw-tabs 一致;量不到真实宽度时的兜底要用它)。 */
 export const TAB_STRIP_PADDING_PX = 6;
@@ -436,7 +436,7 @@ export function createPanelWorkspace({
         //
         // ⚠️ 抓手 ⠿ 与条上空白**不再启动任何拖动**(规格 §1.2,本轮把整条手势删掉了)。
         //    为什么还留着它们、而不是从 DOM 里删掉:
-        //      · 条上空白是这一行唯一的"喘息位"—— 删了它,标签会紧贴 ＋ 挤在一起;
+        //      · 条上空白是标签右侧的留白,避免标签贴住面板边缘;
         //      · 抓手是这一行的视觉语言(用户已经认得的"这一格"标记),突然消失会被当成 bug。
         //    所以它们只**显示**、不响应指针、不进 Tab 序、也不向读屏报名字:
         //    一个"看着能拖、其实不能"的键盘可达控件比不显示更糟(读屏用户会反复按它)。
@@ -627,10 +627,9 @@ export function createPanelWorkspace({
                 strip.append(more);
             }
         }
-        // 条上空白:夹在标签与 ＋ 之间。⚠️ v4 起它**不启动任何拖动**(整片拖动已删),
-        // 留着它是这一行的喘息位(见 renderLeaf 的注释)。
+        // 标签右侧留白:⚠️ v4 起它**不启动任何拖动**(整片拖动已删),
+        // 只用于保持标签与面板边缘的间距(见 renderLeaf 的注释)。
         strip.append(ref.pad);
-        strip.append(makeAddButton(node));
         // ⚠️ 面板自己没有名字了,读屏的名字取**当前那一枚标签** ——
         //    这就是"属性由标签页继承"在无障碍上的同一条规矩(空容器就直说它是空的)。
         const activeNow = activeTabOf(node);
@@ -923,22 +922,12 @@ export function createPanelWorkspace({
         win?.addEventListener?.('pointercancel', cancel);
     }
 
-    function makeAddButton(node) {
-        const plus = el(doc, 'button', 'pw-tabs-add');
-        plus.type = 'button';
-        plus.textContent = TAB_CHAR_ADD;
-        plus.title = '加一个视图(并列:不关掉现有的标签)';
-        plus.setAttribute('aria-label', '加一个视图');
-        on(plus, 'click', (e) => { e?.stopPropagation?.(); togglePopup('views', node.id, plus); });
-        return plus;
-    }
-
     function findLeaf(paneId) {
         const leaf = findPane(tree, paneId);
         return isPane(leaf) ? leaf : null;
     }
 
-    // ---- 浮层(点 ＋ / 窄栏下拉 / 右键菜单都是同一个东西) ----
+    // ---- 浮层(窄栏视图下拉与标签右键菜单共用同一套容器) ----
 
     function closePopup() {
         popup?.el?.remove?.();
@@ -1477,6 +1466,7 @@ export function createPanelWorkspace({
         const startSizes = live.sizes.slice();
         const startPos = horizontal ? (e.clientX ?? 0) : (e.clientY ?? 0);
         g.dataset.dragging = '1';
+        desk?.classList?.add?.('pw-resizing');
 
         const move = (ev) => {
             ev.preventDefault?.();
@@ -1489,6 +1479,7 @@ export function createPanelWorkspace({
             win?.removeEventListener?.('pointerup', up);
             win?.removeEventListener?.('pointercancel', up);
             delete g.dataset.dragging;
+            desk?.classList?.remove?.('pw-resizing');
             interacted = true;
             commit();
         };

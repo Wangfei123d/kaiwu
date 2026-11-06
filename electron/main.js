@@ -788,6 +788,64 @@ app.whenReady().then(async () => {
         return result.canceled ? null : (result.filePaths[0] ?? null);
     });
 
+    ipcMain.handle('kaiwu:music:download', async (event, options = {}) => {
+        if (!isMainWindowSender(event) || options.pluginId !== 'music') {
+            return { ok: false, error: '无权下载此音乐文件' };
+        }
+        let url;
+        try { url = new URL(options.url); }
+        catch { return { ok: false, error: '音乐下载地址无效' }; }
+        const trustedHost = url.hostname === 'qq.com' || url.hostname.endsWith('.qq.com')
+            || url.hostname === 'gtimg.cn' || url.hostname.endsWith('.gtimg.cn');
+        if (url.protocol !== 'https:' || !trustedHost || (url.port !== '' && url.port !== '443')
+            || url.username !== '' || url.password !== '') {
+            return { ok: false, error: '音乐下载地址不受支持' };
+        }
+
+        const extension = String(options.extension ?? '').toLowerCase();
+        if (!['mp3', 'm4a', 'aac', 'flac'].includes(extension)) {
+            return { ok: false, error: '歌曲格式不受支持' };
+        }
+        const rawName = String(options.fileName ?? '歌曲').split(/[\\/]/).pop() ?? '歌曲';
+        const stem = rawName.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+            .replace(/\.[^.]*$/, '').replace(/[. ]+$/g, '').trim().slice(0, 120) || '歌曲';
+        const fileName = `${stem}.${extension}`;
+        const save = await dialog.showSaveDialog(win, {
+            title: '保存歌曲',
+            defaultPath: path.join(app.getPath('downloads'), fileName),
+            filters: [{ name: '音频文件', extensions: [extension] }],
+        });
+        if (save.canceled || !save.filePath) return { canceled: true };
+
+        const session = event.sender.session;
+        return await new Promise((resolve) => {
+            let timer = null;
+            let finished = false;
+            const finish = (result) => {
+                if (finished) return;
+                finished = true;
+                if (timer !== null) clearTimeout(timer);
+                session.removeListener('will-download', onWillDownload);
+                resolve(result);
+            };
+            const onWillDownload = (_downloadEvent, item) => {
+                let downloadedUrl = '';
+                try { downloadedUrl = new URL(item.getURL()).href; } catch { /* 忽略无效地址 */ }
+                if (downloadedUrl !== url.href) return;
+                item.setSavePath(save.filePath);
+                item.once('done', (_doneEvent, state) => {
+                    finish(state === 'completed'
+                        ? { ok: true, fileName: path.basename(save.filePath) }
+                        : { ok: false, error: state === 'cancelled' ? '下载已取消' : '下载失败，请稍后重试' });
+                });
+            };
+            session.on('will-download', onWillDownload);
+            timer = setTimeout(() => finish({ ok: false, error: '音乐服务器没有开始下载，请稍后重试' }), 20000);
+            try { event.sender.downloadURL(url.href); }
+            catch { finish({ ok: false, error: '无法启动歌曲下载，请稍后重试' }); }
+        });
+    });
+
     ipcMain.handle('kaiwu:shell:openExternal', (_event, { url } = {}) => {
         // 渲染进程侧已经挡了一道,这里是主进程侧的第二道(设计文档 §3.4)
         if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return false;

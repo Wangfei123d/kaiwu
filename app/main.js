@@ -549,6 +549,15 @@ async function boot() {
             if (workspaceApi) open();
             else void ensureWorkspace().then(open).catch((err) => console.error('[notes] 打开画布失败', err));
         },
+        onCreateCanvas: () => {
+            const open = () => {
+                workspaceApi?.openView('note-canvas');
+                // 等画布插件完成惰性挂载，再让它在画布面板中显示命名窗口。
+                queueMicrotask(() => window.dispatchEvent(new Event('kaiwu:create-canvas')));
+            };
+            if (workspaceApi) open();
+            else void ensureWorkspace().then(open).catch((err) => console.error('[notes] 新建画布失败', err));
+        },
         onCloseDocx: (path) => {
             for (const pane of workspaceApi?.allTabs?.() ?? []) {
                 const index = pane.tabs?.findIndex((tab) => tab.view === 'doc' && tab.doc === path) ?? -1;

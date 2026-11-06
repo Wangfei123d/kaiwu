@@ -124,6 +124,13 @@ export function buildCtx({ descriptor, bridge, registries, log = console }) {
             // 选**目录**:插件想把数据放到笔记库之外时才需要(默认位置就在笔记库旁边,
             // 用 vault.path() 就够)。与 openFile 同一口径:主进程只回用户选中的那一个。
             openDirectory: (options = {}) => invoke('kaiwu:dialog:openDirectory', options),
+            /** 通过原生另存为对话框下载已校验的远程文件。 */
+            downloadMusic: (url, options = {}) => invoke('kaiwu:music:download', {
+                pluginId,
+                url,
+                fileName: options.fileName,
+                extension: options.extension,
+            }),
         };
     }
 
@@ -251,7 +258,7 @@ export function buildCtx({ descriptor, bridge, registries, log = console }) {
              * 一行要显示「12 节点 · 3 张图 · 2 天前」,纯名字不够。
              */
             projects: () => invoke('drama:projects', {}),
-            /** → {projects, project, graph, types, textImport, version, root} —— 面板一次拿全。
+            /** → {projects, project, graph, types, textImport, officeFileImport, version, root} —— 面板一次拿全。
              *  `textImport` = {extensions, maxBytes}:导入要用的常量,**由引擎给**
              *  (能读哪些格式只有引擎的 lib/text.js 知道,插件不另抄一份名单)。 */
             state: (project) => invoke('drama:state', { project }),
@@ -293,6 +300,16 @@ export function buildCtx({ descriptor, bridge, registries, log = console }) {
                 path: options.path,
                 name: options.name,
             }),
+            /** 复制所选 WPS/Office 文件到当前项目的 files/，返回节点要保存的相对路径与信息。 */
+            importOfficeFile: (project, filePath) => invoke('drama:importOfficeFile', {
+                project, path: filePath,
+            }),
+            /** 从系统拖入文件时由 preload 在隔离区解析本地路径，不把路径暴露给插件。 */
+            importDroppedOfficeFile: (project, file) => bridge.importDroppedOfficeFile(project, file),
+            /** 只打开当前项目 files/ 内由导入器写入的素材。 */
+            openOfficeFile: (project, file) => invoke('drama:openOfficeFile', { project, file }),
+            /** 打开运行节点按提示词导出的项目文件。 */
+            openGeneratedOutput: (project, file) => invoke('drama:openGeneratedOutput', { project, file }),
             /** 取一张出图 → {mime, base64}(渲染进程拿不到 fs,只能这样读图)。 */
             media: (project, file) => invoke('drama:media', { project, file }),
             importImage: (project, file) => invoke('drama:importImage', { project, file }),

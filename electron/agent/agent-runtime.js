@@ -26,6 +26,7 @@ import { nullLedger } from '../sessions/session-ledger.js';
 import { createAgentSupervisor } from './agent-supervisor.js';
 import { createAcpClient } from './acp-client.js';
 import { detectCredentials, isMissingCredentialError } from './credentials.js';
+import { ensureDeepseekHarness } from './dsh-installer.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -178,6 +179,7 @@ export function createAgentRuntime({
     createSupervisor = createAgentSupervisor,
     createClient = createAcpClient,
     detectCredentialsFn = detectCredentials,
+    ensureHarness = ensureDeepseekHarness,
     readFile = (p) => readFileSync(p, 'utf8'),
     ledger = null,
 } = {}) {
@@ -196,6 +198,9 @@ export function createAgentRuntime({
     /** 正在进行的收尾(dispose/换库/stop 共用)。见 tearDownNow。 */
     let inFlightTeardown = null;
     let inFlightStart = null;
+    let inFlightHarnessSetup = null;
+    let harnessSetupAbortController = null;
+    let selectedDshEntry = null;
     let sessionId = null;
     let inFlightSession = null;
     /**
@@ -550,7 +555,12 @@ export function createAgentRuntime({
         if (root === null) {
             throw new Error('还没有选择笔记库(Vault),Agent 不知道该在哪个目录下工作');
         }
-        const e = env ?? process.env;
+        const baseEnv = env ?? process.env;
+        // 新装的 Harness 放在用户数据目录,以显式入口传给 Agent 子进程;
+        // DSH_HOME 仍只用于配置与会话资料,不混入安装目录。
+        const e = selectedDshEntry === null
+            ? baseEnv
+            : { ...baseEnv, DSH_CLI_ENTRY: selectedDshEntry };
         // `fixturePath` 是自检那条路的**说明性**入参:夹具脚本真正的来源是
         // `KAIWU_AGENT_SCRIPT`(见 agent-command 的优先级),所以这里不参与解析 ——
         // 留着它只是让调用点能一眼看出"这个 runtime 是给谁用的"。
@@ -660,9 +670,66 @@ export function createAgentRuntime({
      * 同时活着(那样就有一个监护人都停不掉的活进程,旧客户端的反向请求通道也还开着)。
      * 那个 await 是 cwd 修复的一部分,不能为了同步 spawn 把它去掉。
      */
-    function ensureController() {
+    async function ensureHarnessReady() {
+        const baseEnv = env ?? process.env;
+        // 自检夹具与注入的子进程不需要真正 Harness,也不应联网安装依赖。
+        if (typeof spawnChild === 'function' || trimmed(baseEnv.KAIWU_AGENT_SCRIPT) !== '') return;
+        if (selectedDshEntry !== null && exists(selectedDshEntry)) return;
+        if (inFlightHarnessSetup !== null) return inFlightHarnessSetup;
+
+        const abortController = new AbortController();
+        harnessSetupAbortController = abortController;
+        const p = (async () => {
+            emitState({ ...agentStatus(), state: 'starting', pid: null, error: null });
+            try {
+                const prepared = await ensureHarness({
+                    env: baseEnv,
+                    appRoot,
+                    appData: baseEnv.APPDATA,
+                    exists,
+                    signal: abortController.signal,
+                    log,
+                    onProgress: (message) => emit({ kind: 'setup', message: String(message ?? '') }),
+                });
+                if (disposed || abortController.signal.aborted) {
+                    throw Object.assign(new Error('Harness 安装已取消'), { name: 'AbortError' });
+                }
+                selectedDshEntry = prepared.entry;
+                emit({ kind: 'setup', message: '' });
+            } catch (err) {
+                emit({ kind: 'setup', message: '' });
+                const cancelled = err?.name === 'AbortError' || abortController.signal.aborted;
+                const message = cancelled ? 'Agent 环境准备已取消。'
+                    : `DeepSeek Harness 自动准备失败：${errorMessage(err)}`;
+                const snapshot = cancelled
+                    ? { ...agentStatus(), state: 'stopped', pid: null, error: null }
+                    : { state: 'failed', pid: null, restarts: 0, since: null, error: message };
+                emitState(snapshot);
+                const wrapped = new Error(message);
+                wrapped.state = snapshot.state;
+                wrapped.snapshot = snapshot;
+                throw wrapped;
+            } finally {
+                if (harnessSetupAbortController === abortController) harnessSetupAbortController = null;
+            }
+        })();
+        inFlightHarnessSetup = p;
+        const clear = () => { if (inFlightHarnessSetup === p) inFlightHarnessSetup = null; };
+        p.then(clear, clear);
+        return p;
+    }
+
+    async function ensureController() {
         if (disposed) throw new Error('Agent 运行时已经释放(dispose)');
         const root = currentVaultRoot();
+        if (root === null) throw new Error('还没有选择笔记库(Vault),Agent 不知道该在哪个目录下工作');
+        if (controller !== null && controllerVault === root) return controller;
+        if (controller !== null || inFlightTeardown !== null) return supersedeController(root);
+
+        await ensureHarnessReady();
+        if (disposed) throw new Error('Agent 运行时已经释放(dispose)');
+        if (currentVaultRoot() !== root) return ensureController();
+        if (controller !== null && controllerVault === root) return controller;
         if (controller === null && inFlightTeardown === null) {
             controller = buildController();
             controllerVault = root;
@@ -1422,6 +1489,7 @@ export function createAgentRuntime({
         // 必然失败(真机上就是这么表现的:从输入卡片或设置页按下停止,界面纹丝不动)。
         // 收掉 controller 之后再推,`agentStatus()` 才如实地是 stopped ——
         // 面板据此把「已经停掉 + 重试」摆出来。
+        harnessSetupAbortController?.abort();
         leaveReady(LEFT_READY.stopped, { emit: false });
         const c = controller;
         // ⚠️ 顺手把 controller **收掉**(不是只停进程):下一次 start() 必须按
@@ -1448,6 +1516,8 @@ export function createAgentRuntime({
     async function dispose() {
         if (disposed) return;
         disposed = true;
+        const setupInFlight = inFlightHarnessSetup;
+        harnessSetupAbortController?.abort();
         // 挂起的权限请求一律**丢弃**(不发响应):请求方那个进程正是我们接下来
         // 要停掉的这个,没有人在等;而响应会顺着**当前** transport 走,重启之后
         // 就是打到新进程上(见 dropPermissionsOf 的说明)。
@@ -1461,6 +1531,7 @@ export function createAgentRuntime({
         busy = false;
         currentTurn = null;
         listeners.clear();
+        if (setupInFlight !== null) await setupInFlight.catch(() => {});
         if (c !== null) await tearDownNow(c);
         else if (inFlightTeardown !== null) await inFlightTeardown;
         // 最后把会话记录落干净:forgetSession 里那次是"不等人"的,而进程要走了,
