@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>思考强度 · 宽轨道流光方案</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111110; --panel: #191817; --line: #373431;
+      --text: #f3f0eb; --dim: #a7a198; --muted: #706c66;
+      --motion: 900ms;
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { min-width: 320px; min-height: 100vh; margin: 0; color: var(--text); background: radial-gradient(ellipse at 52% -30%, rgba(105,133,158,.17), transparent 54%), var(--bg); }
+    .page { width: min(1240px, calc(100% - 48px)); margin: 0 auto; padding: 34px 0 56px; }
+    .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; }
+    .brand { display: flex; align-items: center; gap: 9px; color: #d8d4ce; font-size: 12px; }
+    .brand-icon { position: relative; width: 20px; height: 20px; }
+    .brand-icon::before, .brand-icon::after, .brand-icon i { content: ""; position: absolute; display: block; border-radius: 4px; background: #eeeae5; }
+    .brand-icon::before { left: 4px; top: 2px; width: 3px; height: 16px; transform: rotate(-8deg); }
+    .brand-icon::after { left: 5px; top: 5px; width: 13px; height: 3px; transform: rotate(-32deg); }
+    .brand-icon i { left: 6px; top: 12px; width: 12px; height: 3px; transform: rotate(30deg); }
+    .brand-icon b { position: absolute; z-index: 1; left: 1px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: #83ceff; }
+    .badge { padding: 6px 10px; border: 1px solid #34322f; border-radius: 99px; color: #aaa59e; font-size: 10px; }
+    .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+    h1 { margin: 0; font-size: clamp(25px, 4vw, 34px); font-weight: 620; letter-spacing: -.045em; }
+    .lead { max-width: 710px; margin: 9px 0 0; color: var(--dim); font-size: 12px; line-height: 1.75; }
+    .demo { display: inline-flex; flex: none; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border: 1px solid #48433e; border-radius: 8px; color: var(--text); background: #242220; font: inherit; font-size: 11px; cursor: pointer; }
+    .demo[aria-pressed="true"] { border-color: rgba(131,206,255,.55); color: #83ceff; background: rgba(131,206,255,.08); }
+    .controls { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 10px 14px; border: 1px solid #302e2b; border-radius: 10px; background: rgba(25,24,23,.76); }
+    .controls label { flex: none; color: var(--dim); font-size: 11px; }
+    .speed { width: 165px; accent-color: #83ceff; cursor: pointer; }
+    .readout { min-width: 55px; color: #83ceff; font: 11px ui-monospace, Consolas, monospace; }
+    .note { margin-left: auto; color: var(--muted); font-size: 10px; }
+    .list { display: grid; gap: 11px; }
+    .card { --accent: #7ecbff; --progress: 66.667%; min-width: 0; padding: 14px 20px 12px; border: 1px solid var(--line); border-radius: 12px; background: linear-gradient(145deg, #1d1c1a, #171615 76%); transition: border-color .2s ease; }
+    .card:hover { border-color: #504b45; }
+    .card[data-kind="gradient"] { --accent: #87d9bd; }
+    .card[data-kind="pulse"] { --accent: #a9a0ff; }
+    .card[data-kind="ripple"] { --accent: #ffc17c; }
+    .card[data-kind="dust"] { --accent: #ef91c6; }
+    .head { display: flex; align-items: center; gap: 9px; }
+    .number { color: #77726b; font: 10px ui-monospace, Consolas, monospace; }
+    h2 { margin: 0; font-size: 13px; font-weight: 590; }
+    .desc { margin-left: auto; color: var(--muted); font-size: 10px; }
+    .value-row { display: flex; align-items: baseline; gap: 7px; margin: 13px 0 0; color: var(--accent); }
+    .value { min-width: 22px; font-size: 16px; font-weight: 600; }
+    .value-row span:last-child { color: var(--muted); font-size: 10px; }
+    .slider-zone { position: relative; margin: 1px 0 0; }
+    .track { position: relative; height: 32px; }
+    .rail { position: absolute; inset: 50% 0 auto; height: 7px; transform: translateY(-50%); border-radius: 99px; background: #373431; }
+    .fill { position: absolute; inset: 50% auto auto 0; width: var(--progress); height: 7px; overflow: hidden; transform: translateY(-50%); border-radius: 99px; background: var(--accent); transition: width var(--motion) cubic-bezier(.18,.75,.24,1); }
+    .fill::after { content: ""; position: absolute; inset: 0; opacity: .9; pointer-events: none; }
+    .knob { position: absolute; z-index: 1; top: 50%; left: var(--progress); width: 18px; height: 18px; transform: translate(-50%,-50%); border-radius: 50%; background: #f4f7f8; box-shadow: 0 1px 6px rgba(0,0,0,.56), 0 0 0 3px color-mix(in srgb, var(--accent), transparent 82%); transition: left var(--motion) cubic-bezier(.18,.75,.24,1), box-shadow .28s ease; pointer-events: none; }
+    .control { position: absolute; z-index: 2; inset: 0; width: 100%; height: 32px; margin: 0; opacity: 0; cursor: pointer; }
+    .control::-webkit-slider-thumb { width: 24px; height: 24px; appearance: none; -webkit-appearance: none; }
+    .control::-moz-range-thumb { width: 24px; height: 24px; border: 0; background: transparent; }
+    .control:focus-visible + .focus-ring { position: absolute; z-index: 3; inset: 1px 0; border: 2px solid color-mix(in srgb, var(--accent), transparent 10%); border-radius: 7px; pointer-events: none; }
+    .card.dragging .knob, .card.dragging .fill { transition: none; }
+    .card.dragging .knob { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent), transparent 80%), 0 1px 6px rgba(0,0,0,.56); }
+    .stops { display: grid; grid-template-columns: repeat(4, 1fr); }
+    .stop { padding: 2px 0; border: 0; color: #706c66; background: transparent; font: inherit; font-size: 10px; cursor: pointer; }
+    .stop.active { color: #f2eee8; }
+    .card.changed .knob { box-shadow: 0 1px 6px rgba(0,0,0,.5), 0 0 0 6px color-mix(in srgb, var(--accent), transparent 78%); }
+    .foot { display: flex; justify-content: space-between; margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,.055); color: #77726b; font-size: 9px; }
+    .foot b { color: var(--accent); font-weight: 500; }
+
+    /* 方案 1：一束柔亮的光慢慢扫过进度。 */
+    [data-kind="beam"] .fill { box-shadow: 0 0 12px color-mix(in srgb, var(--accent), transparent 48%); }
+    [data-kind="beam"] .fill::after { inset: 0 auto 0 -130px; width: 130px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent), white 26%), white, color-mix(in srgb, var(--accent), white 26%), transparent); filter: blur(4px); animation: beam 3.8s ease-in-out infinite; }
+    @keyframes beam { from { left: -130px; } to { left: 100%; } }
+
+    /* 方案 2：整段彩色渐变缓慢流动。 */
+    [data-kind="gradient"] .fill { background: linear-gradient(90deg,#58ae94,#a0e6c7,#66c8a7,#b6f1da); background-size: 220% 100%; animation: gradient-flow 5.4s linear infinite; box-shadow: 0 0 11px rgba(104,215,174,.3); }
+    @keyframes gradient-flow { from { background-position: 0% 50%; } to { background-position: 220% 50%; } }
+
+    /* 方案 3：光晕沿着圆点后方缓慢呼吸。 */
+    [data-kind="pulse"] .fill { background: linear-gradient(90deg,#7165dc,#b1aaff,#8b80ef); }
+    [data-kind="pulse"] .fill::after { background: radial-gradient(ellipse at 72% 50%, rgba(255,255,255,.8), transparent 48%); background-size: 180px 100%; background-repeat: no-repeat; animation: pulse-glow 3.4s ease-in-out infinite alternate; }
+    [data-kind="pulse"] .knob { animation: knob-breathe 3.4s ease-in-out infinite; }
+    @keyframes pulse-glow { from { background-position: 0% 50%; opacity: .25; } to { background-position: 100% 50%; opacity: .9; } }
+    @keyframes knob-breathe { 0%,100% { box-shadow: 0 1px 6px rgba(0,0,0,.56),0 0 0 3px rgba(169,160,255,.2); } 50% { box-shadow: 0 1px 6px rgba(0,0,0,.45),0 0 0 7px rgba(169,160,255,.12); } }
+
+    /* 方案 4：缓慢推进的波纹，流动感更明显。 */
+    [data-kind="ripple"] .fill { background: linear-gradient(90deg,#e3a252,#ffd49a,#f1b76e); box-shadow: 0 0 10px rgba(255,193,124,.27); }
+    [data-kind="ripple"] .fill::after { inset: 0 auto 0 -170px; width: 170px; background: repeating-radial-gradient(ellipse at 0 50%, transparent 0 12px, rgba(255,255,255,.52) 13px 15px, transparent 16px 28px); mask-image: linear-gradient(90deg,transparent,black 20%,black 80%,transparent); animation: ripple-flow 4.6s linear infinite; }
+    @keyframes ripple-flow { from { left: -170px; } to { left: 100%; } }
+
+    /* 方案 5：细小星尘慢速横移，整体更轻、更有颗粒感。 */
+    [data-kind="dust"] .fill { background: linear-gradient(90deg,#d96fae,#f3a8d1,#df81bb); box-shadow: 0 0 11px rgba(239,145,198,.25); }
+    [data-kind="dust"] .fill::after { background-image: radial-gradient(circle,rgba(255,255,255,.95) 0 1px,transparent 1.7px),radial-gradient(circle,rgba(255,255,255,.6) 0 1px,transparent 1.8px); background-position: 0 1px, 10px 5px; background-size: 28px 7px, 37px 7px; animation: dust-drift 5s linear infinite; }
+    @keyframes dust-drift { from { background-position: 0 1px,10px 5px; } to { background-position: 112px 1px,158px 5px; } }
+
+    @media (max-width: 650px) { .page { width: calc(100% - 26px); padding-top: 24px; } .hero { align-items: flex-start; flex-direction: column; gap: 14px; } .controls { flex-wrap: wrap; } .note { width: 100%; margin-left: 0; } .desc { margin-left: auto; } .card { padding-inline: 14px; } }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="top"><div class="brand"><span class="brand-icon" aria-hidden="true"><i></i><b></b></span><span>开物 · AI 面板</span></div><span class="badge">宽轨道流光预览</span></header>
+    <section class="hero"><div><h1>让流光铺开来</h1><p class="lead">轨道扩展到内容区全宽，拖动时圆点连续跟手，松开后缓动吸附到最近档位。下面并排比较五种慢速流光；点按档位或拖动圆点可交互体验。</p></div><button class="demo" id="demo" type="button" aria-pressed="false"><span class="demo-icon">▶</span><span>自动演示</span></button></section>
+    <div class="controls"><label for="speed">吸附时间</label><input class="speed" id="speed" type="range" min="650" max="1400" step="50" value="900"><output class="readout" id="readout">900 ms</output><span class="note">拖动调节松手后的圆点速度</span></div>
+    <section class="list" aria-label="宽轨道流光效果方案">
+      <article class="card" data-kind="beam"><div class="head"><span class="number">01</span><h2>光束掠过</h2><span class="desc">一道柔亮光带沿进度方向扫过</span></div><div class="value-row"><strong class="value">中</strong><span>思考强度</span></div><div class="slider-zone"><div class="track"><span class="rail"></span><span class="fill"></span><span class="knob"></span><input class="control" type="range" min="0" max="3" step="any" value="2" aria-label="光束掠过"><span class="focus-ring"></span></div><div class="stops"></div></div><div class="foot"><span>清晰、有方向感</span><b>推荐</b></div></article>
+      <article class="card" data-kind="gradient"><div class="head"><span class="number">02</span><h2>渐变流动</h2><span class="desc">整段颜色持续缓慢流转</span></div><div class="value-row"><strong class="value">中</strong><span>思考强度</span></div><div class="slider-zone"><div class="track"><span class="rail"></span><span class="fill"></span><span class="knob"></span><input class="control" type="range" min="0" max="3" step="any" value="2" aria-label="渐变流动"><span class="focus-ring"></span></div><div class="stops"></div></div><div class="foot"><span>连贯、存在感柔和</span><b>平顺</b></div></article>
+      <article class="card" data-kind="pulse"><div class="head"><span class="number">03</span><h2>节点呼吸</h2><span class="desc">圆点与进度尾端同步呼吸</span></div><div class="value-row"><strong class="value">中</strong><span>思考强度</span></div><div class="slider-zone"><div class="track"><span class="rail"></span><span class="fill"></span><span class="knob"></span><input class="control" type="range" min="0" max="3" step="any" value="2" aria-label="节点呼吸"><span class="focus-ring"></span></div><div class="stops"></div></div><div class="foot"><span>安静、有节奏</span><b>克制</b></div></article>
+      <article class="card" data-kind="ripple"><div class="head"><span class="number">04</span><h2>缓速波纹</h2><span class="desc">短波纹向前推进，动感更明显</span></div><div class="value-row"><strong class="value">中</strong><span>思考强度</span></div><div class="slider-zone"><div class="track"><span class="rail"></span><span class="fill"></span><span class="knob"></span><input class="control" type="range" min="0" max="3" step="any" value="2" aria-label="缓速波纹"><span class="focus-ring"></span></div><div class="stops"></div></div><div class="foot"><span>更有动势，节奏仍偏慢</span><b>流动</b></div></article>
+      <article class="card" data-kind="dust"><div class="head"><span class="number">05</span><h2>星辰横移</h2><span class="desc">微小亮点在色带里慢慢经过</span></div><div class="value-row"><strong class="value">中</strong><span>思考强度</span></div><div class="slider-zone"><div class="track"><span class="rail"></span><span class="fill"></span><span class="knob"></span><input class="control" type="range" min="0" max="3" step="any" value="2" aria-label="星辰横移"><span class="focus-ring"></span></div><div class="stops"></div></div><div class="foot"><span>细腻、有轻微能量感</span><b>灵动</b></div></article>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const labels = ['关', '低', '中', '高'];
+      const cards = [...document.querySelectorAll('.card')];
+      function update(card, value, animate = false) {
+        const amount = Math.max(0, Math.min(3, Number(value)));
+        const nearest = Math.round(amount);
+        card.style.setProperty('--progress', `${amount / 3 * 100}%`);
+        card.querySelector('.value').textContent = labels[nearest];
+        const control = card.querySelector('.control');
+        control.setAttribute('aria-valuetext', labels[nearest]);
+        card.querySelectorAll('.stop').forEach((button, i) => {
+          const active = i === nearest;
+          button.classList.toggle('active', active);
+          button.setAttribute('aria-pressed', String(active));
+        });
+        if (animate) {
+          card.classList.remove('changed');
+          void card.offsetWidth;
+          card.classList.add('changed');
+          clearTimeout(card._changedTimer);
+          card._changedTimer = setTimeout(() => card.classList.remove('changed'), 260);
+        }
+      }
+      cards.forEach((card) => {
+        const control = card.querySelector('.control');
+        let dragging = false;
+        let pointerSettlePending = false;
+        const settle = () => {
+          if (!dragging) return;
+          dragging = false;
+          pointerSettlePending = true;
+          const target = Math.round(Number(control.value));
+          card.classList.remove('dragging');
+          requestAnimationFrame(() => {
+            control.value = String(target);
+            update(card, target, true);
+            pointerSettlePending = false;
+          });
+        };
+        labels.forEach((label, index) => {
+          const button = document.createElement('button');
+          button.type = 'button'; button.className = 'stop'; button.textContent = label;
+          button.addEventListener('click', () => { control.value = String(index); update(card, index, true); });
+          card.querySelector('.stops').appendChild(button);
+        });
+        control.addEventListener('pointerdown', () => { dragging = true; card.classList.add('dragging'); });
+        control.addEventListener('pointerup', settle);
+        control.addEventListener('pointercancel', settle);
+        control.addEventListener('blur', settle);
+        control.addEventListener('input', () => update(card, control.value));
+        control.addEventListener('change', () => {
+          if (dragging || pointerSettlePending) return;
+          const target = Math.round(Number(control.value));
+          control.value = String(target);
+          update(card, target, true);
+        });
+        control.addEventListener('keydown', (event) => {
+          const current = Math.round(Number(control.value));
+          let target = current;
+          if (event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'PageUp') target = Math.min(3, current + 1);
+          else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown' || event.key === 'PageDown') target = Math.max(0, current - 1);
+          else if (event.key === 'Home') target = 0;
+          else if (event.key === 'End') target = 3;
+          else return;
+          event.preventDefault(); control.value = String(target); update(card, target, true);
+        });
+        update(card, control.value);
+      });
+      const speed = document.getElementById('speed');
+      const readout = document.getElementById('readout');
+      speed.addEventListener('input', () => {
+        document.documentElement.style.setProperty('--motion', `${speed.value}ms`);
+        readout.value = `${speed.value} ms`; readout.textContent = `${speed.value} ms`;
+      });
+      const demo = document.getElementById('demo');
+      let timer = null; let step = 0;
+      demo.addEventListener('click', () => {
+        if (timer !== null) {
+          clearInterval(timer); timer = null; demo.setAttribute('aria-pressed', 'false');
+          demo.querySelector('.demo-icon').textContent = '▶'; demo.lastElementChild.textContent = '自动演示'; return;
+        }
+        demo.setAttribute('aria-pressed', 'true'); demo.querySelector('.demo-icon').textContent = 'Ⅱ'; demo.lastElementChild.textContent = '暂停演示';
+        timer = setInterval(() => {
+          step = (step + 1) % labels.length;
+          cards.forEach((card, i) => { const control = card.querySelector('.control'); const value = (step + i) % labels.length; control.value = String(value); update(card, value, true); });
+        }, Math.max(1550, Number(speed.value) + 650));
+      });
+    })();
+  </script>
+</body>
+</html>

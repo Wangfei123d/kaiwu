@@ -5,7 +5,7 @@
     font-size: 12.5px; color: var(--muted); }
 
 /* ---- 工具条 ---- */
-.drama-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; flex: none;
+.drama-bar { display: none; align-items: center; gap: 6px; padding: 6px 10px; flex: none;
     flex-wrap: wrap; border-bottom: 1px solid var(--border); background: var(--surface); }
 .drama-btn { font: inherit; font-size: 12px; padding: 3px 10px; cursor: pointer; color: var(--muted);
     background: none; border: 1px solid var(--border); border-radius: 6px; white-space: nowrap; }
@@ -29,18 +29,10 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
 
 /* ---- 主体 ---- */
-/* ⚠️ 这里是「画布既不能为 0 宽、也不能被检视器顶掉」的护栏。两个坑都踩过:
-   ① 右侧检视器原本 width:196px + flex:none —— **不肯让位**。面板窄到 104px 时画布
-      (flex:1)只能拿到 max(0, 104-196) = **0 宽**:看不见、也永远接不了货(落点按矩形判,
-      0 宽就是"松手没反应",看着像接货逻辑坏了)。
-   ② 于是先改成"两者都可压缩 + 放不下就折行" —— 更糟:检视器落到第二行后**那一行会按内容长高**
-      (落下文本就是一大块编辑框、落下图片就是一整张预览),画布那一行被顶到只剩一条:
-      现象是"拖进去之后画布被编辑预览面板顶消失"(实测读数:折行时画布只有 104x102,原本 436 高)。
-   最终:**不折行**;画布留一个最小宽度,检视器先让位(它本身可以一直被压到 0)。
-   宽面板里(≥ 检视器宽度 + 画布最小宽度)与改动前逐像素一致。 */
+/* 画布是主体的唯一内容，始终占满短剧画布区域。 */
 .drama-wrap { flex: 1; display: flex; min-height: 0; overflow: hidden; }
 
-.drama-canvas { flex: 1; position: relative; overflow: hidden; min-width: 120px;
+.drama-canvas { flex: 1; position: relative; overflow: hidden; min-width: 0;
     background-image:
         linear-gradient(var(--surface) 1px, transparent 1px),
         linear-gradient(90deg, var(--surface) 1px, transparent 1px);
@@ -53,6 +45,8 @@
 .drama-edge-draft { fill: none; stroke: var(--accent); stroke-width: 2;
     stroke-dasharray: 6 4; opacity: .9; }
 .drama-canvas.connecting { cursor: crosshair; }
+.drama-canvas.disconnecting, .drama-canvas.disconnecting * { cursor: grabbing; }
+.drama-canvas.disconnecting .drama-edge-draft { stroke: var(--error); stroke-dasharray: 5 4; opacity: 1; }
 .drama-snap-guide { position: absolute; z-index: 4; pointer-events: none; opacity: .8;
     border-color: var(--accent); border-style: dashed; }
 .drama-snap-guide.x { width: 0; border-left-width: 1px; border-top: 0; border-right: 0; border-bottom: 0; }
@@ -107,6 +101,7 @@
 .drama-port::after { content: ''; position: absolute; inset: 5px; border: 1.5px solid var(--accent);
     border-radius: 50%; background: var(--surface-2); box-shadow: 0 0 0 2px var(--glass); }
 .drama-port.connected::after { background: var(--accent); }
+.drama-port-input.connected { cursor: grab; }
 .drama-port:hover::after, .drama-port:focus-visible::after, .drama-port.is-target::after {
     background: var(--accent); box-shadow: 0 0 0 4px rgba(126, 200, 255, .2); }
 .drama-port-output { cursor: crosshair; }
@@ -291,6 +286,8 @@
     padding: 4px 6px; border: 1px solid var(--ask); border-radius: 5px;
     background: rgba(216, 179, 106, .08); font-size: 10.5px; color: var(--ask);
     animation: dramaConfirmIn .14s ease-out both; }
+.drama-confirm-canvas { position: absolute; z-index: 20; top: 50%; left: 50%; margin: 0;
+    translate: -50% -50%; box-shadow: 0 8px 24px rgba(0, 0, 0, .4); }
 @keyframes dramaConfirmIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 .drama-confirm .drama-btn { font-size: 10.5px; padding: 1px 6px; }
 .drama-confirm-yes { color: var(--bg); background: var(--ask); border-color: var(--ask); }
@@ -299,28 +296,6 @@
 .drama-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     padding: 18px; text-align: center; white-space: pre-line; color: var(--faint); font-size: 12px;
     line-height: 1.8; }
-
-/* ---- 检视器 ---- */
-.drama-inspector { width: 196px; flex: 0 1 196px; min-width: 0; border-left: 1px solid var(--border);
-    overflow: auto; padding: 9px; }
-.drama-inspector h4 { margin: 0 0 2px; font-size: 12.5px; }
-.drama-node-path { font: 10.5px/1.5 var(--mono); color: var(--faint); margin-bottom: 8px; }
-.drama-hint { font-size: 11px; color: var(--faint); line-height: 1.7; margin: 4px 0 8px; }
-.drama-kv { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim);
-    padding: 2px 0; border-bottom: 1px dashed var(--border); }
-.drama-kv b { color: var(--muted); font-weight: 600; }
-.drama-error { margin-top: 6px; padding: 5px 7px; border: 1px solid var(--error);
-    border-radius: 6px; font-size: 11px; color: var(--dim); background: rgba(224,138,138,.07); }
-.drama-generated-output { margin-top: 9px; display: flex; flex-direction: column; gap: 5px; }
-.drama-generated-output .drama-node-path { margin: 0; overflow-wrap: anywhere; }
-.drama-generated-output textarea { width: 100%; min-height: 180px; resize: vertical;
-    box-sizing: border-box; padding: 6px; border: 1px solid var(--border); border-radius: 6px;
-    background: var(--surface-2); color: var(--text); font: 11px/1.5 var(--mono); }
-.drama-actions { margin-top: 9px; display: flex; gap: 5px; flex-wrap: wrap; }
-.drama-add { margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--border);
-    display: flex; flex-direction: column; gap: 5px; }
-.drama-add select { font: inherit; font-size: 11.5px; padding: 3px 6px; color: var(--text);
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; }
 
 /* ---- 「短剧项目」面板 ----
    一行一个项目:名字 + 「12 节点 · 3 张图 · 2 天前」。
@@ -403,7 +378,7 @@
 .drama-canvas[data-nav="panning"],
 .drama-canvas[data-nav="panning"] * { cursor: grabbing; }
 
-/* 收"从笔记列表拖过来的文件":拖动途中亮一层虚线,松手才动图。
+/* 拖动画布支持的视频资源时亮一层虚线,松手才动图。
    ⚠️ 只画伪元素,不碰任何节点 —— 与"拖动只改 transform"同一条纪律。 */
 .drama-canvas[data-drop="armed"]::after {
   content: '松手放到画布上';
@@ -413,26 +388,194 @@
   color: #c9dcea; font: 12.5px/1.7 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
   padding: 8px 12px;
 }
-.drama-canvas[data-drop-preview="word"][data-drop="armed"]::after { display: none; }
 
-/* Word 拖入的 B 方案:轮廓就是最终文本节点的尺寸与落点，随 world 平移缩放。 */
-.drama-drop-preview { position: absolute; z-index: 6; width: 150px; min-height: 56px;
-  overflow: hidden; border: 1px dashed var(--accent); border-radius: var(--radius-sm);
-  background: var(--surface-2); color: var(--text); pointer-events: none;
-  box-shadow: 0 0 0 4px rgba(126, 200, 255, .12), 0 8px 22px rgba(0, 0, 0, .25);
-  animation: dramaDropPreviewIn .16s ease-out both; }
-.drama-drop-preview[hidden], .drama-drop-guide[hidden] { display: none; }
-.drama-drop-preview-head { padding: 5px 7px; border-bottom: 1px solid var(--border);
-  font: 600 10.5px/1.4 var(--mono); color: var(--accent); }
-.drama-drop-preview-name { padding: 5px 7px 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; font: 10px/1.4 var(--mono); }
-.drama-drop-preview-note { padding: 1px 7px 6px; color: var(--faint); font: 9.5px/1.4 var(--mono); }
-.drama-drop-guide { position: absolute; z-index: 5; height: 1px; transform-origin: 0 50%;
-  pointer-events: none; opacity: .4;
-  background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 8px);
-  animation: dramaDropGuideFlow .8s linear infinite; }
-@keyframes dramaDropPreviewIn { from { opacity: .35; scale: .97; } to { opacity: 1; scale: 1; } }
-@keyframes dramaDropGuideFlow { to { background-position-x: 8px; } }
+/* 文本节点 A：名称独立放在框外，正文区域不再重复标题或字段说明。 */
+.drama-node[data-type="text"] { width: 280px; overflow: visible; }
+.drama-node[data-type="text"] > .drama-node-head { display: none; }
+.drama-node[data-type="text"] > .drama-node-name {
+    position: absolute; z-index: 2; left: 0; bottom: calc(100% + 5px); width: auto;
+    min-width: 42px; max-width: min(240px, 100%); height: 19px; margin: 0; padding: 0 1px;
+    border: 0; border-radius: 0; outline: 0; background: transparent; color: var(--text);
+    font: 500 11px/19px -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    text-overflow: ellipsis; caret-color: var(--accent); cursor: text;
+}
+.drama-node[data-type="text"] > .drama-node-name:focus { color: var(--text); }
+.drama-node[data-type="text"] > .drama-node-name::selection { background: rgba(126, 200, 255, .28); }
+.drama-node[data-type="text"] > .drama-node-body { padding: 0; }
+.drama-node[data-type="text"] .drama-text-content {
+    height: 100%; margin: 0; padding: 10px 11px; border-radius: 0; background: transparent;
+    color: var(--text); font: 11px/1.55 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+.drama-node[data-type="text"] .drama-editor { height: 100%; min-height: 0; gap: 0; padding: 0; }
+.drama-node[data-type="text"] .drama-textarea {
+    display: flex; flex: 1 1 0; width: 100%; height: 100%; min-height: 0; min-width: 0;
+    overflow: hidden; padding: 0; border: 0; border-radius: 0; outline: 0; background: transparent;
+}
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content {
+    flex: 1 1 0; width: 100%; height: 100%; min-height: 0; min-width: 0; overflow: auto;
+    overscroll-behavior: contain; padding: 10px 11px; outline: 0; background: transparent;
+    color: var(--text); font: 11px/1.55 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; caret-color: var(--accent);
+}
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content:focus { outline: 0; }
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content h1 { font-size: 14px; }
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content h2 { font-size: 12.5px; }
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content h3,
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content h4,
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content h5,
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content h6 { font-size: 11.5px; }
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content p { margin: 4px 0 7px; }
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content ul,
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content ol { margin: 4px 0 8px; padding-left: 18px; }
+.drama-node[data-type="text"] .drama-textarea .live-markdown-content pre {
+    white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.drama-node[data-type="text"] .drama-port-input { left: -10px; }
+.drama-node[data-type="text"] .drama-port-output { right: -10px; }
+.drama-node[data-type="text"] .drama-port {
+    opacity: 0; transform: translateY(-50%) scale(.68);
+    transition: opacity .18s ease, transform .22s cubic-bezier(.2, .8, .2, 1);
+}
+.drama-node[data-type="text"] .drama-port.is-near,
+.drama-node[data-type="text"] .drama-port:hover,
+.drama-node[data-type="text"] .drama-port:focus-visible {
+    opacity: 1; transform: translateY(-50%) scale(1);
+}
+.drama-node[data-type="text"] .drama-port.is-near::after,
+.drama-node[data-type="text"] .drama-port:hover::after,
+.drama-node[data-type="text"] .drama-port:focus-visible::after {
+    background: var(--accent); box-shadow: 0 0 0 4px rgba(126, 200, 255, .16);
+}
+
+/* 运行节点：只提供一个动作按钮和一个左侧输入端口，不暴露文本编辑区。 */
+.drama-node[data-type="run"] { display: flex; flex-direction: column; width: 176px; height: 88px;
+    min-height: 88px; overflow: visible; }
+.drama-node[data-type="run"] > .drama-node-head { display: none; }
+.drama-node[data-type="run"] > .drama-node-name {
+    position: absolute; z-index: 2; left: 0; bottom: calc(100% + 5px); color: var(--text);
+    font: 500 11px/19px -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+.drama-node[data-type="run"] > .drama-node-body { display: flex; flex: 1; min-height: 0;
+    flex-direction: column; align-items: center; justify-content: center; padding: 4px 8px; }
+.drama-node[data-type="run"] .drama-input-caption { align-self: flex-start; margin: 0; padding-left: 0; }
+.drama-node[data-type="run"] .drama-input-sources { width: 100%; max-height: 72px; }
+.drama-node[data-type="run"] .drama-slot { gap: 5px; }
+.drama-run-control { display: flex; width: 100%; flex-direction: column; align-items: center;
+    justify-content: center; gap: 5px; padding: 7px; }
+.drama-run-button { min-width: 94px; padding: 6px 18px; border: 1px solid var(--accent);
+    border-radius: 7px; background: rgba(126, 200, 255, .12); color: var(--accent);
+    font-family: inherit; font-weight: 600; font-size: 12px; line-height: 1.4;
+    cursor: pointer; transition: background .14s ease, color .14s ease, transform .14s ease; }
+.drama-run-button:hover:not(:disabled) { background: var(--accent); color: var(--bg); }
+.drama-run-button:active:not(:disabled) { transform: scale(.97); }
+.drama-run-button:disabled { opacity: .55; cursor: wait; }
+.drama-run-state { max-width: 100%; overflow: hidden; color: var(--faint); font: 9.5px/1.3 var(--mono);
+    text-overflow: ellipsis; white-space: nowrap; }
+.drama-run-state-failed { color: var(--error); }
+.drama-run-state-ok, .drama-run-state-cached { color: var(--ok); }
+.drama-node[data-type="run"].running { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(126, 200, 255, .18), 0 0 18px rgba(126, 200, 255, .12); }
+.drama-node[data-type="run"] .drama-port-input { left: -10px; }
+.drama-node[data-type="run"] .drama-port-output { right: -10px; }
+.drama-node[data-type="run"] .drama-port { transform: translateY(-50%); }
+
+/* 运行结果节点：自动生成、只读显示，并通过连线标明来源运行节点。 */
+.drama-node[data-type="result"] { display: flex; flex-direction: column; width: 280px; height: 184px;
+    min-height: 184px; overflow: visible; }
+.drama-node[data-type="result"] > .drama-node-head { display: none; }
+.drama-node[data-type="result"] > .drama-node-name {
+    position: absolute; z-index: 2; left: 0; bottom: calc(100% + 5px); color: var(--text);
+    font: 500 11px/19px -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+.drama-node[data-type="result"] > .drama-node-body { display: flex; flex: 1; min-height: 0; flex-direction: column; padding: 0; }
+.drama-result-export { display: flex; flex: none; min-width: 0; height: 34px; align-items: center; gap: 8px;
+    margin: 0 10px; border-bottom: 1px solid var(--border); }
+.drama-result-export-icon { display: grid; width: 30px; height: 21px; flex: none; place-items: center;
+    border-radius: 4px; background: #2869dc; color: #fff; font: 700 8px/1 Arial, sans-serif; }
+.drama-result-export-label { flex: 1; overflow: hidden; color: var(--muted); font: 10px/1.2 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    text-overflow: ellipsis; white-space: nowrap; }
+.drama-result-export-open { flex: none; padding: 3px 8px; border: 1px solid rgba(126, 200, 255, .35);
+    border-radius: 5px; background: rgba(126, 200, 255, .08); color: var(--accent);
+    font: 10px/1.3 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; cursor: pointer; }
+.drama-result-export-open:hover:not(:disabled) { background: rgba(126, 200, 255, .18); }
+.drama-result-export-open:disabled { opacity: .55; cursor: wait; }
+.drama-node[data-type="result"] .drama-text-content {
+    flex: 1; min-height: 0; max-height: none; margin: 0; padding: 10px 11px; overflow: auto;
+    overscroll-behavior: contain; border-radius: 0; background: transparent; color: var(--text);
+    font: 11px/1.55 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    white-space: normal; overflow-wrap: anywhere; user-select: text; cursor: text;
+}
+.drama-node[data-type="result"] .drama-port-input { left: -10px; }
+.drama-node[data-type="result"] .drama-port-output { right: -10px; }
+.drama-node[data-type="result"] .drama-port { transform: translateY(-50%); }
+
+/* WPS 文件节点：保留项目内副本，用红色矢量 WPS 标识与外置文件名辨认。 */
+.drama-node[data-type="wps-file"] { display: flex; flex-direction: column; width: 248px; height: 96px;
+    min-height: 96px; overflow: visible; border-radius: 9px; }
+.drama-node[data-type="wps-file"] > .drama-node-head { display: none; }
+.drama-node[data-type="wps-file"] > .drama-wps-name {
+    position: absolute; z-index: 2; left: 0; bottom: calc(100% + 5px); max-width: 100%;
+    overflow: hidden; color: var(--text); font: 500 11px/19px -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    text-overflow: ellipsis; white-space: nowrap;
+}
+.drama-node[data-type="wps-file"] > .drama-node-body { display: flex; flex: 1; min-height: 0; padding: 0; }
+.drama-wps-file { display: flex; flex: 1; min-width: 0; align-items: center; gap: 12px;
+    padding: 12px; background: linear-gradient(115deg, rgba(255,255,255,.018), transparent 62%); }
+.drama-wps-icon { display: grid; width: 43px; height: 43px; flex: none; place-items: center;
+    border-radius: 10px; background: linear-gradient(145deg, #f36b5c, #d83c31);
+    color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 3px 10px rgba(226,75,63,.16); }
+.drama-wps-icon svg { display: block; width: 34px; height: 34px; }
+.drama-wps-details { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
+.drama-wps-format { color: var(--text); font: 600 11px/1.3 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    letter-spacing: .04em; }
+.drama-wps-size { color: var(--faint); font: 10px/1.3 var(--mono); }
+
+/* Word 文件节点 A：蓝色 W 图标与文件信息并列，右侧输出 DOCX 正文文本。 */
+.drama-node[data-type="word-file"] { display: flex; flex-direction: column; width: 290px; height: 112px;
+    min-height: 112px; overflow: visible; border-radius: 9px; }
+.drama-node[data-type="word-file"] > .drama-node-head { display: none; }
+.drama-node[data-type="word-file"] > .drama-word-name {
+    position: absolute; z-index: 2; left: 0; bottom: calc(100% + 5px); width: auto;
+    min-width: 42px; max-width: min(240px, 100%); height: 19px; margin: 0; padding: 0 1px;
+    overflow: hidden; border: 0; border-radius: 0; outline: 0; background: transparent;
+    color: var(--text); font: 500 11px/19px -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    text-overflow: ellipsis; white-space: nowrap; caret-color: var(--accent); cursor: text;
+}
+.drama-node[data-type="word-file"] > .drama-word-name:focus { color: var(--text); }
+.drama-node[data-type="word-file"] > .drama-word-name::selection { background: rgba(126, 200, 255, .28); }
+.drama-node[data-type="word-file"] > .drama-node-body { display: flex; flex: 1; min-height: 0; padding: 0; }
+.drama-word-file { display: flex; flex: 1; min-width: 0; align-items: center; gap: 13px;
+    padding: 14px; background: linear-gradient(115deg, rgba(255,255,255,.02), transparent 65%); }
+.drama-word-icon { display: grid; width: 47px; height: 50px; flex: none; place-items: center;
+    border-radius: 9px; background: linear-gradient(145deg, #5e9aff, #2869dc); color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.24), 0 4px 12px rgba(52,124,245,.2); }
+.drama-word-icon svg { display: block; width: 37px; height: 37px; }
+.drama-word-details { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 5px;
+    color: var(--faint); font: 10px/1.35 var(--mono); }
+.drama-word-filename { display: block; max-width: 100%; overflow: hidden; color: var(--text);
+    font: 500 11px/1.35 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    text-overflow: ellipsis; white-space: nowrap; }
+.drama-word-meta { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.drama-word-format { color: #8cb8ff; font: 700 10px/1.3 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    letter-spacing: .06em; }
+.drama-word-readable { color: var(--ok); font: 10px/1.3 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+.drama-node[data-type="word-file"] .drama-port-input { left: -10px; }
+.drama-node[data-type="word-file"] .drama-port-output { right: -10px; }
+.drama-node[data-type="word-file"] .drama-port {
+    opacity: 0; transform: translateY(-50%) scale(.68);
+    transition: opacity .18s ease, transform .22s cubic-bezier(.2, .8, .2, 1);
+}
+.drama-node[data-type="word-file"] .drama-port.is-near,
+.drama-node[data-type="word-file"] .drama-port:hover,
+.drama-node[data-type="word-file"] .drama-port:focus-visible {
+    opacity: 1; transform: translateY(-50%) scale(1);
+}
+.drama-node[data-type="word-file"] .drama-port.is-near::after,
+.drama-node[data-type="word-file"] .drama-port:hover::after,
+.drama-node[data-type="word-file"] .drama-port:focus-visible::after {
+    background: var(--accent); box-shadow: 0 0 0 4px rgba(126, 200, 255, .16);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .drama-drop-preview, .drama-drop-guide { animation: none !important; }
+    .drama-node[data-type="text"] .drama-port,
+    .drama-node[data-type="word-file"] .drama-port { transition: none; }
 }

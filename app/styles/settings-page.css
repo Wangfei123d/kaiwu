@@ -13,6 +13,12 @@
     padding: 14px 16px 4px;
     overflow: hidden;
 }
+.preferences-window { height: 100vh; }
+.preferences-window .pane-settings {
+    grid-area: auto;
+    height: 100vh;
+    padding: 18px 20px 12px;
+}
 .settings-head {
     flex: none;
     display: flex; align-items: center; gap: 12px;

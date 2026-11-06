@@ -38,6 +38,7 @@
 //    并把对不上的那一条打出来,绝不会改出一个半截的桥。
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { resolveDshEntry } from '../app/lib/agent-command.js';
 
 const T = '\t';
@@ -45,6 +46,10 @@ const N = '\n';
 const MARK = 'kaiwu: 实时流式';
 // 图片能力那条:非标准方法名(与 kaiwu/translate 同一条约定,别的客户端不认识也不会发)。
 const CAPABILITIES_METHOD = 'kaiwu/capabilities';
+// ACP initialize 必须在本地快速完成。模型能力查询可能访问尚未就绪的 provider，
+// 把它放在握手里会让整个连接卡到客户端超时；会话建好后由 kaiwu/capabilities 再查询。
+const INITIALIZE_IMAGE_PROBE = 'imagePromptEnabled = await supportsAcpImagePrompts(ctx, config.provider, config.model);';
+const INITIALIZE_IMAGE_PROBE_REPL = 'imagePromptEnabled = false; // kaiwu: initialize capability lookup deferred';
 // 旧版补丁只接了正文,标记也不一样。留着它是为了认出"该升级",而不是当成没打过。
 const LEGACY_MARK = 'kaiwu: 流式正文';
 
@@ -389,6 +394,10 @@ const PROMPT_REPL = [
     T + T + '},',
 ].join(N);
 
+// 初始化只广告快速可得的保守值。开物会在 session/new 之后调用 kaiwu/capabilities，
+// 届时再按当前会话模型查询图片支持；首条消息前也会按同一路由再次确认。
+const INITIALIZE_REPL = INITIALIZE_IMAGE_PROBE_REPL;
+
 // 能力刷新函数:模块级(类外面),与 translateThought 同一处插。
 const CAPFN_ANCHOR = 'var AcpSession = class AcpSession {';
 const CAPFN = [
@@ -424,6 +433,7 @@ const PARTS = [
     { name: '挂上 ' + TRANSLATE_METHOD + ' 与 ' + CAPABILITIES_METHOD + ' 处理器', anchor: CONNECT_ANCHOR, repl: CONNECT_REPL },
     { name: 'prompt 现算图片能力(换模型后立刻生效)', anchor: PROMPT_ANCHOR, repl: PROMPT_REPL },
     { name: '能力刷新函数(模块级,类的外面)', anchor: CAPFN_ANCHOR, repl: CAPFN + CAPFN_ANCHOR },
+    { name: 'initialize 不阻塞握手等待模型能力', anchor: INITIALIZE_IMAGE_PROBE, repl: INITIALIZE_REPL },
 ];
 
 // 写完自检用的读数:每一处改动的**证据字符串**,少一条就算失败。
@@ -441,81 +451,115 @@ const CHECKS = [
     '.onRequest("kaiwu/capabilities"',
     'async function refreshImagePromptEnabled(',
     'const picked = record.modelControl?.selected;',
+    INITIALIZE_IMAGE_PROBE_REPL,
 ];
 
-const argv = process.argv.slice(2);
-const flag = (n) => argv.includes(n);
-const value = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
+/**
+ * 对一份 dsh-acp 桥接文件应用开物所需的增量与扩展方法补丁。
+ * 供应用在自动安装 Harness 后调用,也保留独立 CLI 给开发者维护。
+ * @param {{target?:string, mode?:'patch'|'check'|'revert'}} [options]
+ * @returns {{ok:boolean, code:number, output:string}}
+ */
+export function applyDshAcpPatch({ target = defaultTarget(), mode = 'patch' } = {}) {
+    const backup = target + '.kaiwu-orig';
+    if (!fs.existsSync(target)) return { ok: false, code: 1, output: '目标文件不存在:' + target };
 
-const target = value('--target') ?? defaultTarget();
-const backup = target + '.kaiwu-orig';
-
-if (!fs.existsSync(target)) {
-    console.error('目标文件不存在:' + target);
-    process.exit(1);
-}
-
-if (flag('--revert')) {
-    if (!fs.existsSync(backup)) {
-        console.error('没有备份可还原:' + backup);
-        process.exit(1);
+    if (mode === 'revert') {
+        if (!fs.existsSync(backup)) return { ok: false, code: 1, output: '没有备份可还原:' + backup };
+        fs.copyFileSync(backup, target);
+        return { ok: true, code: 0, output: '已还原:' + target + '(从 ' + backup + ')' };
     }
-    fs.copyFileSync(backup, target);
-    console.log('已还原:' + target + '(从 ' + backup + ')');
-    process.exit(0);
+
+    const before = fs.readFileSync(target, 'utf8');
+    const patched = before.includes(MARK);
+    // 旧版补丁(只接正文)带着它自己的标记 —— 也可能是"更早的那版七件事补丁"(少了问用户那一处):
+    // 两种都要认出来"该升级",不能当成没打过。
+    const legacy = !patched && before.includes(LEGACY_MARK);
+    const needsInitializeUpgrade = patched && before.includes(INITIALIZE_IMAGE_PROBE);
+    const partial = patched && !CHECKS.every((s) => before.includes(s));
+
+    if (mode === 'check') {
+        const counts = PARTS.map((p) => ({ name: p.name, n: before.split(p.anchor).length - 1 }));
+        const output = [
+            '目标:' + target,
+            '已打补丁:' + patched + (legacy ? '(**旧版**:只接正文,建议升级)' : '')
+                + (needsInitializeUpgrade ? '(**旧握手补丁**:initialize 仍会等待模型能力查询)' : '')
+                + (partial && !needsInitializeUpgrade ? '(**不完整**:缺 ' + JSON.stringify(CHECKS.filter((s) => !before.includes(s))) + ')' : ''),
+            '备份:' + (fs.existsSync(backup) ? backup : '(无)'),
+            ...counts.map((c) => '  锚点[' + c.n + '] ' + c.name),
+        ].join('\n');
+        return { ok: patched && !partial, code: patched && !partial ? 0 : 2, output };
+    }
+
+    if (patched && !partial && !needsInitializeUpgrade) return { ok: true, code: 0, output: '已经打过补丁,不动它:' + target };
+    if (patched && needsInitializeUpgrade && !CHECKS.filter((s) => s !== INITIALIZE_IMAGE_PROBE_REPL).every((s) => before.includes(s))) {
+        return {
+            ok: false,
+            code: 1,
+            output: '现有 ACP 补丁不完整，拒绝只改握手逻辑。请先检查安装包完整性:' + target,
+        };
+    }
+    if (patched && needsInitializeUpgrade) {
+        const upgraded = before.replace(INITIALIZE_IMAGE_PROBE, INITIALIZE_REPL);
+        fs.writeFileSync(target, upgraded, 'utf8');
+        const check = fs.readFileSync(target, 'utf8');
+        const missing = CHECKS.filter((s) => !check.includes(s));
+        const ok = missing.length === 0;
+        return {
+            ok,
+            code: ok ? 0 : 1,
+            output: '已更新 initialize 握手补丁:' + target + '\n自检:' + (ok ? '通过' : '**失败**,缺 ' + JSON.stringify(missing)),
+        };
+    }
+    if (legacy || partial) {
+        return {
+            ok: false,
+            code: 1,
+            output: '这份桥打的是**旧版/不完整**的补丁(' + (legacy ? '只接了正文' : '缺了问用户那一处') + '):'
+                + '先 `--revert` 还原,再重跑本脚本升级。不在这里自动改它 —— 在打过补丁的文件上再打一遍,锚点对不上。',
+        };
+    }
+
+    // 每条锚点必须**各自恰好出现一次**:对不上就一条都不改(半个补丁比不打更危险)
+    const bad = PARTS.map((p) => ({ p, n: before.split(p.anchor).length - 1 })).filter((x) => x.n !== 1);
+    if (bad.length > 0) {
+        const output = [
+            '锚点对不上,拒绝写盘(多半是 DSH 升级动过这个文件):',
+            ...bad.map(({ p, n }) => '  [' + n + ' 次] ' + p.name + '  →  ' + JSON.stringify(p.anchor.slice(0, 70))),
+            '文件:' + target,
+        ].join('\n');
+        return { ok: false, code: 1, output };
+    }
+
+    const output = [];
+    if (!fs.existsSync(backup)) {
+        fs.copyFileSync(target, backup);
+        output.push('已备份原始文件:' + backup);
+    }
+
+    let after = before;
+    for (const part of PARTS) after = after.replace(part.anchor, part.repl);
+    fs.writeFileSync(target, after, 'utf8');
+
+    // 写完自检:标记在、八处改动都在(缺哪一条就把它打出来,别只说一句"失败")
+    const check = fs.readFileSync(target, 'utf8');
+    const missing = CHECKS.filter((s) => !check.includes(s));
+    const ok = check.includes(MARK) && missing.length === 0;
+    output.push('已写入:' + target);
+    output.push('自检:' + (ok ? '通过(标记 + 八处改动都在)' : '**失败**,缺 ' + JSON.stringify(missing)));
+    output.push('用 node .agent-probe/acp-stream-timing.mjs 可以量出增量条数与到达时间。');
+    return { ok, code: ok ? 0 : 1, output: output.join('\n') };
 }
 
-const before = fs.readFileSync(target, 'utf8');
-const patched = before.includes(MARK);
-// 旧版补丁(只接正文)带着它自己的标记 —— 也可能是"更早的那版七件事补丁"(少了问用户那一处):
-// 两种都要认出来"该升级",不能当成没打过。
-const legacy = !patched && before.includes(LEGACY_MARK);
-const partial = patched && !CHECKS.every((s) => before.includes(s));
-
-if (flag('--check')) {
-    const counts = PARTS.map((p) => ({ name: p.name, n: before.split(p.anchor).length - 1 }));
-    console.log('目标:' + target);
-    console.log('已打补丁:' + patched + (legacy ? '(**旧版**:只接正文,建议升级)' : '')
-        + (partial ? '(**不完整**:缺 ' + JSON.stringify(CHECKS.filter((s) => !before.includes(s))) + ')' : ''));
-    console.log('备份:' + (fs.existsSync(backup) ? backup : '(无)'));
-    for (const c of counts) console.log('  锚点[' + c.n + '] ' + c.name);
-    process.exit(patched && !partial ? 0 : 2);
+function runCli() {
+    const argv = process.argv.slice(2);
+    const flag = (n) => argv.includes(n);
+    const value = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
+    const target = value('--target') ?? defaultTarget();
+    const mode = flag('--revert') ? 'revert' : flag('--check') ? 'check' : 'patch';
+    const result = applyDshAcpPatch({ target, mode });
+    (result.ok ? process.stdout : process.stderr).write(result.output + '\n');
+    process.exitCode = result.code;
 }
 
-if (patched && !partial) {
-    console.log('已经打过补丁,不动它:' + target);
-    process.exit(0);
-}
-
-if (legacy || partial) {
-    console.error('这份桥打的是**旧版/不完整**的补丁(' + (legacy ? '只接了正文' : '缺了问用户那一处') + '):'
-        + '先 `--revert` 还原,再重跑本脚本升级。不在这里自动改它 —— 在打过补丁的文件上再打一遍,锚点对不上。');
-    process.exit(1);
-}
-
-// 每条锚点必须**各自恰好出现一次**:对不上就一条都不改(半个补丁比不打更危险)
-const bad = PARTS.map((p) => ({ p, n: before.split(p.anchor).length - 1 })).filter((x) => x.n !== 1);
-if (bad.length > 0) {
-    console.error('锚点对不上,拒绝写盘(多半是 DSH 升级动过这个文件):');
-    for (const { p, n } of bad) console.error('  [' + n + ' 次] ' + p.name + '  →  ' + JSON.stringify(p.anchor.slice(0, 70)));
-    console.error('文件:' + target);
-    process.exit(1);
-}
-
-if (!fs.existsSync(backup)) {
-    fs.copyFileSync(target, backup);
-    console.log('已备份原始文件:' + backup);
-}
-
-let after = before;
-for (const part of PARTS) after = after.replace(part.anchor, part.repl);
-fs.writeFileSync(target, after, 'utf8');
-
-// 写完自检:标记在、七处改动都在(缺哪一条就把它打出来,别只说一句"失败")
-const check = fs.readFileSync(target, 'utf8');
-const missing = CHECKS.filter((s) => !check.includes(s));
-const ok = check.includes(MARK) && missing.length === 0;
-console.log('已写入:' + target);
-console.log('自检:' + (ok ? '通过(标记 + 八处改动都在)' : '**失败**,缺 ' + JSON.stringify(missing)));
-console.log('用 node .agent-probe/acp-stream-timing.mjs 可以量出增量条数与到达时间。');
-process.exit(ok ? 0 : 1);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) runCli();

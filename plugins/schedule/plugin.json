@@ -1,0 +1,21 @@
+{
+  "id": "schedule",
+  "name": "日程",
+  "version": "1.0.0",
+  "description": "月历与当日日程、待办管理",
+  "entry": "index.js",
+  "order": 25,
+  "permissions": ["settings"],
+  "contributes": {
+    "tools": [
+      {
+        "id": "schedule",
+        "title": "日程",
+        "icon": "🗓",
+        "panel": "panel.html",
+        "style": "style.css",
+        "workspacePane": true
+      }
+    ]
+  }
+}

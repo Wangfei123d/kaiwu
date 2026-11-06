@@ -105,7 +105,7 @@ export function createEditor({ els, resolveLink = () => true, onDirtyChange = nu
             rootEl.innerHTML = '<div class="md-live-editor md-view" data-testid="markdown-editor"></div>';
             const surface = rootEl.querySelector('.md-live-editor');
             if (surface?.replaceChildren && surface?.addEventListener) {
-                liveSurface = mountLiveMarkdown(surface, body, { resolveLink, wikilinks: true, tags: true, onInput: value => {
+                liveSurface = mountLiveMarkdown(surface, body, { resolveLink, wikilinks: true, tags: true, showToolbar: false, onInput: value => {
                 body = value;
                 setDirty(true);
                 } });

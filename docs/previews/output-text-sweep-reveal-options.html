@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 输出文字 · 扫光逐行逐字方案</title>
+  <style>
+    :root { color-scheme:dark; --bg:#111110; --panel:#191817; --line:#373431; --text:#eeeae4; --dim:#9b9791; --muted:#cfccc7; --faint:#6f6b66; --accent:#83ceff; --char-delay:16ms; font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; }
+    * { box-sizing:border-box; }
+    body { min-width:320px; min-height:100vh; margin:0; color:var(--text); background:radial-gradient(ellipse at 52% -30%,rgba(105,133,158,.16),transparent 56%),var(--bg); }
+    .page { width:min(1180px,calc(100% - 44px)); margin:0 auto; padding:34px 0 52px; }
+    .top { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
+    .brand { display:flex; align-items:center; gap:9px; color:#d8d4ce; font-size:12px; }
+    .logo { position:relative; width:20px; height:20px; }
+    .logo::before,.logo::after,.logo i { content:""; position:absolute; display:block; border-radius:4px; background:#eeeae5; }
+    .logo::before { left:4px; top:2px; width:3px; height:16px; transform:rotate(-8deg); }
+    .logo::after { left:5px; top:5px; width:13px; height:3px; transform:rotate(-32deg); }
+    .logo i { left:6px; top:12px; width:12px; height:3px; transform:rotate(30deg); }
+    .logo b { position:absolute; z-index:1; left:1px; top:8px; width:7px; height:7px; border-radius:50%; background:var(--accent); }
+    .badge { padding:6px 10px; border:1px solid #34322f; border-radius:99px; color:#aaa59e; font-size:10px; }
+    .hero { display:flex; align-items:flex-end; justify-content:space-between; gap:22px; margin-bottom:17px; }
+    h1 { margin:0; font-size:clamp(25px,4vw,34px); font-weight:620; letter-spacing:-.045em; }
+    .lead { max-width:770px; margin:9px 0 0; color:var(--dim); font-size:12px; line-height:1.75; }
+    .speed { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding:9px 12px; border:1px solid #302e2b; border-radius:9px; background:#191817; color:var(--dim); font-size:10px; }
+    .speed input { width:150px; accent-color:var(--accent); cursor:pointer; }
+    .speed output { min-width:48px; color:var(--accent); font:10px ui-monospace,Consolas,monospace; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; }
+    .option { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:12px; background:linear-gradient(145deg,#1c1b19,#171615 78%); }
+    .head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:14px 16px 0; }
+    .title { display:flex; align-items:center; gap:8px; }
+    .num { color:#77726b; font:10px ui-monospace,Consolas,monospace; }
+    h2 { margin:0; font-size:13px; font-weight:590; }
+    .desc { margin:5px 0 0 21px; color:var(--faint); font-size:10px; }
+    .replay { flex:none; padding:5px 9px; border:1px solid #48433e; border-radius:7px; color:#d6d0c7; background:#242220; font:inherit; font-size:10px; cursor:pointer; }
+    .replay:hover { border-color:#777068; background:#2b2926; }
+    .status { display:flex; align-items:center; gap:6px; margin:12px 16px 0; color:#89847c; font:10.5px/1.5 ui-monospace,Consolas,monospace; }
+    .caret { color:#77726b; font-size:9px; }
+    .meta { margin-left:auto; display:flex; align-items:center; gap:7px; }
+    .lang { padding:1px 7px; border:1px solid #34322f; border-radius:99px; color:#89847c; }
+    .lang.on { border-color:#47718c; color:var(--accent); }
+    .answer { min-height:142px; padding:8px 16px 17px; color:var(--muted); font-size:13px; line-height:1.8; overflow:hidden; }
+    .line { position:relative; display:block; margin:0 0 3px; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .base { position:relative; z-index:1; color:var(--dim); white-space:inherit; overflow-wrap:inherit; }
+    .char { display:inline; opacity:0; }
+    .sweep-layer { position:absolute; z-index:2; inset:0; color:transparent; pointer-events:none; white-space:inherit; overflow-wrap:inherit; background-image:linear-gradient(105deg,transparent 46%,rgba(255,255,255,.9) 50%,transparent 54%); background-size:230% 100%; background-position:170% 0; background-repeat:no-repeat; -webkit-background-clip:text; background-clip:text; clip-path:inset(0 100% 0 0); }
+    .hint { margin-top:9px; color:var(--faint); font-size:9px; }
+
+    /* 扫光独立覆盖在正文之上，背景渐变和原扫光速度保持一致。 */
+    .playing .sweep-layer { animation:sweep 1.5s linear infinite; }
+    .complete .sweep-layer { animation-play-state:paused; }
+    @keyframes sweep { from { background-position:170% 0; } to { background-position:-70% 0; } }
+
+    /* 上一行结束后，下一行再逐字开始。 */
+    .playing .char { opacity:0; animation-delay:calc(var(--line-delay,0ms) + var(--char-i,0) * var(--char-delay)); animation-fill-mode:both; }
+    [data-style="fade"].playing .char { animation:char-fade 260ms ease calc(var(--line-delay,0ms) + var(--char-i,0) * var(--char-delay)) both; }
+    @keyframes char-fade { from { opacity:0; } to { opacity:1; } }
+
+    /* 方案 2：每字短暂提亮后落回同一条扫光之下。 */
+    [data-style="spark"].playing .char { animation:char-spark 380ms ease calc(var(--line-delay,0ms) + var(--char-i,0) * var(--char-delay)) both; }
+    @keyframes char-spark { 0% { opacity:0; filter:brightness(.6); } 45% { opacity:1; filter:brightness(1.8) drop-shadow(0 0 3px rgba(255,255,255,.65)); } 100% { opacity:1; filter:brightness(1); } }
+
+    /* 方案 3：字形轻微上浮，扫光动画与其他方案完全相同。 */
+    [data-style="lift"].playing .char { animation:char-lift 300ms cubic-bezier(.2,.7,.25,1) calc(var(--line-delay,0ms) + var(--char-i,0) * var(--char-delay)) both; }
+    @keyframes char-lift { from { opacity:0; transform:translateY(2px); } to { opacity:1; transform:translateY(0); } }
+
+    /* 方案 4：每字轻微虚焦到清晰，扫光保持不变。 */
+    [data-style="focus"].playing .char { animation:char-focus 330ms cubic-bezier(.2,.7,.25,1) calc(var(--line-delay,0ms) + var(--char-i,0) * var(--char-delay)) both; }
+    @keyframes char-focus { from { opacity:0; filter:blur(1.4px); } to { opacity:1; filter:blur(0); } }
+
+    @media (max-width:760px) { .page { width:calc(100% - 26px); padding-top:24px; } .grid { grid-template-columns:1fr; } .hero { align-items:flex-start; flex-direction:column; gap:10px; } .speed { flex-wrap:wrap; } }
+    @media (prefers-reduced-motion:reduce) { .playing .sweep-layer { animation:none !important; } .playing .char { animation-duration:1ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="top"><div class="brand"><span class="logo" aria-hidden="true"><i></i><b></b></span><span>开物 · AI 面板</span></div><span class="badge">输出文字显现预览</span></header>
+    <section class="hero"><div><h1>扫光不变，文字逐行逐字显现</h1><p class="lead">四种方案共用完全相同的持续扫光，只比较文字如何逐字显现。页面打开后自动播放；点“重播”可重新对比显现质感。</p></div></section>
+    <div class="speed"><label for="interval">字符间隔</label><input id="interval" type="range" min="8" max="32" step="2" value="16"><output id="interval-label">16 ms</output><span>数值越大，逐字节奏越慢</span></div>
+    <section class="grid" aria-label="逐行逐字扫光方案">
+      <article class="option" data-style="fade"><header class="head"><div><div class="title"><span class="num">01</span><h2>均匀淡显</h2></div><p class="desc">轻巧自然 · 每字平滑渐入</p></div><button class="replay" type="button">↻ 重播</button></header><div class="status"><span class="caret">▶</span><span>AI 正在回复…</span><span class="meta"><span>扫光固定 · 逐行逐字</span></span></div><div class="answer"></div></article>
+      <article class="option" data-style="spark"><header class="head"><div><div class="title"><span class="num">02</span><h2>光点点亮</h2></div><p class="desc">每个字短暂提亮后渐稳</p></div><button class="replay" type="button">↻ 重播</button></header><div class="status"><span class="caret">▶</span><span>AI 正在回复…</span><span class="meta"><span>扫光固定 · 逐行逐字</span></span></div><div class="answer"></div></article>
+      <article class="option" data-style="lift"><header class="head"><div><div class="title"><span class="num">03</span><h2>轻抬显字</h2></div><p class="desc">每字微微上浮后落位</p></div><button class="replay" type="button">↻ 重播</button></header><div class="status"><span class="caret">▶</span><span>AI 正在回复…</span><span class="meta"><span>扫光固定 · 逐行逐字</span></span></div><div class="answer"></div></article>
+      <article class="option" data-style="focus"><header class="head"><div><div class="title"><span class="num">04</span><h2>柔焦显字</h2></div><p class="desc">每字轻微虚焦到清晰</p></div><button class="replay" type="button">↻ 重播</button></header><div class="status"><span class="caret">▶</span><span>AI 正在回复…</span><span class="meta"><span>扫光固定 · 逐行逐字</span></span></div><div class="answer"></div></article>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const lines = [
+        '你好，我已经检查了当前工作目录。',
+        '主要配置都已读取，下面是本次处理结果：',
+        '• 保留现有文件与设置，没有覆盖用户内容。',
+        '• 逐项确认了输出流程和相关状态。',
+        '如果你愿意，我可以继续处理下一步。',
+      ];
+      const interval = document.getElementById('interval');
+      const intervalLabel = document.getElementById('interval-label');
+      const cards = [...document.querySelectorAll('.option')];
+      const fadeDuration = { fade:260, spark:380, lift:300, focus:330 };
+      const lineGap = 140;
+      const getFadeDuration = (card) => window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : fadeDuration[card.dataset.style];
+      const updateLineDelays = (card) => {
+        let delay = 0;
+        const gapAfterChar = getFadeDuration(card) + lineGap - Number(interval.value);
+        card.querySelectorAll('.line').forEach((row, index) => {
+          row.style.setProperty('--line-delay', `${delay}ms`);
+          delay += [...lines[index]].length * Number(interval.value) + gapAfterChar;
+        });
+      };
+      cards.forEach((card) => {
+        const answer = card.querySelector('.answer');
+        lines.forEach((text, lineIndex) => {
+          const row = document.createElement('span');
+          row.className = 'line';
+          row.style.setProperty('--line-i', String(lineIndex));
+          const base = document.createElement('span');
+          base.className = 'base';
+          const sweepLayer = document.createElement('span');
+          sweepLayer.className = 'sweep-layer';
+          sweepLayer.setAttribute('aria-hidden', 'true');
+          [...text].forEach((value, charIndex) => {
+            const char = document.createElement('span');
+            char.className = 'char';
+            char.textContent = value;
+            char.style.setProperty('--char-i', String(charIndex));
+            base.appendChild(char);
+            const sweepChar = document.createElement('span');
+            sweepChar.textContent = value;
+            sweepLayer.appendChild(sweepChar);
+          });
+          row.append(base, sweepLayer);
+          answer.appendChild(row);
+        });
+        updateLineDelays(card);
+        card.querySelector('.replay').addEventListener('click', () => {
+          clearTimeout(card._timer);
+          card._revealAnimations?.forEach((animation) => animation.cancel());
+          card._revealAnimations = [];
+          card.classList.remove('playing', 'complete');
+          card.querySelectorAll('.sweep-layer').forEach((layer) => { layer.style.clipPath = ''; });
+          void card.offsetWidth;
+          const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          card.classList.add('playing');
+          if (!reducedMotion) {
+            card.querySelectorAll('.line').forEach((row) => {
+              const chars = [...row.querySelectorAll('.char')];
+              const layer = row.querySelector('.sweep-layer');
+              const layerRect = layer.getBoundingClientRect();
+              const width = Math.max(layerRect.width, 1);
+              const height = Math.max(layerRect.height, 1);
+              const frames = [{ clipPath:'inset(0 100% 0 0)', offset:0 }];
+              chars.forEach((char, index) => {
+                const rect = char.getBoundingClientRect();
+                const top = Math.max(0, Math.min(100, (rect.top - layerRect.top) / height * 100));
+                const bottom = Math.max(top, Math.min(100, (rect.bottom - layerRect.top) / height * 100));
+                const right = Math.max(0, Math.min(100, (rect.right - layerRect.left) / width * 100));
+                const clipPath = `polygon(0 0,100% 0,100% ${top}%,${right}% ${top}%,${right}% ${bottom}%,0 ${bottom}%)`;
+                frames.push({ clipPath, offset:(index + 1) / chars.length, easing:'steps(1,end)' });
+              });
+              const delay = Number.parseFloat(row.style.getPropertyValue('--line-delay')) || 0;
+              const animation = layer.animate(frames, {
+                duration:Math.max(chars.length * Number(interval.value), 1),
+                delay,
+                fill:'forwards',
+                easing:'linear',
+              });
+              card._revealAnimations.push(animation);
+            });
+          }
+          const lastRow = card.querySelector('.line:last-child');
+          const lastCharCount = lastRow.querySelectorAll('.char').length;
+          const lastCharDelay = Number.parseFloat(lastRow.style.getPropertyValue('--line-delay')) || 0;
+          const finishedAt = lastCharDelay + Math.max(lastCharCount - 1, 0) * Number(interval.value) + getFadeDuration(card) + 500;
+          card._timer = setTimeout(() => card.classList.add('complete'), finishedAt);
+        });
+      });
+      interval.addEventListener('input', () => {
+        document.documentElement.style.setProperty('--char-delay', `${interval.value}ms`);
+        cards.forEach(updateLineDelays);
+        intervalLabel.value = `${interval.value} ms`;
+        intervalLabel.textContent = `${interval.value} ms`;
+      });
+      // 初次打开就播放,避免正文全处于 opacity:0 时看起来像没有渲染。
+      requestAnimationFrame(() => {
+        cards.forEach((card) => card.querySelector('.replay').click());
+      });
+    })();
+  </script>
+</body>
+</html>

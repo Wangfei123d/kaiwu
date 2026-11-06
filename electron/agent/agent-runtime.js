@@ -19,13 +19,14 @@ import {
 } from '../../app/lib/agent-image.js';
 import {
     REASONING_CONFIG_ID, MODEL_CONFIG_ID, configOptionOf, currentModelEntry, effortLevels,
-    effortValueOf, preferredEffortValue, shortEffortName,
+    effortValueOf, modelGroups, preferredEffortValue, shortEffortName,
 } from '../../app/lib/agent-config.js';
 import { resumeFailureOf } from '../../app/lib/agent-sessions.js';
 import { nullLedger } from '../sessions/session-ledger.js';
 import { createAgentSupervisor } from './agent-supervisor.js';
 import { createAcpClient } from './acp-client.js';
 import { detectCredentials, isMissingCredentialError } from './credentials.js';
+import { ensureDeepseekHarness } from './dsh-installer.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -178,6 +179,7 @@ export function createAgentRuntime({
     createSupervisor = createAgentSupervisor,
     createClient = createAcpClient,
     detectCredentialsFn = detectCredentials,
+    ensureHarness = ensureDeepseekHarness,
     readFile = (p) => readFileSync(p, 'utf8'),
     ledger = null,
 } = {}) {
@@ -196,6 +198,9 @@ export function createAgentRuntime({
     /** 正在进行的收尾(dispose/换库/stop 共用)。见 tearDownNow。 */
     let inFlightTeardown = null;
     let inFlightStart = null;
+    let inFlightHarnessSetup = null;
+    let harnessSetupAbortController = null;
+    let selectedDshEntry = null;
     let sessionId = null;
     let inFlightSession = null;
     /**
@@ -223,16 +228,7 @@ export function createAgentRuntime({
     let recordPending = null;
     /** 自动建会话那一次的在飞 promise(见 autoCreateSession;非 null = 已经有一次在飞)。 */
     let autoSessionInFlight = null;
-    /**
-     * 对端在 `initialize` 里**广告的能力**(至少 `promptCapabilities`)。
-     *
-     * 为什么非要记住它:图片是"内联图片块",而 ACP 的规定是**只有对方广告了才准发**。
-     * 装机那份 acp profile 钉的模型是 `deepseek-v4-flash`,它在 dsh-llm-deepseek 的
-     * 目录里没有声明 `inputModalities:['text','image']` —— 于是桥在 initialize 时
-     * 广告 `image:false`(实测),带图的提示会被它当场以 -32602 拒掉,用户看到的是
-     * 一句英文 + IPC 包装。把广告值记在这里,就能在**发之前**拦住,并把原因说成人话。
-     * 连接生命周期内这个值不变(桥在 initialize 那一刻定下 imagePromptEnabled)。
-     */
+    /** 对端在 initialize 时广告、并可按当前会话模型动态刷新的能力。 */
     let caps = null;
     /** 这次会话的 configOptions(model / reasoning 之类),只为了在拒绝图片时说出模型名。 */
     let sessionConfigOptions = [];
@@ -287,6 +283,65 @@ export function createAgentRuntime({
         const option = configOptionOf(options, MODEL_CONFIG_ID);
         if (option === null) return '';
         return currentModelEntry(option, option.currentValue)?.name ?? '';
+    }
+
+    /**
+     * 新会话优先切到一个已配置且实际支持图片的模型。
+     * 候选来自 ACP 当前会话的模型选项;逐个用桥的同一能力探针核实,不靠模型名猜。
+     * 所有切换都发生在会话首次显示和首条提示之前,不会清除已存在的对话上下文。
+     */
+    async function selectImageModel(c, sid, options) {
+        const model = configOptionOf(options, MODEL_CONFIG_ID);
+        if (model === null) return options;
+        const originalValue = String(model.currentValue ?? '');
+        let latest = options;
+        const candidates = modelGroups(model).flatMap((group) => group.options);
+        let selectedImageModel = false;
+
+        try {
+            const current = await c.client.capabilities({ sessionId: sid });
+            caps = { ...(caps ?? {}), image: current?.image === true, audio: false, embeddedContext: false };
+            if (caps.image === true) return options;
+        } catch (err) {
+            log.warn?.('[agent] 当前模型图片能力探测失败,继续检查可用模型', err);
+        }
+
+        for (const candidate of candidates) {
+            if (candidate.value === originalValue) continue;
+            try {
+                const changed = await c.client.setConfigOption({
+                    sessionId: sid, configId: MODEL_CONFIG_ID, value: candidate.value,
+                });
+                const next = asArray(changed?.configOptions);
+                if (next.length === 0) continue;
+                latest = next;
+                if (configOptionOf(next, MODEL_CONFIG_ID)?.currentValue !== candidate.value) continue;
+                const probed = await c.client.capabilities({ sessionId: sid });
+                caps = { ...(caps ?? {}), image: probed?.image === true, audio: false, embeddedContext: false };
+                if (caps.image === true) {
+                    selectedImageModel = true;
+                    log.info?.(`[agent] 新会话已自动选择图片模型:${candidate.name || candidate.value}`);
+                    break;
+                }
+            } catch (err) {
+                log.warn?.(`[agent] 图片模型探测失败(${candidate.name || candidate.value})`, err);
+            }
+        }
+
+        if (!selectedImageModel && configOptionOf(latest, MODEL_CONFIG_ID)?.currentValue !== originalValue) {
+            try {
+                const restored = await c.client.setConfigOption({
+                    sessionId: sid, configId: MODEL_CONFIG_ID, value: originalValue,
+                });
+                const next = asArray(restored?.configOptions);
+                if (next.length > 0) latest = next;
+                const probed = await c.client.capabilities({ sessionId: sid });
+                caps = { ...(caps ?? {}), image: probed?.image === true, audio: false, embeddedContext: false };
+            } catch (err) {
+                log.warn?.('[agent] 未找到图片模型且原模型恢复失败', err);
+            }
+        }
+        return latest;
     }
 
     /** 当前思考强度的短名(关/低/中/高)。 */
@@ -500,7 +555,12 @@ export function createAgentRuntime({
         if (root === null) {
             throw new Error('还没有选择笔记库(Vault),Agent 不知道该在哪个目录下工作');
         }
-        const e = env ?? process.env;
+        const baseEnv = env ?? process.env;
+        // 新装的 Harness 放在用户数据目录,以显式入口传给 Agent 子进程;
+        // DSH_HOME 仍只用于配置与会话资料,不混入安装目录。
+        const e = selectedDshEntry === null
+            ? baseEnv
+            : { ...baseEnv, DSH_CLI_ENTRY: selectedDshEntry };
         // `fixturePath` 是自检那条路的**说明性**入参:夹具脚本真正的来源是
         // `KAIWU_AGENT_SCRIPT`(见 agent-command 的优先级),所以这里不参与解析 ——
         // 留着它只是让调用点能一眼看出"这个 runtime 是给谁用的"。
@@ -536,10 +596,8 @@ export function createAgentRuntime({
             handshake: async () => {
                 const result = await makeClient().initialize({ name: 'kaiwu', version: '0.1.0' });
                 caps = promptCapabilitiesOf(result);
-                // 立刻把新能力报给界面:重连之后它会拿这份新值替换旧值 ——
-                // 否则界面会继续按"旧的"那条连接拦用户(实测:换成视觉模型、重连成功,
-                // 界面还在显示"当前模型不接受图片输入")。
-                emit({ kind: 'caps', caps });
+                // 握手完成后把能力报给界面;新会话创建时还会根据已配置模型再次确认。
+                emit({ kind: 'caps', caps: sessionId === null ? null : caps });
                 return result;
             },
             handshakeTimeoutMs,
@@ -612,9 +670,66 @@ export function createAgentRuntime({
      * 同时活着(那样就有一个监护人都停不掉的活进程,旧客户端的反向请求通道也还开着)。
      * 那个 await 是 cwd 修复的一部分,不能为了同步 spawn 把它去掉。
      */
-    function ensureController() {
+    async function ensureHarnessReady() {
+        const baseEnv = env ?? process.env;
+        // 自检夹具与注入的子进程不需要真正 Harness,也不应联网安装依赖。
+        if (typeof spawnChild === 'function' || trimmed(baseEnv.KAIWU_AGENT_SCRIPT) !== '') return;
+        if (selectedDshEntry !== null && exists(selectedDshEntry)) return;
+        if (inFlightHarnessSetup !== null) return inFlightHarnessSetup;
+
+        const abortController = new AbortController();
+        harnessSetupAbortController = abortController;
+        const p = (async () => {
+            emitState({ ...agentStatus(), state: 'starting', pid: null, error: null });
+            try {
+                const prepared = await ensureHarness({
+                    env: baseEnv,
+                    appRoot,
+                    appData: baseEnv.APPDATA,
+                    exists,
+                    signal: abortController.signal,
+                    log,
+                    onProgress: (message) => emit({ kind: 'setup', message: String(message ?? '') }),
+                });
+                if (disposed || abortController.signal.aborted) {
+                    throw Object.assign(new Error('Harness 安装已取消'), { name: 'AbortError' });
+                }
+                selectedDshEntry = prepared.entry;
+                emit({ kind: 'setup', message: '' });
+            } catch (err) {
+                emit({ kind: 'setup', message: '' });
+                const cancelled = err?.name === 'AbortError' || abortController.signal.aborted;
+                const message = cancelled ? 'Agent 环境准备已取消。'
+                    : `DeepSeek Harness 自动准备失败：${errorMessage(err)}`;
+                const snapshot = cancelled
+                    ? { ...agentStatus(), state: 'stopped', pid: null, error: null }
+                    : { state: 'failed', pid: null, restarts: 0, since: null, error: message };
+                emitState(snapshot);
+                const wrapped = new Error(message);
+                wrapped.state = snapshot.state;
+                wrapped.snapshot = snapshot;
+                throw wrapped;
+            } finally {
+                if (harnessSetupAbortController === abortController) harnessSetupAbortController = null;
+            }
+        })();
+        inFlightHarnessSetup = p;
+        const clear = () => { if (inFlightHarnessSetup === p) inFlightHarnessSetup = null; };
+        p.then(clear, clear);
+        return p;
+    }
+
+    async function ensureController() {
         if (disposed) throw new Error('Agent 运行时已经释放(dispose)');
         const root = currentVaultRoot();
+        if (root === null) throw new Error('还没有选择笔记库(Vault),Agent 不知道该在哪个目录下工作');
+        if (controller !== null && controllerVault === root) return controller;
+        if (controller !== null || inFlightTeardown !== null) return supersedeController(root);
+
+        await ensureHarnessReady();
+        if (disposed) throw new Error('Agent 运行时已经释放(dispose)');
+        if (currentVaultRoot() !== root) return ensureController();
+        if (controller !== null && controllerVault === root) return controller;
         if (controller === null && inFlightTeardown === null) {
             controller = buildController();
             controllerVault = root;
@@ -716,6 +831,7 @@ export function createAgentRuntime({
             sessionId = sess.sessionId;
             activatedSessions.add(sessionId);
             sessionConfigOptions = asArray(sess.configOptions);
+            sessionConfigOptions = await selectImageModel(c, sessionId, sessionConfigOptions);
             // 「默认思考强度是中」由 kaiwu 保证,不靠对端恰好给中(见 pinEffort)。
             // ⚠️ 必须在 emit 之前补完:否则界面会先亮一下对端的默认值再跳一下。
             sessionConfigOptions = await pinEffort(c, sessionId, sessionConfigOptions, null);
@@ -1373,6 +1489,7 @@ export function createAgentRuntime({
         // 必然失败(真机上就是这么表现的:从输入卡片或设置页按下停止,界面纹丝不动)。
         // 收掉 controller 之后再推,`agentStatus()` 才如实地是 stopped ——
         // 面板据此把「已经停掉 + 重试」摆出来。
+        harnessSetupAbortController?.abort();
         leaveReady(LEFT_READY.stopped, { emit: false });
         const c = controller;
         // ⚠️ 顺手把 controller **收掉**(不是只停进程):下一次 start() 必须按
@@ -1399,6 +1516,8 @@ export function createAgentRuntime({
     async function dispose() {
         if (disposed) return;
         disposed = true;
+        const setupInFlight = inFlightHarnessSetup;
+        harnessSetupAbortController?.abort();
         // 挂起的权限请求一律**丢弃**(不发响应):请求方那个进程正是我们接下来
         // 要停掉的这个,没有人在等;而响应会顺着**当前** transport 走,重启之后
         // 就是打到新进程上(见 dropPermissionsOf 的说明)。
@@ -1412,6 +1531,7 @@ export function createAgentRuntime({
         busy = false;
         currentTurn = null;
         listeners.clear();
+        if (setupInFlight !== null) await setupInFlight.catch(() => {});
         if (c !== null) await tearDownNow(c);
         else if (inFlightTeardown !== null) await inFlightTeardown;
         // 最后把会话记录落干净:forgetSession 里那次是"不等人"的,而进程要走了,

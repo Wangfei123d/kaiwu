@@ -23,6 +23,7 @@ import { inputEdgeGroups, validateConnection } from 'toolbox://shell/lib/drama-c
 import { buildImagePrompt } from 'toolbox://shell/lib/drama-image-prompt.js';
 import { skillCandidates, currentSkillMatch } from 'toolbox://shell/lib/drama-skills.js';
 import { renderMarkdownNodes } from 'toolbox://shell/lib/markdown.js';
+import { mountLiveMarkdown } from 'toolbox://shell/lib/live-markdown.js';
 import { createDramaOutputPanel } from './output-panel.js';
 import { createImagePromptPreview } from './image-prompt-preview.js';
 import { createSkillPanel } from './skill-panel.js';
@@ -261,6 +262,7 @@ function setup(host, ctx, store) {
         rebuildTimer: null,    // 打字时推迟重建
         fresh: null,           // 刚从右键菜单落地的那张卡片(只影响它的入场动画)
         textImport: null,      // {extensions, maxBytes} —— 由引擎给,导入时拼对话框过滤器用
+        officeFileImport: null,
     };
 
     const el = {};
@@ -284,6 +286,8 @@ function setup(host, ctx, store) {
         el.proj.append(el.projDot, el.projName);
 
         el.importBtn = btn('导入稿子…', 'drama-import');
+        el.importWordBtn = btn('导入 Word', 'drama-word-import');
+        el.importOfficeBtn = btn('导入 WPS 文件', 'drama-wps-import');
         el.runAll = btn('运行全部', 'drama-run pri');
         el.runTo = btn('运行到此', 'drama-runto');
         el.forceRun = btn('强制重跑', 'drama-force');
@@ -293,10 +297,10 @@ function setup(host, ctx, store) {
         el.note = document.createElement('span');
         el.note.className = 'drama-note';
 
-        bar.append(el.proj, sep(), el.importBtn, sep(),
+        bar.append(el.proj, sep(), el.importBtn, el.importWordBtn, el.importOfficeBtn, sep(),
             el.runAll, el.runTo, el.forceRun, sep(), el.fit, el.reset1, el.note);
 
-        // ---- 主体:画布 + 检视器 ----
+        // ---- 主体:画布占满可用区域 ----
         const wrap = document.createElement('div');
         wrap.className = 'drama-wrap';
 
@@ -326,10 +330,7 @@ function setup(host, ctx, store) {
         el.world.append(el.snapGuideX, el.snapGuideY, el.snapGrid, el.marquee);
         el.canvas.appendChild(el.world);
 
-        el.inspector = document.createElement('div');
-        el.inspector.className = 'drama-inspector';
-
-        wrap.append(el.canvas, el.inspector);
+        wrap.append(el.canvas);
         root.append(bar, wrap);
         host.appendChild(root);
     };
@@ -359,12 +360,13 @@ function setup(host, ctx, store) {
         el.projName.textContent = name ?? '还没有项目';
         el.proj.dataset.empty = name === null ? '1' : '0';
         el.importBtn.disabled = name === null;
+        el.importWordBtn.disabled = name === null;
+        el.importOfficeBtn.disabled = name === null;
         if (name === null) {
             shownProject = null;
             state.project = null;
             state.graph = null;
             renderEmpty(store.reason || '还没有项目。在「短剧项目」面板里新建一个。');
-            renderInspector();
             return;
         }
         if (name !== shownProject) void loadState(name);
@@ -386,6 +388,7 @@ function setup(host, ctx, store) {
             state.graph = s.graph;
             state.types = s.types ?? [];
             state.textImport = s.textImport ?? null;
+            state.officeFileImport = s.officeFileImport ?? null;
             state.selection.clear();
             state.editing = null;
             render();
@@ -458,7 +461,7 @@ function setup(host, ctx, store) {
     ctx.onDispose(ctx.drama.onRunEvent((event) => {
         if (event?.runId !== state.activeRunId || event?.project !== state.project) return;
         const nodeType = nodeById(event.nodeId)?.type;
-        if (nodeType !== 'llm' && nodeType !== 'image') return;
+        if (nodeType !== 'llm' && nodeType !== 'image' && nodeType !== 'run') return;
         if (event.status === 'skillMatched') {
             state.graph.skillMatches = { ...state.graph.skillMatches, [event.nodeId]: event.skillMatch };
             refreshSkillFeedback();
@@ -486,6 +489,12 @@ function setup(host, ctx, store) {
             .find((item) => item.dataset.nodeId === event.nodeId);
         if (!card) return;
         card.classList.toggle('generating', running);
+        card.classList.toggle('running', running);
+        const runButton = card.querySelector('.drama-run-button');
+        if (runButton) runButton.disabled = running || state.busy;
+        const runState = card.querySelector('.drama-run-state');
+        if (runState) runState.textContent = event.status === 'running' ? '正在运行'
+            : event.status === 'failed' ? '运行失败' : event.status === 'ok' ? '已完成' : '等待运行';
         const badge = card.querySelector('.drama-status');
         if (badge) {
             badge.className = `drama-status drama-status-${event.status}`;
@@ -506,13 +515,13 @@ function setup(host, ctx, store) {
         el.world.querySelectorAll('.drama-node').forEach((n) => n.remove());
 
         if (!state.graph) {
+            el.svg.replaceChildren();
             renderEmpty('先选一个项目,或新建一个。');
-            renderInspector();
             return;
         }
         if ((state.graph.nodes ?? []).length === 0) {
-            renderEmpty('这个项目还是一张空图。\n用左侧节点库加节点(P1 暂只支持在检视器里加)。');
-            renderInspector();
+            el.svg.replaceChildren();
+            renderEmpty('这个项目还是一张空图。\n在画布空白处右键添加节点。');
             return;
         }
         clearEmpty();
@@ -525,7 +534,6 @@ function setup(host, ctx, store) {
         renderEdges();
         applyView();
         repaintSelection();
-        renderInspector();
         renderNote();
     }
 
@@ -625,7 +633,8 @@ function setup(host, ctx, store) {
                 const caption = document.createElement('span');
                 caption.textContent = multiple
                     ? (edge ? `${sourceIndex + 1} ${from}` : label === '技能' ? '连入技能后，按提示词需求启用'
-                        : node.type === 'skill' ? '可连入多个来源' : '暂无上游，使用节点提示词')
+                        : node.type === 'skill' ? '可连入多个来源'
+                            : node.type === 'run' ? '连接文本节点后运行' : '暂无上游，使用节点提示词')
                     : `${index} ${label}${from ? ' ← ' + from : ''}`;
                 caption.title = caption.textContent;
                 slot.appendChild(caption);
@@ -662,12 +671,16 @@ function setup(host, ctx, store) {
         // `fresh` = 刚落地的那一张:给它一次性入场动画 + 一圈选中脉冲(见 style.css)
         card.className = node.id === state.fresh ? 'drama-node fresh' : 'drama-node';
         if ((node.type === 'llm' || node.type === 'image') && state.generatingNodes.has(node.id)) card.classList.add('generating');
+        if (node.type === 'run' && run?.status === 'running') card.classList.add('running');
         if (node.type === 'llm' && (run?.output || run?.file)) card.classList.add('has-output');
         if (node.type === 'image' && Array.isArray(run?.media) && run.media.length > 0) card.classList.add('has-media');
         if (node.type === 'image' && typeof node.h === 'number' && node.h > 0) card.classList.add('has-custom-height');
         card.dataset.nodeId = node.id;
         card.dataset.type = node.type;
-        card.title = '按住并移动可拖动节点；按 Shift 拖动可选择文字';
+        card.title = node.type === 'word-file'
+            ? '双击节点名重命名；右键菜单打开文件；拖动右侧连接点可接入运行节点'
+            : node.type === 'wps-file' ? '双击或右键打开文件；按住并移动可拖动节点'
+            : '按住并移动可拖动节点；按 Shift 拖动可选择文字';
         card.style.left = `${Math.round(node.x ?? 0)}px`;
         card.style.top = `${Math.round(node.y ?? 0)}px`;
         if (typeof node.w === 'number' && node.w > 0) card.style.width = `${node.w}px`;
@@ -689,12 +702,139 @@ function setup(host, ctx, store) {
         const body = document.createElement('div');
         body.className = 'drama-node-body';
         if (node.type === 'image' || node.type === 'skill') renderInputSlots(node, type, body);
-        if (state.editing === node.id) {
+        if (node.type === 'word-file') {
+            const fileCard = document.createElement('div');
+            fileCard.className = 'drama-word-file';
+            const icon = document.createElement('span');
+            icon.className = 'drama-word-icon';
+            const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            iconSvg.setAttribute('viewBox', '0 0 40 40');
+            iconSvg.setAttribute('aria-hidden', 'true');
+            const mark = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            mark.setAttribute('d', 'M5 10h7l3.2 14.2L19.1 10h4.2l4 14.2L30.5 10H36l-6.3 20h-5.1l-3.5-12.1L17.5 30h-5.1L5 10Z');
+            mark.setAttribute('fill', 'currentColor');
+            iconSvg.appendChild(mark);
+            icon.appendChild(iconSvg);
+
+            const details = document.createElement('div');
+            details.className = 'drama-word-details';
+            const filename = document.createElement('span');
+            filename.className = 'drama-word-filename';
+            filename.textContent = String(node.params?.name ?? node.title ?? 'Word 文档');
+            filename.title = filename.textContent;
+            const format = document.createElement('span');
+            format.className = 'drama-word-format';
+            format.textContent = 'DOCX';
+            const bytes = Number(node.params?.size) || 0;
+            const size = document.createElement('span');
+            size.className = 'drama-word-size';
+            size.textContent = bytes >= 1024 * 1024
+                ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+                : bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : (bytes > 0 ? `${bytes} B` : 'Word 文档');
+            const meta = document.createElement('div');
+            meta.className = 'drama-word-meta';
+            meta.append(format, document.createTextNode(' · '), size);
+            const readable = document.createElement('span');
+            readable.className = 'drama-word-readable';
+            readable.textContent = '正文可读取';
+            details.append(filename, meta, readable);
+            fileCard.append(icon, details);
+            body.appendChild(fileCard);
+        } else if (node.type === 'wps-file') {
+            const fileCard = document.createElement('div');
+            fileCard.className = 'drama-wps-file';
+            const icon = document.createElement('span');
+            icon.className = 'drama-wps-icon';
+            const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            iconSvg.setAttribute('viewBox', '0 0 40 40');
+            iconSvg.setAttribute('aria-hidden', 'true');
+            const mark = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            mark.setAttribute('d', 'M6 8h4.5l3 14 3-10h4l3 10 3-14H34l-5.5 19h-4.2L20 17.5 15.7 27h-4.2L6 8Z');
+            mark.setAttribute('fill', 'currentColor');
+            const brand = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            brand.setAttribute('x', '20');
+            brand.setAttribute('y', '35');
+            brand.setAttribute('text-anchor', 'middle');
+            brand.setAttribute('font-size', '6');
+            brand.setAttribute('font-family', 'Arial, sans-serif');
+            brand.setAttribute('font-weight', '700');
+            brand.setAttribute('letter-spacing', '.5');
+            brand.textContent = 'WPS';
+            iconSvg.append(mark, brand);
+            icon.appendChild(iconSvg);
+
+            const details = document.createElement('div');
+            details.className = 'drama-wps-details';
+            const extension = document.createElement('span');
+            extension.className = 'drama-wps-format';
+            extension.textContent = String(node.params?.extension ?? 'wps').toUpperCase();
+            const bytes = Number(node.params?.size) || 0;
+            const size = document.createElement('span');
+            size.className = 'drama-wps-size';
+            size.textContent = bytes >= 1024 * 1024
+                ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+                : bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : (bytes > 0 ? `${bytes} B` : 'WPS 文件');
+            details.append(extension, document.createTextNode(' · '), size);
+            fileCard.append(icon, details);
+            body.appendChild(fileCard);
+        } else if (node.type === 'run') {
+            renderInputSlots(node, type, body);
+            body.appendChild(renderRunControl(node, run));
+        } else if (node.type === 'result') {
+            const out = document.createElement('div');
+            out.className = 'drama-out drama-text-content drama-output-markdown';
+            const sourceEdge = state.graph.edges?.find((edge) => edge.to === node.id
+                && (edge.toPort ?? 0) === 0);
+            const sourceRun = sourceEdge ? state.graph.runs?.[sourceEdge.from] : null;
+            const resultProject = state.project;
+            const renderResult = (value) => {
+                out.replaceChildren(...renderMarkdownNodes(document, String(value ?? ''), { tables: true }));
+            };
+            renderResult(sourceRun?.output ?? node.outputText ?? '');
+            out.setAttribute('aria-label', '运行结果');
+            out.tabIndex = 0;
+            if (typeof sourceRun?.exportFile === 'string' && sourceRun.exportFile !== '') {
+                const exportFile = document.createElement('div');
+                exportFile.className = 'drama-result-export';
+                const icon = document.createElement('span');
+                icon.className = 'drama-result-export-icon';
+                icon.setAttribute('aria-hidden', 'true');
+                icon.textContent = String(sourceRun.exportFormat ?? '').toUpperCase().slice(0, 4);
+                const label = document.createElement('span');
+                label.className = 'drama-result-export-label';
+                label.textContent = `${sourceRun.exportLabel ?? sourceRun.exportFormat ?? '导出'} 文件`;
+                const open = document.createElement('button');
+                open.type = 'button';
+                open.className = 'drama-result-export-open';
+                open.textContent = '打开文件';
+                open.addEventListener('click', async (event) => {
+                    event.stopPropagation();
+                    open.disabled = true;
+                    try {
+                        await ctx.drama.openGeneratedOutput(resultProject, sourceRun.exportFile);
+                        setStatus(`已打开 ${sourceRun.exportLabel ?? sourceRun.exportFormat ?? '导出'} 文件`);
+                    } catch (error) {
+                        setStatus(`打开文件失败：${error.message}`);
+                    } finally {
+                        open.disabled = false;
+                    }
+                });
+                exportFile.append(icon, label, open);
+                body.appendChild(exportFile);
+            }
+            body.appendChild(out);
+            if (sourceRun?.file) {
+                const project = state.project;
+                void fullOutputText(project, sourceRun.file).then((full) => {
+                    if (out.isConnected && state.project === project) renderResult(full);
+                }).catch(() => {});
+            }
+        } else if (state.editing === node.id) {
             body.appendChild(renderEditor(node));
         } else {
             if (node.type !== 'image' && node.type !== 'skill') renderInputSlots(node, type, body);
             const summary = summarize(node);
-            if (summary !== '') {
+            if (summary !== '' && node.type !== 'text') {
                 const s = document.createElement('div');
                 s.className = 'drama-summary';
                 s.textContent = summary;
@@ -705,7 +845,7 @@ function setup(host, ctx, store) {
                 out.className = 'drama-out drama-text-content';
                 // 正文来自当前输入；旧运行缓存不能覆盖编辑后的内容。
                 out.textContent = String(node.params?.value ?? run?.output ?? '');
-                out.setAttribute('aria-label', '文本/剧本内容');
+                out.setAttribute('aria-label', '文本内容');
                 out.tabIndex = 0;
                 body.appendChild(out);
             } else if (card.classList.contains('has-output')) {
@@ -799,7 +939,65 @@ function setup(host, ctx, store) {
             if (gallery) body.appendChild(gallery);
         }
 
-        card.append(head, body);
+        if (node.type === 'text') {
+            const name = document.createElement('input');
+            name.type = 'text';
+            name.className = 'drama-node-name';
+            name.value = String(node.title ?? type?.label ?? node.id);
+            name.size = Math.max(4, Math.min(32, name.value.length));
+            name.setAttribute('aria-label', '节点名称');
+            name.autocomplete = 'off';
+            name.spellcheck = false;
+            name.addEventListener('input', () => {
+                const current = nodeById(node.id);
+                if (!current) return;
+                current.title = name.value;
+                name.size = Math.max(4, Math.min(32, name.value.length));
+                scheduleSave();
+            });
+            name.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') name.blur();
+            });
+            card.append(name, body);
+        } else if (node.type === 'run' || node.type === 'result') {
+            const name = document.createElement('div');
+            name.className = 'drama-node-name';
+            name.textContent = node.title ?? type?.label ?? '节点';
+            card.append(name, body);
+        } else if (node.type === 'word-file') {
+            const name = document.createElement('input');
+            name.type = 'text';
+            name.className = 'drama-node-name drama-word-name';
+            name.value = node.title && node.title !== node.params?.name ? node.title : 'Word 文件';
+            name.size = Math.max(4, Math.min(32, name.value.length));
+            name.setAttribute('aria-label', 'Word 节点名称');
+            name.autocomplete = 'off';
+            name.spellcheck = false;
+            name.addEventListener('input', () => {
+                const current = nodeById(node.id);
+                if (!current) return;
+                current.title = name.value;
+                name.size = Math.max(4, Math.min(32, name.value.length));
+                scheduleSave();
+            });
+            name.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') name.blur();
+            });
+            name.addEventListener('dblclick', (event) => {
+                event.stopPropagation();
+                name.focus();
+                name.select();
+            });
+            card.append(name, body);
+        } else if (node.type === 'wps-file') {
+            const name = document.createElement('div');
+            name.className = 'drama-node-name drama-wps-name';
+            name.textContent = node.params?.name ?? node.title ?? 'WPS 文件';
+            name.title = name.textContent;
+            card.append(name, body);
+        } else {
+            card.append(head, body);
+        }
         (type?.inputs ?? []).forEach((label, index) => {
             const port = document.createElement('button');
             port.type = 'button';
@@ -808,10 +1006,11 @@ function setup(host, ctx, store) {
             const connected = incoming.length > 0;
             if (connected) port.classList.add('connected');
             port.dataset.portIndex = String(index);
-            port.style.top = `${24 + index * 22}px`;
-            port.title = `输入：${label}${type.multipleInputs?.includes(index)
-                ? `（可连入多个节点，已连接 ${incoming.length} 个）` : connected ? '（已连接）' : ''}`;
-            port.setAttribute('aria-label', `${node.title ?? type?.label ?? node.id} 输入：${label}`);
+            port.style.top = ['text', 'run', 'result', 'word-file'].includes(node.type) ? '50%' : `${24 + index * 22}px`;
+            const inputName = node.type === 'run' ? `文本输入端（可连接多个来源，当前 ${incoming.length} 条）` : `输入：${label}`;
+            port.title = `${inputName}${type.multipleInputs?.includes(index)
+                ? `（可连入多个节点，已连接 ${incoming.length} 个）` : connected ? '（已连接；拖动到空白处断开）' : ''}`;
+            port.setAttribute('aria-label', `${node.title ?? type?.label ?? node.id} ${inputName}${connected ? '，拖动到空白处可断开连接' : ''}`);
             card.appendChild(port);
         });
         (type?.outputs ?? []).forEach((label, index) => {
@@ -821,7 +1020,7 @@ function setup(host, ctx, store) {
             if ((state.graph.edges ?? []).some((edge) => edge.from === node.id
                 && (edge.fromPort ?? 0) === index)) port.classList.add('connected');
             port.dataset.portIndex = String(index);
-            port.style.top = `${2 + index * 22}px`;
+            port.style.top = ['text', 'run', 'result', 'word-file'].includes(node.type) ? '50%' : `${2 + index * 22}px`;
             port.title = `从这里拖出 ${label} 连线`;
             port.setAttribute('aria-label', `${node.title ?? type?.label ?? node.id} 输出：${label}`);
             card.appendChild(port);
@@ -837,8 +1036,10 @@ function setup(host, ctx, store) {
             edge.setAttribute('aria-hidden', 'true');
             card.appendChild(edge);
         }
+        bindDynamicPortHover(card);
         bindNodeGestures(card, node);
         bindConnectionGestures(card, node);
+        bindDisconnectGestures(card, node);
         bindResizeGestures(card, node, size);
         return card;
     }
@@ -854,6 +1055,29 @@ function setup(host, ctx, store) {
             return `${p.label}:${text.slice(0, 60)}`;
         }
         return '';
+    }
+
+    function renderRunControl(node, run) {
+        const box = document.createElement('div');
+        box.className = 'drama-run-control';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'drama-run-button';
+        button.textContent = '运行';
+        button.disabled = state.busy;
+        button.setAttribute('aria-label', `运行节点「${node.title ?? '运行'}」`);
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            void runGraph(node.id, true, true);
+        });
+        const status = document.createElement('div');
+        status.className = `drama-run-state drama-run-state-${statusKey(run)}`;
+        status.setAttribute('aria-live', 'polite');
+        status.textContent = run?.status === 'running' ? '正在运行'
+            : run?.status === 'failed' ? (run.error ?? '运行失败')
+                : run?.status === 'ok' || run?.status === 'cached' ? '已完成' : '等待提示词连接';
+        box.append(button, status);
+        return box;
     }
 
     function renderEditor(node) {
@@ -878,9 +1102,39 @@ function setup(host, ctx, store) {
             label.append(caption, name);box.appendChild(label);
         }
         for (const p of type?.params ?? []) {
-            const label = document.createElement('label');
-            label.className = 'drama-field';
+            const label = node.type === 'text' ? null : document.createElement('label');
+            if (label) label.className = 'drama-field';
             const value = node.params?.[p.key] ?? p.default ?? '';
+            if (node.type === 'text' && p.type === 'textarea') {
+                const editor = document.createElement('div');
+                editor.className = 'drama-textarea drama-live-markdown';
+                editor.dataset.paramKey = p.key;
+                const live = mountLiveMarkdown(editor, String(value), {
+                    showToolbar: false,
+                    onInput: (markdown) => {
+                        const current = nodeById(node.id);
+                        if (!current) return;
+                        current.params = { ...(current.params ?? {}), [p.key]: markdown };
+                        scheduleSave();
+                        refreshSkillFeedback();
+                    },
+                });
+                const content = editor.querySelector('.live-markdown-content');
+                if (content) {
+                    content.classList.add('drama-output-markdown');
+                    content.dataset.paramKey = p.key;
+                    content.setAttribute('aria-label', p.label);
+                    content.addEventListener('keydown', (ev) => {
+                        if (ev.key === 'Escape') {
+                            live.dispose();
+                            state.editing = null;
+                            render();
+                        }
+                    });
+                }
+                box.appendChild(editor);
+                continue;
+            }
             const input = p.type === 'textarea'
                 ? document.createElement('textarea')
                 : document.createElement('input');
@@ -904,14 +1158,20 @@ function setup(host, ctx, store) {
                 }
             });
             // 标签行:标题 + (只有标了 importable 的参数才有)那个 ＋
-            const cap = document.createElement('span');
-            cap.className = 'drama-field-cap';
-            const capText = document.createElement('span');
-            capText.textContent = p.label;
-            cap.appendChild(capText);
-            if (p.importable === true) cap.appendChild(importButton(node, p, input));
-            label.append(cap, input);
-            box.appendChild(label);
+            if (node.type === 'text') {
+                input.className = 'drama-textarea';
+                input.setAttribute('aria-label', p.label);
+                box.appendChild(input);
+            } else {
+                const cap = document.createElement('span');
+                cap.className = 'drama-field-cap';
+                const capText = document.createElement('span');
+                capText.textContent = p.label;
+                cap.appendChild(capText);
+                if (p.importable === true) cap.appendChild(importButton(node, p, input));
+                label.append(cap, input);
+                box.appendChild(label);
+            }
         }
         return box;
     }
@@ -969,11 +1229,8 @@ function setup(host, ctx, store) {
     }
 
     /**
-     * 标签行右边那个 ＋:选一个文本文件,把**内容**灌进这个框。
-     *
-     * 为什么是参数级标记(`p.importable`):不是每个 textarea 都该长这个按钮 ——
-     * 手输内容是"一段可以来自文件的正文",提示词/备注不是。判据写在类型表里(引擎侧),
-     * 面板只是照着画;将来哪个参数也想支持,改类型表一行即可。
+     * 标签行右边那个 ＋:仅为显式标记了 importable 的文本输入提供文件导入。
+     * 文本节点不带这个标记,只允许手动输入纯文本。
      */
     function importButton(node, param, input) {
         const b = document.createElement('button');
@@ -1002,7 +1259,7 @@ function setup(host, ctx, store) {
     }
 
     /**
-     * 「＋ 导入」整条路:选文件 → (框里非空先确认) → 主进程抽文本 → 灌进框。
+     * 「＋ 导入」整条路:选文件 → (框里非空先确认) → 主进程抽文本 → 灌进允许导入的框。
      *
      * @param {object} node 目标节点
      * @param {object} param 目标参数(它有 importable 标记)
@@ -1010,6 +1267,10 @@ function setup(host, ctx, store) {
      * @param {HTMLElement|null} button 触发它的那个 ＋(用来转圈)
      */
     async function importInto(node, param, input, button) {
+        if (node?.type === 'text') {
+            setStatus('文本节点只支持手动输入纯文本');
+            return;
+        }
         const filters = [
             { name: '文本与剧本', extensions: state.textImport?.extensions ?? ['txt', 'md', 'srt'] },
             { name: '全部文件', extensions: ['*'] },
@@ -1047,13 +1308,14 @@ function setup(host, ctx, store) {
         }
     }
 
-    /** 替换确认条(就地长在编辑器底下,和卡片一个坐标系)。返回 true = 继续替换。 */
+    /** 替换确认条:优先显示在编辑器下方,未进入编辑时显示在画布中央。 */
     function confirmReplace(node, currentChars) {
         return new Promise((resolve) => {
-            const holder = el.world.querySelector(`.drama-node[data-node-id="${node.id}"] .drama-editor`)
-                ?? el.inspector;
+            const editor = el.world.querySelector(`.drama-node[data-node-id="${node.id}"] .drama-editor`);
+            const holder = editor ?? el.canvas;
             const row = document.createElement('div');
             row.className = 'drama-confirm';
+            if (editor === null) row.classList.add('drama-confirm-canvas');
             const text = document.createElement('span');
             text.textContent = `框里已经有 ${currentChars} 字 —— 导入会把它替换掉?`;
             const yes = btn('替换', 'drama-confirm-yes pri');
@@ -1084,7 +1346,8 @@ function setup(host, ctx, store) {
         return {
             x: (node.x ?? 0) + (port ? port.offsetLeft + port.offsetWidth / 2
                 : direction === 'output' ? nodeSnapBox(node).width - 10 : 10),
-            y: (node.y ?? 0) + (port ? port.offsetTop + port.offsetHeight / 2 : 34 + index * 22),
+            y: (node.y ?? 0) + (port ? port.offsetTop + (['text', 'run', 'result'].includes(node.type) ? 0 : port.offsetHeight / 2)
+                : 34 + index * 22),
         };
     }
 
@@ -1115,6 +1378,7 @@ function setup(host, ctx, store) {
             `${box.minX - pad} ${box.minY - pad} ${box.w + pad * 2} ${box.h + pad * 2}`);
         el.svg.innerHTML = '';
         for (const e of state.graph.edges ?? []) {
+            if (draft?.skipEdge === e) continue;
             const a = nodeById(e.from);
             const b = nodeById(e.to);
             if (!a || !b) continue;
@@ -1126,7 +1390,7 @@ function setup(host, ctx, store) {
             appendEdgePath(portPoint(a, 'output', e.fromPort ?? 0),
                 portPoint(b, 'input', index < 0 ? (e.toPort ?? 0) : index), `drama-edge${style}`);
         }
-        if (draft) appendEdgePath(draft.start, draft.end, 'drama-edge-draft');
+        if (draft?.start && draft?.end) appendEdgePath(draft.start, draft.end, 'drama-edge-draft');
     }
 
     function worldBounds() {
@@ -1152,6 +1416,30 @@ function setup(host, ctx, store) {
         const hit = resizeHitSizes(state.view.scale);
         el.world.style.setProperty('--drama-resize-edge-hit', `${hit.edge}px`);
         el.world.style.setProperty('--drama-resize-corner-hit', `${hit.corner}px`);
+    }
+
+    function revealNodeInViewport(node, padding = 24) {
+        const viewport = el.canvas.getBoundingClientRect();
+        const box = nodeSnapBox(node);
+        const scale = state.view.scale || 1;
+        const width = box.width * scale;
+        const height = box.height * scale;
+        const minX = padding;
+        const maxX = viewport.width - padding;
+        const minY = padding;
+        const maxY = viewport.height - padding;
+        let left = state.view.x + box.x * scale;
+        let top = state.view.y + box.y * scale;
+
+        if (width > maxX - minX) state.view.x += (minX + maxX - width) / 2 - left;
+        else if (left < minX) state.view.x += minX - left;
+        else if (left + width > maxX) state.view.x -= left + width - maxX;
+
+        if (height > maxY - minY) state.view.y += (minY + maxY - height) / 2 - top;
+        else if (top < minY) state.view.y += minY - top;
+        else if (top + height > maxY) state.view.y -= top + height - maxY;
+
+        applyView();
     }
 
     function hideSnapFeedback() {
@@ -1222,6 +1510,17 @@ function setup(host, ctx, store) {
                 .reduce((height, child) => height + outerHeight(child) + 5, 0);
             // 只计固定栏和最小正文，不用随节点伸展的 scrollHeight 反向锁住缩小。
             return Math.max(92, (head?.offsetHeight ?? 0) + fixed + caps + confirms + 64);
+        }
+        if (card.dataset.type === 'result') {
+            // 结果正文自身滚动，不能拿它的完整 scrollHeight 当节点最小高度：
+            // Markdown 长文或窄列换行会把最小高度抬高，导致拖拽时节点被撑开且无法收回。
+            const fixed = [...(body?.children ?? [])]
+                .filter((child) => !child.classList.contains('drama-text-content'))
+                .reduce((height, child) => {
+                    const style = getComputedStyle(child);
+                    return height + child.offsetHeight + (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
+                }, 0);
+            return Math.max(184, (head?.offsetHeight ?? 0) + fixed + 64);
         }
         if (card.dataset.type === 'image' && card.classList.contains('has-media')
             && card.classList.contains('has-custom-height')) {
@@ -1354,10 +1653,232 @@ function setup(host, ctx, store) {
         }
     }
 
+    /** 拖动已连接的输入端点：拖到兼容输出端可换接，拖到空白画布则断开。 */
+    function bindDisconnectGestures(card, node) {
+        const doc = host.ownerDocument;
+        const findOutput = (ev) => {
+            const canvas = el.canvas.getBoundingClientRect();
+            if (ev.clientX < canvas.left || ev.clientX > canvas.right
+                || ev.clientY < canvas.top || ev.clientY > canvas.bottom) return null;
+            const direct = doc.elementFromPoint(ev.clientX, ev.clientY)
+                ?.closest?.('.drama-port-output');
+            if (direct) return direct;
+            let nearest = null;
+            let best = 12 * 12;
+            for (const port of el.world.querySelectorAll('.drama-port-output')) {
+                const rect = port.getBoundingClientRect();
+                const dx = ev.clientX - (rect.left + rect.width / 2);
+                const dy = ev.clientY - (rect.top + rect.height / 2);
+                const distance = dx * dx + dy * dy;
+                if (distance <= best) { nearest = port; best = distance; }
+            }
+            return nearest;
+        };
+        const clearTargets = () => {
+            el.world.querySelectorAll('.drama-port-output.is-target')
+                .forEach((port) => port.classList.remove('is-target'));
+        };
+
+        for (const input of card.querySelectorAll('.drama-port-input')) {
+            let gesture = null;
+            const portIndex = Number(input.dataset.portIndex);
+            const cleanup = () => {
+                if (!gesture) return;
+                const pointerId = gesture.pointerId;
+                gesture = null;
+                doc.removeEventListener('keydown', onEscape, true);
+                clearTargets();
+                el.canvas.classList.remove('connecting', 'disconnecting');
+                try { input.releasePointerCapture(pointerId); } catch { /* 指针可能已释放 */ }
+                renderEdges();
+            };
+            const onEscape = (ev) => {
+                if (ev.key !== 'Escape' || !gesture) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                cleanup();
+                setStatus('已取消断开');
+            };
+            const candidateFor = (edge, port) => {
+                if (!port) return null;
+                const sourceCard = port.closest('.drama-node');
+                if (!sourceCard) return null;
+                const from = sourceCard.dataset.nodeId;
+                const fromPort = Number(port.dataset.portIndex);
+                const graphWithoutEdge = { ...state.graph,
+                    edges: state.graph.edges.filter((candidate) => candidate !== edge) };
+                return {
+                    from,
+                    fromPort,
+                    result: validateConnection(graphWithoutEdge, state.types,
+                        from, fromPort, node.id, portIndex),
+                    source: nodeById(from),
+                };
+            };
+
+            input.addEventListener('pointerdown', (ev) => {
+                if (ev.button !== 0 || !state.graph) return;
+                const edges = inboundOf(node.id)[portIndex] ?? [];
+                if (edges.length === 0) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (edges.length !== 1) {
+                    setStatus('该端口有多条连线，请在输入列表中用 × 单独断开');
+                    return;
+                }
+                const edge = edges[0];
+                const source = nodeById(edge.from);
+                if (!source) return;
+                const sourcePort = edge.fromPort ?? 0;
+                const fixedEnd = portPoint(node, 'input', portIndex);
+                gesture = {
+                    pointerId: ev.pointerId,
+                    edge,
+                    source,
+                    sourcePort,
+                    fixedEnd,
+                    start: fixedEnd,
+                    current: fixedEnd,
+                    clientX: ev.clientX,
+                    clientY: ev.clientY,
+                    moved: false,
+                    candidate: null,
+                };
+                el.canvas.classList.add('connecting', 'disconnecting');
+                doc.addEventListener('keydown', onEscape, true);
+                try { input.setPointerCapture(ev.pointerId); } catch { /* 合成事件没有真指针 */ }
+                renderEdges({ skipEdge: edge, start: portPoint(source, 'output', sourcePort), end: fixedEnd });
+            });
+            input.addEventListener('pointermove', (ev) => {
+                if (!gesture || ev.pointerId !== gesture.pointerId) return;
+                ev.stopPropagation();
+                const point = canvasPoint(ev);
+                gesture.current = point;
+                gesture.moved ||= Math.hypot(ev.clientX - gesture.clientX, ev.clientY - gesture.clientY) >= 5;
+                clearTargets();
+                const port = findOutput(ev);
+                const candidate = candidateFor(gesture.edge, port);
+                gesture.candidate = candidate?.result.ok ? { ...candidate, port } : null;
+                if (gesture.candidate) port.classList.add('is-target');
+                renderEdges(gesture.candidate
+                    ? { skipEdge: gesture.edge, start: portPoint(gesture.candidate.source, 'output', gesture.candidate.fromPort), end: gesture.fixedEnd }
+                    : { skipEdge: gesture.edge, start: portPoint(gesture.source, 'output', gesture.sourcePort), end: point });
+            });
+            input.addEventListener('pointerup', (ev) => {
+                if (!gesture || ev.pointerId !== gesture.pointerId) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                const current = gesture;
+                const pointer = canvasPoint(ev);
+                const port = findOutput(ev);
+                const candidate = candidateFor(current.edge, port);
+                const candidateNode = port?.closest('.drama-node');
+                const underPointer = doc.elementFromPoint(ev.clientX, ev.clientY);
+                const overNode = Boolean(underPointer?.closest?.('.drama-node'));
+                const canvas = el.canvas.getBoundingClientRect();
+                const overCanvas = ev.clientX >= canvas.left && ev.clientX <= canvas.right
+                    && ev.clientY >= canvas.top && ev.clientY <= canvas.bottom;
+                const distance = Math.hypot(ev.clientX - current.clientX, ev.clientY - current.clientY);
+                const edgeIndex = state.graph.edges.indexOf(current.edge);
+
+                if (distance < 5) {
+                    cleanup();
+                    return;
+                }
+                if (candidate?.result.ok && candidateNode && edgeIndex >= 0) {
+                    const unchanged = candidate.from === current.edge.from
+                        && candidate.fromPort === (current.edge.fromPort ?? 0);
+                    if (!unchanged) state.graph.edges[edgeIndex] = candidate.result.edge;
+                    cleanup();
+                    if (!unchanged) {
+                        render();
+                        scheduleSave();
+                        setStatus('已重新连接');
+                    }
+                    return;
+                }
+                if (overCanvas && !overNode && edgeIndex >= 0) {
+                    state.graph.edges.splice(edgeIndex, 1);
+                    cleanup();
+                    render();
+                    scheduleSave();
+                    setStatus('已断开连线');
+                    return;
+                }
+                cleanup();
+                if (candidate && !candidate.result.ok) setStatus(candidate.result.reason);
+                else if (distance >= 5) setStatus('松开到空白画布即可断开；无效位置会保留原连接');
+            });
+            input.addEventListener('pointercancel', (ev) => {
+                if (gesture && ev.pointerId === gesture.pointerId) cleanup();
+            });
+            input.addEventListener('lostpointercapture', () => cleanup());
+        }
+    }
+
+    function bindDynamicPortHover(card) {
+        if (card.dataset.type !== 'text' && card.dataset.type !== 'word-file') return;
+        const ports = [...card.querySelectorAll('.drama-port')];
+        if (ports.length === 0) return;
+        const current = new Map(ports.map((port) => [port, 50]));
+        const target = new Map(ports.map((port) => [port, 50]));
+        let frame = 0;
+        const sideOf = (port) => port.classList.contains('drama-port-input') ? 'input' : 'output';
+        const animate = () => {
+            let moving = false;
+            for (const port of ports) {
+                const next = current.get(port) + (target.get(port) - current.get(port)) * .18;
+                current.set(port, next);
+                port.style.top = `${next}%`;
+                if (Math.abs(target.get(port) - next) > .08) moving = true;
+            }
+            if (ports.some((port) => port.classList.contains('connected'))) renderEdges();
+            if (moving) frame = requestAnimationFrame(animate);
+            else frame = 0;
+        };
+        const reset = () => {
+            for (const port of ports) {
+                port.classList.remove('is-near');
+                target.set(port, 50);
+            }
+            if (!frame) frame = requestAnimationFrame(animate);
+        };
+        card.addEventListener('pointermove', (event) => {
+            if (event.pointerType === 'touch' || event.target.closest?.('.drama-node-name')) return;
+            const rect = card.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            const nearLeft = x >= 0 && x <= 34;
+            const nearRight = x <= rect.width && rect.width - x <= 34;
+            const side = nearLeft ? 'input' : nearRight ? 'output' : null;
+            for (const port of ports) {
+                const active = sideOf(port) === side && y >= 0 && y <= rect.height;
+                port.classList.toggle('is-near', active);
+                if (!active) {
+                    target.set(port, 50);
+                    continue;
+                }
+                const pointerY = y / rect.height * 100;
+                target.set(port, Math.max(42, Math.min(58, 50 + (pointerY - 50) * .14)));
+            }
+            if (!frame && ports.some((port) => Math.abs(target.get(port) - current.get(port)) > .08)) {
+                frame = requestAnimationFrame(animate);
+            }
+        });
+        card.addEventListener('pointerleave', reset);
+    }
+
     function bindNodeGestures(card, node) {
         let gesture = null;   // 只在手势真正开始时才有值
         let suppressClick = false;
         const doc = card.ownerDocument;
+        if (node.type === 'wps-file') {
+            card.addEventListener('dblclick', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                void openOfficeFileNode(node);
+            });
+        }
 
         card.addEventListener('pointerdown', (ev) => {
             if (ev.button !== 0 || gesture) return;
@@ -1366,10 +1887,12 @@ function setup(host, ctx, store) {
             // 端口连线和边缘拉伸有各自的手势；内容与按钮不再整块排除。
             if (target.closest?.('.drama-port, .drama-resize-edge')) return;
             const control = target.closest?.('input, textarea, select, button, a, summary, label, [contenteditable]:not([contenteditable="false"])');
-            const content = target.closest?.('.drama-output-panel, .drama-text-content, .drama-image-prompt, .drama-input-sources, .drama-skill-panel, .drama-reference-input, .drama-image-gallery');
-            // Shift 保留原生选字；普通单击仍能聚焦输入框或执行按钮。
-            if (ev.shiftKey && (control || content)) return;
-            if (!control) ev.preventDefault();
+            const contentRegion = target.closest?.('.drama-output-panel, .drama-text-content, .drama-image-prompt, .drama-input-sources, .drama-skill-panel, .drama-reference-input, .drama-image-gallery');
+            const isResultText = node.type === 'result' && contentRegion?.classList.contains('drama-text-content');
+            // Shift 保留原生选字；运行结果正文的普通单击要继续进入节点选中流程。
+            if (ev.shiftKey && (control || contentRegion)) return;
+            const content = isResultText ? null : contentRegion;
+            if (!control && !content) ev.preventDefault();
             gesture = { pointerId: ev.pointerId, x: ev.clientX, y: ev.clientY,
                 moved: false, nativeClick: Boolean(control || content), target };
             // 临时跟踪文档，快速划出节点时也能跨过阈值；捕获仍延迟到实际拖动。
@@ -1465,7 +1988,18 @@ function setup(host, ctx, store) {
                 else scheduleSave();
                 return;
             }
-            if (cancelled || ended.nativeClick) return;
+            if (cancelled) return;
+            if (node.type === 'run' || node.type === 'result'
+                || node.type === 'wps-file' || node.type === 'word-file') {
+                if (!ended.nativeClick) {
+                    state.selection.clear();
+                    state.selection.add(node.id);
+                    state.editing = null;
+                    repaintSelection();
+                }
+                return;
+            }
+            if (ended.nativeClick) return;
             // 没拖动 = 一次点击:第一次选中,已选中则进编辑
             if (state.selection.size === 1 && state.selection.has(node.id)) {
                 state.editing = node.id;
@@ -1475,7 +2009,6 @@ function setup(host, ctx, store) {
                 state.selection.add(node.id);
                 state.editing = null;
                 repaintSelection();
-                renderInspector();
             }
         }
         function cancelGesture(ev) { endGesture(ev, true); }
@@ -1488,10 +2021,17 @@ function setup(host, ctx, store) {
         // 浏览器原生图片/文本拖拽会抢走 pointermove；节点移动统一由画布处理。
         card.addEventListener('dragstart', (ev) => ev.preventDefault());
         card.addEventListener('click', (ev) => {
-            if (!suppressClick || ev.detail === 0) return;
-            suppressClick = false;
-            ev.preventDefault();
-            ev.stopImmediatePropagation();
+            if (suppressClick && ev.detail !== 0) {
+                suppressClick = false;
+                ev.preventDefault();
+                ev.stopImmediatePropagation();
+                return;
+            }
+            if (node.type !== 'text' || ev.target.closest?.('.drama-port, .drama-resize-edge')) return;
+            if (state.selection.size === 1 && state.selection.has(node.id)) return;
+            state.selection.clear();
+            state.selection.add(node.id);
+            repaintSelection();
         }, true);
 
         // 双击标题栏 = 复原(与独立版一致:清掉手改的 w/h)
@@ -1562,7 +2102,6 @@ function setup(host, ctx, store) {
             card.classList.remove('resizing');
             if (cancelled || !changed) restoreOriginal(original);
             else scheduleSave();
-            renderInspector();
         }
 
         for (const edge of card.querySelectorAll('.drama-resize-edge')) {
@@ -1633,10 +2172,11 @@ function setup(host, ctx, store) {
         for (const id of next) state.selection.add(id);
         state.editing = null;
         repaintSelection();
-        renderInspector();
     }
 
     el.canvas.addEventListener('pointerdown', (ev) => {
+        // 空格抓手优先；同一个空白画布节点上也可能收到框选监听。
+        if (navSpace) { ev.preventDefault(); return; }
         if (ev.button !== 0 || !state.graph) return;
         if (ev.target !== el.canvas && ev.target !== el.world && ev.target !== el.svg) return;
         marqueeGesture = {
@@ -1681,7 +2221,6 @@ function setup(host, ctx, store) {
         state.selection.clear();
         state.editing = null;
         repaintSelection();
-        renderInspector();
         openAddMenu(ev);
     });
     const rememberCanvasPointer = (ev) => {
@@ -1708,7 +2247,7 @@ function setup(host, ctx, store) {
 
     /* 滚轮平移 / Ctrl+滚轮缩放(与独立版同一套换算) */
     el.canvas.addEventListener('wheel', (ev) => {
-        if (!ev.ctrlKey && ev.target.closest?.('.drama-output-scroll, .drama-text-content, .drama-node[data-type="text"] textarea, .drama-image-prompt-content, .drama-input-sources, .drama-skill-input')) return;
+        if (!ev.ctrlKey && ev.target.closest?.('.drama-output-scroll, .drama-text-content, .drama-node[data-type="text"] .live-markdown-content, .drama-node[data-type="text"] textarea, .drama-image-prompt-content, .drama-input-sources, .drama-skill-input')) return;
         ev.preventDefault();
         if (ev.ctrlKey) {
             const next = Math.min(2.5, Math.max(0.25, state.view.scale * (ev.deltaY < 0 ? 1.1 : 0.9)));
@@ -1726,23 +2265,25 @@ function setup(host, ctx, store) {
         applyView();
     }, { passive: false });
 
-    /* 收"从笔记列表拖过来的文件"(全应用拖拽总线,方案丙)—— 逻辑在 drop-bus.js 里 */
+    /* 收画布支持的拖拽资源(全应用拖拽总线,方案丙)—— 逻辑在 drop-bus.js 里 */
     void (async () => {
         // ⚠️ 结果**写进 DOM**:接不上总线时不能静默 —— 页面日志只在自检抛异常时才打印,
         //    静默失败的表现是"拖进去什么都没发生"(实测踩到过,查了半小时)。
         try {
             const mod = await import('./drop-bus.js');
-            const { createWordDropPreview } = await import('./drop-preview.js');
-            const preview = createWordDropPreview({ el, state });
             const offDrop = await mod.wireDrop({ ctx, el, state, nodeById, createNode,
-                scheduleSave, setStatus, preview });
+                scheduleSave, setStatus });
             // Intercept image files first so they neither create nodes nor open in the window.
             const offNativeImageDrop = mod.wireNativeImageDrop({ el, setStatus });
-            const offNativeWordDrop = mod.wireNativeWordDrop({ ctx, el, state, nodeById, createNode, scheduleSave, setStatus, preview });
+            const offNativeFileDrop = mod.wireNativeFileDrop({
+                el,
+                setStatus,
+                extensions: () => state.officeFileImport?.extensions ?? [],
+                onOfficeFiles: (files, point) => importOfficeFiles({ files, point }),
+            });
             ctx.onDispose?.(offDrop);
             ctx.onDispose?.(offNativeImageDrop);
-            ctx.onDispose?.(offNativeWordDrop);
-            ctx.onDispose?.(() => preview.dispose());
+            ctx.onDispose?.(offNativeFileDrop);
             el.canvas.dataset.dropWired = '1';
         } catch (err) {
             el.canvas.dataset.dropError = String(err?.message ?? err);
@@ -1789,6 +2330,11 @@ function setup(host, ctx, store) {
         if (el.canvas.getAttribute('data-nav') !== next) el.canvas.setAttribute('data-nav', next);
     }
 
+    /** pointerenter 可能在面板刚挂载、鼠标一直静止时尚未触发；以浏览器当前 hover 命中补正。 */
+    function pointerIsOverCanvas(target = null) {
+        return navInside || el.canvas.matches(':hover') || (target !== null && el.canvas.contains(target));
+    }
+
     /** 结束一次平移(松鼠标 / 取消 / 收尾都走这里)。 */
     function endPan(pointerId) {
         if (navPan === null) return;
@@ -1809,8 +2355,10 @@ function setup(host, ctx, store) {
         if (ev.key !== ' ' && ev.key !== 'Spacebar' && ev.code !== 'Space') return;
         // 打字优先:焦点在输入类元素里 → 空格是字符,不是手势(一个字都不许吞)
         if (isTypingTarget(ev.target) || isTypingTarget(navDoc.activeElement)) return;
-        // 作用域:鼠标必须正指着画布 —— 否则会跟笔记面板 / AI 面板的空格抢
-        if (!navInside) return;
+        // 作用域:鼠标必须正指着画布 —— 否则会跟笔记面板 / AI 面板的空格抢。
+        // matches(':hover') 覆盖面板刚挂载时指针已在画布、但 pointerenter 尚未同步的情况。
+        if (!pointerIsOverCanvas()) return;
+        navInside = true;
         ev.preventDefault();          // 不然会滚页面 / 点亮按钮
         if (navSpace) return;         // 长按的自动重复
         navSpace = true;
@@ -1834,9 +2382,12 @@ function setup(host, ctx, store) {
 
     // 平移的起手必须走**捕获阶段**:空格按住那一刻,卡片自己的 pointerdown / 按钮 click 全让位
     el.canvas.addEventListener('pointerdown', (ev) => {
-        if (!navSpace || !navInside) return;
+        if (!navSpace || ev.button !== 0 || !pointerIsOverCanvas(ev.target)) return;
         ev.preventDefault();
-        ev.stopPropagation();
+        // 空白处 pointerdown 的 target 就是 canvas 本身，stopPropagation 不会
+        // 阻止同一元素上的框选监听；必须立即截断后续同节点监听。
+        ev.stopImmediatePropagation();
+        navInside = true;
         navPan = {
             pointerId: ev.pointerId, x0: ev.clientX, y0: ev.clientY,
             vx: state.view.x, vy: state.view.y,
@@ -1849,7 +2400,7 @@ function setup(host, ctx, store) {
         if (navPan === null || ev.pointerId !== navPan.pointerId) return;
         state.view.x = navPan.vx + (ev.clientX - navPan.x0);
         state.view.y = navPan.vy + (ev.clientY - navPan.y0);
-        applyView();                  // 只改 transform:节点/连线/检视器一个都不重建
+        applyView();                  // 只改 transform，不重建节点或连线
     });
     el.canvas.addEventListener('pointerup', (ev) => endPan(ev.pointerId));
     el.canvas.addEventListener('pointercancel', (ev) => endPan(ev.pointerId));
@@ -1864,7 +2415,7 @@ function setup(host, ctx, store) {
     /* ---------------- 画布上的两个右键菜单 ---------------- */
     //
     // 空白处 = 加节点(按分类分组的类型表);卡片上 = 那个节点自己的动作
-    // (运行到此 / 重跑 / 编辑 / 删除 —— 都是检视器里已有的动作,搬一份到手边)。
+    // (运行到此 / 重跑 / 编辑 / 删除)。
     //
     // ⚠️ 菜单挂在 document.body 上、用 fixed 定位。两个理由,缺一不可:
     //    · 画布是 overflow:hidden —— 菜单挂在里面会被裁掉;
@@ -2032,6 +2583,8 @@ function setup(host, ctx, store) {
         const order = [];
         const byCat = new Map();
         for (const t of types) {
+            if (!['text', 'run'].includes(t.id)) continue;
+            if (t.internal === true) continue;
             const cat = t.category ?? '其他';
             if (!byCat.has(cat)) { byCat.set(cat, []); order.push(cat); }
             byCat.get(cat).push(t);
@@ -2072,7 +2625,14 @@ function setup(host, ctx, store) {
                     onClick: () => {
                         // 鼠标处就是卡片的**中心**(与虚线框逐字同一处),所以各减半个卡片。
                         // 关菜单由 buildMenu 统一负责(而且是在 onClick **之后**才关)。
-                        mergeGhost(() => { createNode(t.id, p.x - 75, p.y - 28); });
+                        const size = defaultNodeSize(t.id);
+                        if (ghostEl) {
+                            ghostEl.style.width = `${size.width}px`;
+                            ghostEl.style.height = `${size.height}px`;
+                            ghostEl.style.left = `${Math.round(p.x - size.width / 2)}px`;
+                            ghostEl.style.top = `${Math.round(p.y - size.height / 2)}px`;
+                        }
+                        mergeGhost(() => { createNode(t.id, p.x - size.width / 2, p.y - size.height / 2); });
                     },
                 });
             }
@@ -2080,11 +2640,20 @@ function setup(host, ctx, store) {
         buildMenu(items, ev, 40);
     }
 
+    function defaultNodeSize(typeId) {
+        if (typeId === 'text') return { width: 280, height: 92 };
+        if (typeId === 'run') return { width: 176, height: 92 };
+        if (typeId === 'word-file') return { width: 290, height: 112 };
+        if (typeId === 'result') return { width: 280, height: 184 };
+        if (typeId === 'wps-file') return { width: 248, height: 96 };
+        return { width: 150, height: 56 };
+    }
+
     /**
      * 卡片上的菜单。
      *
      * ⚠️ 右键**不改动多选**,但要分清两种情况:点中的卡片已在选中里 → 动作就是对**所选**
-     *    做的(与检视器一致);不在 → 先把选中切到它。否则会出现"右键一个没选中的卡片、
+     *    做的;不在 → 先把选中切到它。否则会出现"右键一个没选中的卡片、
      *    菜单写着「删除所选(3)」、删掉的却是另外三个" —— 那是真实的误删。
      */
     function openNodeMenu(ev, nodeId) {
@@ -2095,24 +2664,30 @@ function setup(host, ctx, store) {
             state.selection.add(nodeId);
             state.editing = null;
             repaintSelection();
-            renderInspector();
         }
         const many = state.selection.size;
         const type = typeById(node.type);
         const items = [];
-        if (many === 1) {
+        if (many === 1 && ['wps-file', 'word-file'].includes(node.type)) {
+            items.push({
+                label: '打开文件',
+                hint: node.type === 'word-file' ? 'Word 文档' : 'WPS Office',
+                onClick: () => { void openOfficeFileNode(node); },
+            });
+        }
+        if (many === 1 && !['run', 'result', 'wps-file', 'word-file'].includes(node.type)) {
             items.push({
                 label: '编辑',
                 hint: type?.label ?? '',
                 onClick: () => { state.editing = nodeId; render(); },
             });
         }
-        items.push({
+        if (!['wps-file', 'word-file'].includes(node.type)) items.push({
             label: many > 1 ? `运行所选(${many})` : '运行到此',
             hint: many > 1 ? '' : '跑它和它的上游',
             onClick: () => { void runGraph(many > 1 ? null : nodeId, false); },
         });
-        if (many === 1) {
+        if (many === 1 && !['wps-file', 'word-file'].includes(node.type)) {
             items.push({
                 label: '重跑',
                 hint: '忽略缓存',
@@ -2125,7 +2700,7 @@ function setup(host, ctx, store) {
             onClick: () => { copySelectedNodes(); },
         });
         if (many > 1) {
-            items.push({ label: '取消选中', hint: '', onClick: () => { state.selection.clear(); state.editing = null; repaintSelection(); renderInspector(); } });
+            items.push({ label: '取消选中', hint: '', onClick: () => { state.selection.clear(); state.editing = null; repaintSelection(); } });
         }
         items.push({ sep: true });
         items.push({
@@ -2140,8 +2715,7 @@ function setup(host, ctx, store) {
     }
 
     /**
-     * 造一个节点。**两条入口共用**(检视器那个「加」、画布右键菜单):
-     * 各写一遍迟早会长出不一致 —— 默认参数的填法、id 规则、选中与保存的时机都在这里。
+     * 造一个节点。画布右键菜单统一走这里，避免默认参数、id 规则、选中和保存时机不一致。
      */
     function createNode(typeId, x, y) {
         const node = makeGraphNode(typeId, x, y);
@@ -2179,6 +2753,7 @@ function setup(host, ctx, store) {
             y: Math.round(y),
             params: { ...Object.fromEntries((t.params ?? []).map((p) => [p.key, p.default ?? ''])),
                 ...(options.params ?? {}) },
+            ...(typeof options.outputText === 'string' ? { outputText: options.outputText } : {}),
         };
         state.graph.nodes.push(node);
         return node;
@@ -2207,6 +2782,7 @@ function setup(host, ctx, store) {
                     x: (Number(node.x) || 0) - left,
                     y: (Number(node.y) || 0) - top,
                     params: cloneGraphValue(node.params ?? {}),
+                    ...(typeof node.outputText === 'string' ? { outputText: node.outputText } : {}),
                     ...(Number.isFinite(node.w) ? { w: node.w } : {}),
                     ...(Number.isFinite(node.h) ? { h: node.h } : {}),
                 })),
@@ -2251,7 +2827,7 @@ function setup(host, ctx, store) {
                 return false;
             }
             const node = makeGraphNode(source.type, x - 75 + source.x, y - 28 + source.y,
-                { title: source.title, params });
+                { title: source.title, params, outputText: source.outputText });
             if (node === null) {
                 for (const created of made) state.graph.nodes = state.graph.nodes.filter((item) => item.id !== created.id);
                 setStatus('粘贴失败：画布尚未就绪');
@@ -2279,7 +2855,7 @@ function setup(host, ctx, store) {
 
     /**
      * 删掉当前选中的那些节点(连同挂在它们身上的边)。
-     * 检视器与右键菜单共用 —— 两处各写一遍迟早漏掉一处(比如忘了清选中)。
+     * 右键菜单与 Delete 快捷键共用 —— 两处各写一遍迟早漏掉一处(比如忘了清选中)。
      */
     function deleteSelected() {
         if (!state.graph || state.selection.size === 0) return;
@@ -2290,147 +2866,6 @@ function setup(host, ctx, store) {
         state.editing = null;
         render();
         scheduleSave();
-    }
-
-    /* ---------------- 检视器 ---------------- */
-
-    function renderInspector() {
-        el.inspector.innerHTML = '';
-        const ids = [...state.selection];
-        const head = document.createElement('h4');
-        if (ids.length === 0) {
-            head.textContent = '没有选中节点';
-            const hint = document.createElement('p');
-            hint.className = 'drama-hint';
-            hint.textContent = '点一下卡片选中;再点一下进入编辑。参数改完自动保存。';
-            el.inspector.append(head, hint, addNodeBox());
-            return;
-        }
-        if (ids.length > 1) {
-            head.textContent = `选中 ${ids.length} 个`;
-            const runSel = btn(`运行所选(${ids.length})`, 'drama-runsel pri');
-            runSel.addEventListener('click', () => runGraph(null, false));
-            const delSel = btn('删除所选', 'drama-delsel');
-            delSel.addEventListener('click', () => { deleteSelected(); });
-            const clear = btn('取消选中', 'drama-clear');
-            clear.addEventListener('click', () => {
-                state.selection.clear();
-                repaintSelection();
-                renderInspector();
-            });
-            el.inspector.append(head, runSel, delSel, clear);
-            return;
-        }
-
-        const node = nodeById(ids[0]);
-        if (!node) {
-            renderInspector();
-            return;
-        }
-        const type = typeById(node.type);
-        head.textContent = node.title ?? type?.label ?? node.id;
-        const sub = document.createElement('div');
-        sub.className = 'drama-node-path';
-        sub.textContent = `${node.type} · ${type?.category ?? ''}`;
-        el.inspector.append(head, sub);
-
-        const run = state.graph.runs?.[node.id];
-        const kv = (k, v) => {
-            const row = document.createElement('div');
-            row.className = 'drama-kv';
-            const a = document.createElement('span');
-            a.textContent = k;
-            const b = document.createElement('b');
-            b.textContent = v;
-            row.append(a, b);
-            return row;
-        };
-        el.inspector.append(
-            kv('状态', run ? `${run.status ?? '-'}` : '还没跑过'),
-            kv('尺寸', `${nodeSnapBox(node).width} × ${nodeSnapBox(node).height}`),
-            kv('指纹', run?.fp ? String(run.fp).slice(0, 8) : '-'),
-            kv('耗时ms', run?.ms !== undefined ? String(run.ms) : '-'),
-        );
-        if (run?.error) {
-            const err = document.createElement('div');
-            err.className = 'drama-error';
-            err.textContent = run.error;
-            el.inspector.appendChild(err);
-        }
-        if (node.type === 'llm' && run?.file) {
-            const outputBox = document.createElement('div');
-            outputBox.className = 'drama-generated-output';
-            const location = document.createElement('div');
-            location.className = 'drama-node-path';
-            location.textContent = `文本文件：${run.file}`;
-            const view = btn('查看全文', 'drama-view-output');
-            view.addEventListener('click', async () => {
-                view.disabled = true;
-                try {
-                    const result = await ctx.drama.readOutput(state.project, run.file);
-                    if (!outputBox.isConnected) return;
-                    let full = outputBox.querySelector('textarea');
-                    if (!full) {
-                        full = document.createElement('textarea');
-                        full.readOnly = true;
-                        full.setAttribute('aria-label', '文本生成结果全文');
-                        outputBox.appendChild(full);
-                    }
-                    full.value = result.text;
-                    view.textContent = '刷新全文';
-                } catch (err) {
-                    setStatus(`读取文本失败：${err.message}`);
-                } finally {
-                    view.disabled = false;
-                }
-            });
-            outputBox.append(location, view);
-            el.inspector.appendChild(outputBox);
-        }
-
-        const actions = document.createElement('div');
-        actions.className = 'drama-actions';
-        const runHere = btn('运行到此', 'drama-runhere pri');
-        runHere.addEventListener('click', () => runGraph(node.id, false));
-        const rerun = btn('重跑', 'drama-rerun');
-        rerun.addEventListener('click', () => runGraph(node.id, true));
-        const del = btn('删除', 'drama-del');
-        del.addEventListener('click', () => { deleteSelected(); });
-        if (node.type === 'skill') {
-            const hint = document.createElement('p');
-            hint.className = 'drama-hint';
-            hint.textContent = '技能无需单独运行。将输出连入生成节点的“技能”端口，接收端按自然语言需求启用。';
-            el.inspector.appendChild(hint);
-            actions.append(del);
-        } else actions.append(runHere, rerun, del);
-        el.inspector.appendChild(actions);
-    }
-
-    /** 加节点(P1 的入口放在检视器里;左侧节点库留到 P1.5)。 */
-    function addNodeBox() {
-        const box = document.createElement('div');
-        box.className = 'drama-add';
-        const cap = document.createElement('div');
-        cap.className = 'drama-hint';
-        cap.textContent = '加一个节点:';
-        const sel = document.createElement('select');
-        sel.setAttribute('aria-label', '节点类型');
-        for (const t of state.types) {
-            const o = document.createElement('option');
-            o.value = t.id;
-            o.textContent = `${t.label}(${t.category})`;
-            sel.appendChild(o);
-        }
-        const add = btn('加', 'drama-addbtn pri');
-        add.addEventListener('click', () => {
-            if (!state.graph) return;
-            const n = (state.graph.nodes ?? []).length;
-            // 检视器这条入口保持原来的**网格落点**(一格一格排开,不会叠在一起);
-            // 画布右键那条是按鼠标落点。两条都走同一个 createNode。
-            createNode(sel.value, 40 + (n % 4) * 190, 40 + Math.floor(n / 4) * 140);
-        });
-        box.append(cap, sel, add);
-        return box;
     }
 
     /* ---------------- 保存与跑图 ---------------- */
@@ -2450,7 +2885,7 @@ function setup(host, ctx, store) {
         }, 400);
     }
 
-    async function runGraph(target, force) {
+    async function runGraph(target, force, createOutput = false) {
         if (state.busy || !state.project) return;
         state.busy = true;
         const runProject = state.project;
@@ -2467,8 +2902,57 @@ function setup(host, ctx, store) {
             const r = await ctx.drama.run({ project: runProject, target, force, runId });
             if (state.project === runProject) {
                 state.graph = r.state.graph;
+                let createdOutput = null;
+                let outputSaveError = null;
+                const completedNode = nodeById(target);
+                const completedRun = state.graph.runs?.[target];
+                if (createOutput && completedNode?.type === 'run'
+                    && ['ok', 'cached'].includes(completedRun?.status)) {
+                    const generated = completedRun.file
+                        ? await fullOutputText(runProject, completedRun.file)
+                        : String(completedRun.output ?? '');
+                    if (state.project === runProject && generated.trim() !== '') {
+                        const box = nodeSnapBox(completedNode);
+                        const existingResults = state.graph.nodes.filter((item) => item.type === 'result'
+                            && /^运行结果(?: \d+)?$/.test(String(item.title ?? ''))).length;
+                        const resultTitle = existingResults === 0 ? '运行结果' : `运行结果 ${existingResults + 1}`;
+                        let resultY = completedNode.y ?? 0;
+                        const resultX = (completedNode.x ?? 0) + box.width + 48;
+                        const collides = (candidateY) => state.graph.nodes.some((item) => {
+                            const other = nodeSnapBox(item);
+                            return resultX < other.x + other.width + 18
+                                && resultX + 280 + 18 > other.x
+                                && candidateY < other.y + other.height + 16
+                                && candidateY + 184 + 16 > other.y;
+                        });
+                        let attempts = 0;
+                        while (collides(resultY) && attempts < 30) { resultY += 200; attempts += 1; }
+                        createdOutput = makeGraphNode('result', resultX, resultY,
+                            { title: resultTitle, outputText: generated });
+                        if (createdOutput) {
+                            state.graph.edges.push({ from: completedNode.id, fromPort: 0,
+                                to: createdOutput.id, toPort: 0 });
+                            state.selection.clear();
+                            state.selection.add(createdOutput.id);
+                            state.editing = null;
+                            state.fresh = createdOutput.id;
+                            try { await ctx.drama.save(runProject, state.graph); }
+                            catch (error) { outputSaveError = error; }
+                        }
+                    }
+                }
                 render();
-                setStatus(r.summary ?? '跑完了');
+                if (createdOutput) {
+                    revealNodeInViewport(createdOutput);
+                    const card = el.world.querySelector(`.drama-node[data-node-id="${createdOutput.id}"]`);
+                    setTimeout(() => {
+                        if (state.fresh === createdOutput.id) state.fresh = null;
+                        card?.classList.remove('fresh');
+                    }, 430);
+                    setStatus(outputSaveError
+                        ? `结果已创建，但保存失败：${outputSaveError.message}`
+                        : `已创建「${createdOutput.title}」`);
+                } else setStatus(r.summary ?? '跑完了');
             }
         } catch (err) {
             if (state.project === runProject) setStatus(`跑图失败:${err.message}`);
@@ -2479,12 +2963,24 @@ function setup(host, ctx, store) {
             }
             state.activeRunId = null;
             state.busy = false;
+            el.world.querySelectorAll('.drama-run-button').forEach((button) => { button.disabled = false; });
         }
     }
 
     function setStatus(text) {
         state.status = text;
         renderNote();
+    }
+
+    async function openOfficeFileNode(node) {
+        const project = state.project;
+        if (!project || typeof node?.params?.file !== 'string') return;
+        try {
+            await ctx.drama.openOfficeFile(project, node.params.file);
+            if (state.project === project) setStatus(`已打开 ${node.params?.name ?? node.title}`);
+        } catch (error) {
+            if (state.project === project) setStatus(`打开文件失败：${error.message}`);
+        }
     }
 
     function renderNote() {
@@ -2537,14 +3033,16 @@ function setup(host, ctx, store) {
             setStatus('先选一个项目');
             return;
         }
-        // 工具条这条就是「＋ 导入」的另一个入口:目标换成**当前选中的那个文本节点**。
+        // 工具条这条就是参数行「＋ 导入」的另一个入口:目标是**当前选中的可导入节点**。
         // ⚠️ 没选中、或者选中的不是带 importable 参数的节点 → 说清楚,**不猜**一个节点去灌:
         //    猜错就是把别人正在写的稿子替换掉了。
         const pickedId = [...state.selection][0] ?? null;
         const node = pickedId === null ? null : nodeById(pickedId);
         const param = typeById(node?.type)?.params?.find((p) => p.importable === true) ?? null;
         if (node === null || param === null) {
-            setStatus('先在画布上选一个「文本 / 剧本」节点,再导入');
+            setStatus(node?.type === 'text'
+                ? '文本节点只支持手动输入纯文本'
+                : '请选择带文本输入的节点,再导入');
             return;
         }
         // 顺手让它进编辑态:导入完内容就摆在眼前(不然只剩状态行一句话,用户还得自己双击)
@@ -2557,6 +3055,120 @@ function setup(host, ctx, store) {
         );
         await importInto(node, param, input ?? null, null);
     });
+
+    el.importOfficeBtn.addEventListener('click', () => { void importOfficeFiles(); });
+    el.importWordBtn.addEventListener('click', () => { void importOfficeFiles({ wordOnly: true }); });
+
+    async function importOfficeFiles({ files = [], point = null, wordOnly = false } = {}) {
+        const project = state.project;
+        const projectGraph = state.graph;
+        if (!project || !projectGraph) {
+            setStatus('先选一个项目，再导入文件');
+            return;
+        }
+        const extensions = wordOnly ? ['docx'] : (state.officeFileImport?.extensions
+            ?? ['wps', 'et', 'dps', 'wpt', 'ett', 'dpt', 'docx', 'xlsx', 'pptx']);
+        try {
+            let sources = Array.from(files ?? []).map(file => ({ file }));
+            if (sources.length === 0) {
+                const picked = await ctx.dialog.openFile({ multiple: true, filters: [
+                    { name: wordOnly ? 'Word 文档' : 'WPS / Office 文件', extensions },
+                    { name: '全部文件', extensions: ['*'] },
+                ] });
+                const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
+                if (paths.length === 0) { setStatus('已取消导入'); return; }
+                sources = paths.map(path => ({ path }));
+            }
+            if (state.project !== project || state.graph !== projectGraph) {
+                setStatus('项目已切换，请在当前项目重新导入');
+                return;
+            }
+
+            el.importWordBtn.disabled = true;
+            el.importOfficeBtn.disabled = true;
+            const rect = el.canvas.getBoundingClientRect();
+            const dropPoint = point && Number.isFinite(Number(point.clientX))
+                && Number.isFinite(Number(point.clientY))
+                ? point : { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
+            const center = canvasPoint(dropPoint);
+            const created = [];
+            const failures = [];
+            const findPosition = (size) => {
+                const startX = center.x - size.width / 2;
+                const startY = center.y - size.height / 2;
+                for (let attempt = 0; attempt < 80; attempt += 1) {
+                    const column = attempt % 2;
+                    const row = Math.floor(attempt / 2);
+                    const x = startX + column * (size.width + 26);
+                    const y = startY + row * (size.height + 24);
+                    const collision = projectGraph.nodes.some((other) => {
+                        const box = nodeSnapBox(other);
+                        return x < box.x + box.width + 16 && x + size.width + 16 > box.x
+                            && y < box.y + box.height + 14 && y + size.height + 14 > box.y;
+                    });
+                    if (!collision) return { x, y };
+                }
+                return { x: startX, y: startY + projectGraph.nodes.length * (size.height + 24) };
+            };
+
+            for (const source of sources) {
+                if (state.project !== project || state.graph !== projectGraph) break;
+                try {
+                    const sourceName = source.file?.name ?? source.path ?? '';
+                    if (wordOnly && !/\.docx$/i.test(sourceName)) {
+                        throw new Error('Word 文件节点只支持 .docx');
+                    }
+                    const imported = source.file
+                        ? await ctx.drama.importDroppedOfficeFile(project, source.file)
+                        : await ctx.drama.importOfficeFile(project, source.path);
+                    if (state.project !== project || state.graph !== projectGraph) break;
+                    const nodeType = imported.extension === 'docx' ? 'word-file' : 'wps-file';
+                    const size = defaultNodeSize(nodeType);
+                    const position = findPosition(size);
+                    const node = makeGraphNode(nodeType, position.x, position.y, {
+                        title: nodeType === 'word-file' ? 'Word 文件' : imported.name,
+                        params: {
+                            file: imported.file,
+                            name: imported.name,
+                            extension: imported.extension,
+                            size: imported.size,
+                        },
+                    });
+                    if (node === null) throw new Error(nodeType === 'word-file'
+                        ? 'Word 文件节点类型尚未就绪' : 'WPS 文件节点类型尚未就绪');
+                    node.w = size.width;
+                    node.h = size.height;
+                    created.push(node);
+                } catch (error) { failures.push(error.message); }
+            }
+
+            if (created.length > 0 && state.project === project && state.graph === projectGraph) {
+                state.selection.clear();
+                state.selection.add(created.at(-1).id);
+                state.editing = null;
+                state.fresh = created.at(-1).id;
+                render();
+                try { await ctx.drama.save(project, projectGraph); }
+                catch (error) { failures.push(`节点保存失败：${error.message}`); }
+                const freshId = state.fresh;
+                const card = el.world.querySelector(`.drama-node[data-node-id="${freshId}"]`);
+                setTimeout(() => {
+                    if (state.fresh === freshId) state.fresh = null;
+                    card?.classList.remove('fresh');
+                }, 430);
+            }
+            if (failures.length > 0) {
+                setStatus(created.length > 0
+                    ? `已导入 ${created.length} 个文件；另有 ${failures.length} 个失败：${failures[0]}`
+                    : `导入失败：${failures[0]}`);
+            } else setStatus(`已导入 ${created.length} 个文件`);
+        } catch (error) {
+            setStatus(`${wordOnly ? '导入 Word 文件' : '导入 WPS 文件'}失败：${error.message}`);
+        } finally {
+            el.importWordBtn.disabled = !state.project;
+            el.importOfficeBtn.disabled = !state.project;
+        }
+    }
 
     // 键盘:Delete 删选中 / Esc 退出编辑
     const onKey = (ev) => {
@@ -2581,7 +3193,7 @@ function setup(host, ctx, store) {
             render();
         }
         if (ev.key === 'Delete' && state.selection.size > 0) {
-            // 与检视器、右键菜单同一条路(免得三处各写一遍,漏掉一处就出怪事)
+            // 与右键菜单同一条路(免得两处各写一遍,漏掉一处就出怪事)
             deleteSelected();
         }
     };
@@ -2600,7 +3212,7 @@ function setup(host, ctx, store) {
             renderEmpty(why);
             setStatus(why);
             el.note.textContent = why;
-            for (const b of [el.importBtn, el.runAll, el.runTo, el.forceRun]) b.disabled = true;
+            for (const b of [el.importBtn, el.importOfficeBtn, el.runAll, el.runTo, el.forceRun]) b.disabled = true;
             return;
         }
         // 名牌与"要不要去读图"都由 applyStore 定 —— 它订阅的是 store 的变化。
@@ -2623,7 +3235,7 @@ function setup(host, ctx, store) {
  * 项目面板:列表 + 新建 / 改名 / 删除,点一行就切换画布。
  *
  * 为什么单独一片面板(而不是在画布工具条上多塞几个按钮):
- *   · 画布那一格本来就挤(工具条、画布、检视器),项目是**另一件事**;
+ *   · 画布工具条属于画布操作,项目管理是**另一件事**;
  *   · 列表要能滚动、要能右键、要能就地改名 —— 塞进工具条就没地方了;
  *   · 它天然是可关的:不关心项目的人把这格关掉,画布照样用(选中项仍在 store 里)。
  *

@@ -1,9 +1,10 @@
 // 唯一的 CommonJS 文件。sandbox: true 下预加载不支持 ESM,所以扩展名必须是 .cjs。
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 // 频道路由表。渲染进程侧的第一道约束 —— 主进程对未注册的频道本来也会拒绝,
 // 但在这里挡住能让错误更早、更清楚地暴露出来。
 const ALLOWED_INVOKE = [
+    'appmenu:get',
     'kaiwu:plugins:scan',
     'kaiwu:plugins:registerManifest',
     'kaiwu:services:list',
@@ -15,6 +16,7 @@ const ALLOWED_INVOKE = [
     'kaiwu:dialog:openFile',
     // 选目录(插件想把数据放到笔记库之外时才用得上)。只回用户选中的那一个路径。
     'kaiwu:dialog:openDirectory',
+    'kaiwu:music:download',
     'kaiwu:shell:openExternal',
     // 「登录一次,自动记住 Cookie」:只递 pluginId,登录页/域名/投递目标全部来自
     // 插件清单,主进程还会把 Cookie 直接 POST 给该插件自己的服务(值不经过这里)。
@@ -40,6 +42,8 @@ const ALLOWED_INVOKE = [
     'notes:vault:set',
     'notes:index',
     'notes:read',
+    // 只读 DOCX 预览。渲染层只能递 Vault 内相对路径，转换在主进程执行。
+    'notes:readDocx',
     'notes:write',
     'notes:create',
     // 新建文件夹(侧栏树状列表用)。同样只递 Vault 内的相对目录名。
@@ -51,7 +55,7 @@ const ALLOWED_INVOKE = [
     // 与 notes:rename 的分工见主进程注释;两道防线(路径越界、移进自己的子孙)
     // 都在主进程,渲染进程只递相对路径。
     'notes:move',
-    // 用系统程序打开一个**非笔记文件**(树里那些 png / docx / json)。
+    // 用系统程序打开一个**非笔记文件**(树里那些 png / json 等；DOCX 使用 notes:readDocx)。
     // 只递相对路径,主进程过路径守卫后交给 shell.openPath。
     'notes:openPath',
     // 「命名好却保存不了」:标题输入框提交(回车/失焦)走这条。
@@ -119,11 +123,13 @@ const ALLOWED_INVOKE = [
     // 项目面板的两条:改名、删除(删除走系统回收站,可恢复)。
     'drama:rename',
     'drama:remove',
-    // 「＋ 导入」:把一个文本文件抽成纯文本交给面板(**只读**,不往项目里拷东西)。
+    // 可导入文本框的只读文件解析(**不往项目里拷东西**)。
     // 从前的 'drama:import'(拷进项目 + 在节点上记路径)与 source/useSource 两个参数一起删了。
     'drama:readText',
-    // 从系统拖进画布的 Word:只递文件名与字节,不递磁盘路径。
-    'drama:readDroppedText',
+    'drama:importOfficeFile',
+    'drama:openOfficeFile',
+    'drama:openGeneratedOutput',
+    // 读取项目内画面素材；导入与读取的路径校验都由主进程处理。
     'drama:media',
     'drama:importImage',
     // 「AI 会话」:会话台账(记录写在 <笔记库>/AI会话/ 里)。
@@ -142,10 +148,16 @@ const ALLOWED_INVOKE = [
 // 与 ALLOWED_INVOKE 分开列是因为方向不同:那条是"问一件事、等一个回答",
 // 这条只是通告 —— 主进程收到就办事,不回任何东西,所以不能走 invoke。
 const ALLOWED_SEND = [
+    'appmenu:action',
     // 「窗口」菜单要列出**程序目前所有的面板**,而这份表只有渲染层知道
     // (插件面板是插件激活时才登记的,主进程看不到)—— 布局一变就报一次,
     // 主进程据此重建菜单。递过去的只有 id / 标题 / 开着没有三种叶子字段。
     'kaiwu:panels:report',
+    'preferences:reset-layout',
+    'preferences:change-vault',
+    'preferences:motion-change',
+    'preferences:layout-text',
+    'preferences:layout-text-request',
 ];
 
 // 桥只活在预加载的闭包里,不挂在 window 上。
@@ -155,6 +167,18 @@ const bridge = {
             return Promise.reject(new Error('未授权的 IPC 频道: ' + channel));
         }
         return ipcRenderer.invoke(channel, payload);
+    },
+    importDroppedOfficeFile(project, file) {
+        if (typeof project !== 'string' || !project.trim()) {
+            return Promise.reject(new Error('请先选择项目'));
+        }
+        let filePath = '';
+        try { filePath = webUtils.getPathForFile(file); }
+        catch { return Promise.reject(new Error('无法读取拖入文件的本地路径')); }
+        if (typeof filePath !== 'string' || filePath === '') {
+            return Promise.reject(new Error('拖入的文件不在本地磁盘上'));
+        }
+        return bridge.invoke('drama:importOfficeFile', { project, path: filePath });
     },
     /**
      * 单向通报(没有返回值)。白名单与 invoke 那一份是同一个作用:挡住没登记过的频道,
@@ -220,6 +244,17 @@ const bridge = {
             tools: Array.isArray(tools) ? tools : [],
         });
     },
+    getApplicationMenu() {
+        return bridge.invoke('appmenu:get');
+    },
+    onApplicationMenuChange(callback) {
+        if (typeof callback !== 'function') throw new Error('onApplicationMenuChange 需要一个函数');
+        return bridge.on('appmenu:state', callback);
+    },
+    requestApplicationMenuAction(action) {
+        if (typeof action !== 'string') throw new Error('菜单动作必须是字符串');
+        bridge.send('appmenu:action', action);
+    },
     /**
      * 订阅主进程的「把某个面板加进窗口」命令(`menu:add-view`)。
      *
@@ -233,9 +268,41 @@ const bridge = {
         }
         return bridge.on('menu:add-view', callback);
     },
-    onOpenPreferences(callback) {
-        if (typeof callback !== 'function') throw new Error('onOpenPreferences 需要一个函数');
-        return bridge.on('menu:open-preferences', () => callback());
+    requestPreferencesResetLayout() {
+        bridge.send('preferences:reset-layout');
+    },
+    requestPreferencesChangeVault() {
+        bridge.send('preferences:change-vault');
+    },
+    requestPreferencesMotionChange(off) {
+        if (typeof off !== 'boolean') throw new Error('动效设置必须是布尔值');
+        bridge.send('preferences:motion-change', { off });
+    },
+    onPreferencesResetLayout(callback) {
+        if (typeof callback !== 'function') throw new Error('onPreferencesResetLayout 需要一个函数');
+        return bridge.on('preferences:main-reset-layout', callback);
+    },
+    onPreferencesChangeVault(callback) {
+        if (typeof callback !== 'function') throw new Error('onPreferencesChangeVault 需要一个函数');
+        return bridge.on('preferences:main-change-vault', callback);
+    },
+    onPreferencesMotionChange(callback) {
+        if (typeof callback !== 'function') throw new Error('onPreferencesMotionChange 需要一个函数');
+        return bridge.on('preferences:main-motion-change', callback);
+    },
+    reportPreferencesLayoutText(text) {
+        bridge.send('preferences:layout-text', { text: String(text ?? '') });
+    },
+    requestPreferencesLayoutText() {
+        bridge.send('preferences:layout-text-request');
+    },
+    onPreferencesLayoutTextRequest(callback) {
+        if (typeof callback !== 'function') throw new Error('onPreferencesLayoutTextRequest 需要一个函数');
+        return bridge.on('preferences:main-layout-text-request', callback);
+    },
+    onPreferencesLayoutText(callback) {
+        if (typeof callback !== 'function') throw new Error('onPreferencesLayoutText 需要一个函数');
+        return bridge.on('preferences:layout-text', callback);
     },
 };
 

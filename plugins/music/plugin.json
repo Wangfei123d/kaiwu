@@ -6,7 +6,7 @@
   "author": "wangfei",
   "entry": "index.js",
   "order": 40,
-  "permissions": ["log", "services", "settings"],
+  "permissions": ["log", "services", "settings", "dialog"],
   "contributes": {
     "tools": [
       { "id": "music", "title": "音乐试听", "icon": "music",
@@ -21,7 +21,7 @@
         "args": ["src/server.js"],
         "port": 3300,
         "healthPath": "/",
-        "autoStart": true,
+        "autoStart": false,
         "stopOnExit": true
       }
     ]

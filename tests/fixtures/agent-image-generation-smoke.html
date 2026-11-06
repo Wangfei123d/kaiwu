@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../../app/styles/tokens.css">
+  <link rel="stylesheet" href="../../app/styles/base.css">
+  <link rel="stylesheet" href="../../app/styles/shell.css">
+  <style>html, body { margin: 0; width: 100%; height: 100%; } .agent-panel { width: 100%; height: 100%; }</style>
+</head>
+<body>
+  <section class="agent-panel" id="agentPanel">
+    <div id="agentStatus" class="agent-status agent-sr-only"><button id="agentRetry">重试</button></div>
+    <div id="agentCredential" hidden></div>
+    <div id="agentMessages" class="agent-messages"></div>
+    <footer class="agent-footer">
+      <div class="agent-ctx-row" hidden><span class="agent-ctx-hint" hidden></span></div>
+      <textarea id="agentInput" rows="1"></textarea>
+      <div class="agent-act-row"><button id="agentSend"></button></div>
+    </footer>
+  </section>
+  <script type="module">
+    import { createAgentPanel } from '../../app/agent/panel.js';
+    const $ = id => document.getElementById(id);
+    const check = (condition, message) => { if (!condition) throw new Error(message); };
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+    async function waitFor(predicate, label) {
+      const until = performance.now() + 3000;
+      while (performance.now() < until) {
+        const result = predicate();
+        if (result) return result;
+        await delay(20);
+      }
+      throw new Error(`等待超时：${label}`);
+    }
+    window.runImageGenerationSmoke = async (imageUrl) => {
+      const bridge = { async invoke(channel) {
+        if (channel === 'agent:status') return { state: 'stopped', pid: null };
+        if (channel === 'agent:credentials') return { ok: true, source: 'fixture' };
+        if (channel === 'agent:start') return { ok: true, status: { state: 'ready', pid: 1 } };
+        return {};
+      }, onAgentEvent() { return () => {}; } };
+      const panel = createAgentPanel({
+        els: { panel: $('agentPanel'), statusEl: $('agentStatus'), retryBtn: $('agentRetry'),
+          credentialEl: $('agentCredential'), messagesEl: $('agentMessages'), inputEl: $('agentInput'), sendBtn: $('agentSend') },
+        bridge, getNote: () => null, log: { warn() {}, error() {} },
+      });
+      try {
+        await panel.mount();
+        $('agentInput').value = '生成一张角色图';
+        await panel.send();
+        panel.onEvent({ kind: 'update', sessionId: 's1', update: {
+          sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: '我来生成图片。' },
+        } });
+        panel.onEvent({ kind: 'update', sessionId: 's1', update: {
+          sessionUpdate: 'tool_call', toolCallId: 'recorded-image-call', title: 'generate_image', kind: 'other', status: 'pending',
+        } });
+        const view = await waitFor(() => document.querySelector('.agent-image-generation'), '生图状态图');
+        const group = document.querySelector('.agent-group');
+        check(group && !group.open, '夹具必须重现录屏的收起工具组');
+        check(!view.closest('details'), '动效被收起的工具组隐藏');
+        const rect = view.getBoundingClientRect();
+        check(rect.width > 100 && rect.height >= 120, `生图动效不可见：${rect.width} × ${rect.height}`);
+        check(getComputedStyle(view).display !== 'none', '生图动效被 CSS 隐藏');
+        const back = view.querySelector('.agent-generation-back');
+        const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        await delay(120);
+        const before = getComputedStyle(back).transform;
+        await delay(180);
+        const after = getComputedStyle(back).transform;
+        const animations = view.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length;
+        if (!reducedMotion) {
+          check(animations >= 4, `只有 ${animations} 个动画在运行`);
+          check(before !== after, '远景没有发生真实位移');
+        }
+        panel.onEvent({ kind: 'update', sessionId: 's1', update: {
+          sessionUpdate: 'tool_call_update', toolCallId: 'recorded-image-call', status: 'in_progress',
+        } });
+        await delay(50);
+        check(document.querySelector('.agent-image-generation') === view, '状态更新重建了动效');
+        panel.onEvent({ kind: 'update', sessionId: 's1', update: {
+          sessionUpdate: 'tool_call_update', toolCallId: 'recorded-image-call', status: 'completed',
+        } });
+        await delay(50);
+        check(document.querySelector('.agent-image-generation') === view, '完成事件提前移除了等待框');
+        panel.onEvent({ kind: 'update', sessionId: 's1', update: {
+          sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `\n![结果](${imageUrl})\n图片直链：${imageUrl}\n` },
+        } });
+        panel.onEvent({ kind: 'prompt-end', sessionId: 's1' });
+        await waitFor(() => view.getAttribute('data-state') === 'ready', '结果在原框载入');
+        const resultImage = view.querySelector('img');
+        check(resultImage && resultImage.naturalWidth === 120 && resultImage.naturalHeight === 240, '测试竖图没有加载');
+        check(getComputedStyle(resultImage).objectFit === 'cover', '生成结果未填满框体');
+        const resultRect = view.getBoundingClientRect();
+        check(Math.abs(resultRect.width / resultRect.height - resultImage.naturalWidth / resultImage.naturalHeight) < 0.01,
+          '框体比例未匹配结果图片');
+        check(view.querySelector('.agent-generation-scene').hidden, '图片就绪后动画仍挡住结果');
+        check([...document.querySelectorAll('img')].filter(img => img.src === imageUrl).length === 1, '正文中重复显示结果图片');
+        check(view.querySelector('a').href === imageUrl, '查看原图入口不正确');
+        $('agentInput').value = '继续生成';
+        await panel.send();
+        panel.onEvent({ kind: 'update', sessionId: 's1', update: {
+          sessionUpdate: 'tool_call', toolCallId: 'cancel-image-call', title: 'generate_image', kind: 'other', status: 'in_progress',
+        } });
+        await waitFor(() => document.querySelector('.agent-image-generation[data-tool-call-id="cancel-image-call"]'), '第二次生图');
+        await panel.cancel();
+        check(!document.querySelector('.agent-image-generation[data-tool-call-id="cancel-image-call"]'), '取消后动画残留');
+        check(document.querySelector('.agent-image-generation') === view, '取消新任务丢失历史结果');
+        return { ok: true, width: rect.width, height: rect.height, outsideCollapsedGroup: true,
+          reducedMotion, runningAnimations: animations, before, after, reused: true, resultInSameFrame: true,
+          portraitContained: true, deduplicated: true, originalLink: true, historyRetained: true, cancelledRemoved: true };
+      } finally { panel.dispose(); }
+    };
+  </script>
+</body>
+</html>

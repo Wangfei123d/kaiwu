@@ -8,27 +8,25 @@ import { createSession } from './session.js';
 
 const imagePath = file => /\.(png|jpe?g|webp|gif|bmp)$/i.test(file);
 const notePath = file => /\.(md|txt)$/i.test(file);
+const canvasPath = file => typeof file === 'string' && /^画布\/[^/]+\.canvas$/.test(file);
 const safeUrl = value => { try { return ['http:','https:'].includes(new URL(value).protocol); } catch { return false; } };
 const uid = () => crypto.randomUUID();
 const contained = (a,b) => b.x>=a.x && b.y>=a.y && b.x+b.width<=a.x+a.width && b.y+b.height<=a.y+a.height;
 const overlaps = (a,b) => a.x<b.x+b.width && a.x+a.width>b.x && a.y<b.y+b.height && a.y+a.height>b.y;
 
 export function mountCanvas(host,ctx) {
-    const doc=host.ownerDocument;let dead=false,epoch=0,listEpoch=0,session=null,library={boards:[],notes:[],images:[],vault:null};
+    const doc=host.ownerDocument;let dead=false,epoch=0,listEpoch=0,session=null,library={boards:[],vault:null};
     let selected=new Set(),clipboard=null,editor=null,modal=null,gesture=null,portSource=null,nearbyPort=null,space=false,vaultMismatch=false,lastPointer={x:40,y:40},clickCandidate=null,inlineEditId=null,draggedPointer=false;
     const resources=new Map(),scrollNavigations=new Set(),unsubs=[];let refreshing=null,loadingPath=null;
     function el(tag,className,text) {const node=doc.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
     function button(text,action,className='') {const b=el('button',className,text);b.type='button';b.addEventListener('click',()=>Promise.resolve(action()).catch(showError));return b;}
     const pane=el('section','nc-pane');pane.tabIndex=0;pane.setAttribute('aria-label','笔记画布');
-    const side=el('aside','nc-sidebar'),sideHead=el('div','nc-sidebar-head');sideHead.append(el('strong','','画布'),button('新建画布',newBoard),button('刷新',()=>refreshLibrary()));
-    const boards=el('div','nc-boards'),assets=el('div','nc-assets');side.append(sideHead,boards,el('h3','','笔记与素材'),assets);
-    const main=el('main','nc-main'),toolbar=el('div','nc-toolbar'),title=el('strong','nc-board-title','笔记画布'),status=el('span','nc-status','正在读取笔记库…');status.setAttribute('role','status');
+    const main=el('main','nc-main');
+    const status=el('span','nc-status','');status.setAttribute('role','status');status.hidden=true;
     const imageInput=el('input','nc-image-input');imageInput.type='file';imageInput.accept='.png,.jpg,.jpeg,.webp,.gif,.bmp';imageInput.multiple=true;imageInput.hidden=true;
-    const tools=el('div','nc-tools');tools.append(button('文本',()=>addNode('text')),button('分组',()=>addGroup()),button('链接',()=>linkForm()),button('图片',()=>imageInput.click()),button('保存',()=>flushActive()),button('导出草稿',exportDraft),button('素材',()=>pane.classList.toggle('show-assets'),'nc-assets-toggle'));
-    toolbar.append(title,tools,status);const canvas=el('div','nc-canvas');canvas.tabIndex=0;canvas.setAttribute('aria-label','画布编辑区');
+    const canvas=el('div','nc-canvas');canvas.tabIndex=0;canvas.setAttribute('aria-label','画布编辑区');
     const world=el('div','nc-world'),zoomLayer=el('div','nc-zoom'),motionLayer=el('div','nc-motion'),svg=doc.createElementNS('http://www.w3.org/2000/svg','svg');svg.classList.add('nc-connections');const nodes=el('div','nc-nodes');motionLayer.append(svg,nodes);zoomLayer.append(motionLayer);world.append(zoomLayer);
-    const empty=el('div','nc-empty',''),hint=el('div','nc-hint','空白框选 · Space / 中键平移 · Ctrl + 滚轮缩放 · Alt 选择正文');
-    canvas.append(world,empty,hint);main.append(toolbar,canvas,imageInput);pane.append(side,main);host.replaceChildren(pane);
+    canvas.append(world,status);main.append(canvas,imageInput);pane.append(main);host.replaceChildren(pane);
     const media=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
     const reduced=()=>media?.matches===true || doc.documentElement.dataset.motion==='off';
     const visible=()=>!dead && !doc.hidden && host.isConnected && host.getClientRects().length>0 && host.offsetWidth>0 && host.offsetHeight>0;
@@ -39,9 +37,10 @@ export function mountCanvas(host,ctx) {
     },onSettled:()=>saveViewport()});
     nav.set({x:40,y:40,scale:1});
     function listen(target,type,fn,options) {target.addEventListener(type,fn,options);unsubs.push(()=>target.removeEventListener(type,fn,options));}
-    function showError(error) {if(!dead){status.textContent=error?.message??String(error);status.classList.add('error');}}
-    function updateStatus(){if(dead)return;status.classList.toggle('error',!!session?.error||vaultMismatch);
-        status.textContent=vaultMismatch?'笔记库已切换；旧草稿已保留，请导出':session?.error?`${session.error.message} · 草稿已保留，可重试保存`:editor?'正在编辑':session?.saving?'正在保存…':Object.keys(session?.extras.inlineMarkdown??{}).length?'原笔记有未保存修改 · 可在节点内保存':session?.dirty?'未保存 · 800ms 后自动保存':session?'已保存':library.reason||'新建画布，或从左侧打开画布';}
+    function showError(error) {if(!dead){status.textContent=error?.message??String(error);status.hidden=false;status.classList.add('error');}}
+    function updateStatus(){if(dead)return;
+        const message=vaultMismatch?'笔记库已切换；旧草稿已保留，请导出':session?.error?`${session.error.message} · 草稿已保留，可重试保存`:'';
+        status.textContent=message;status.hidden=!message;status.classList.toggle('error',!!message);}
     const editable=()=>session && !vaultMismatch && session.vault===library.vault;
     function mutate(fn){if(!editable()){showError(Error('请先打开当前笔记库的画布；旧草稿可导出'));return false;}session.edit(fn);return true;}
     function saveViewport(){if(editable()){const view=nav.view;if(JSON.stringify(session.graph.viewport)!==JSON.stringify(view))mutate(g=>g.viewport=view);}}
@@ -66,15 +65,9 @@ export function mountCanvas(host,ctx) {
         try {const result=await pending;if(dead||stamp!==listEpoch)return;
             const changed=library.vault!==result.vault;library=result;
             if(changed && session && session.vault!==result.vault){stopMotion();exitInlineEdit();clickCandidate=null;epoch++;vaultMismatch=true;resources.clear();if(editor){editor.setDisabled(true);editor.save.disabled=true;}nodes.querySelectorAll('.live-markdown-content').forEach(content=>{content.contentEditable='false';content.setAttribute('aria-disabled','true');content.closest('.nc-node')?.querySelectorAll('.live-markdown-tool,.nc-note-save,.nc-note-reload').forEach(control=>control.disabled=true);});updateStatus();}
-            renderLibrary();
             if(!session && result.boards.length)await openBoard(result.boards[0].path);
-            else if(!session){empty.hidden=false;empty.textContent=result.reason||'这座笔记库还没有画布。点击「新建画布」开始。';updateStatus();}
+            else if(!session)updateStatus();
         } catch(err){showError(err);} finally {if(refreshing===pending)refreshing=null;}
-    }
-    function renderLibrary(){boards.replaceChildren();assets.replaceChildren();
-        for(const board of library.boards){const b=button(board.name,()=>openBoard(board.path),'nc-board-row');b.dataset.path=board.path;b.classList.toggle('active',board.path===session?.path&&library.vault===session?.vault);boards.append(b);}
-        for(const item of [...library.notes,...library.images]){const b=button(item.title??item.name,()=>addFile(item.path),'nc-asset-row');b.dataset.file=item.path;b.draggable=true;b.title=item.path;b.addEventListener('dragstart',event=>event.dataTransfer.setData('application/x-kaiwu-note',JSON.stringify({file:item.path,vault:library.vault})));assets.append(b);}
-        sideHead.querySelectorAll('button')[0].disabled=!library.vault;
     }
     async function flushActive(){if(editor && editor.readText()!==editor.original)throw Error('请先应用或保存当前编辑；编辑草稿已保留');if(vaultMismatch)throw Error('笔记库已切换；请导出旧草稿');if(session)await session.flush();updateStatus();}
     async function openBoard(path){
@@ -82,7 +75,8 @@ export function mountCanvas(host,ctx) {
         await flushActive();if(dead)return;const stamp=++epoch,vault=library.vault;stopMotion();
         loadingPath=path;let result;try{result=await ctx.canvas.read(path,vault);}finally{if(stamp===epoch)loadingPath=null;}if(dead||stamp!==epoch||vault!==library.vault||result.vault!==vault)return;
         session?.dispose();session=createSession({...result,write:ctx.canvas.write,changed:updateStatus});vaultMismatch=false;selected.clear();resources.clear();clearConnection();
-        title.textContent=path.split('/').pop().replace(/\.canvas$/i,'');const viewport=session.graph.viewport??{x:40,y:40,scale:1};zoomLayout.sync(viewport.scale);nav.set(viewport);renderLibrary();renderGraph();updateStatus();
+        const viewport=session.graph.viewport??{x:40,y:40,scale:1};zoomLayout.sync(viewport.scale);nav.set(viewport);renderGraph();updateStatus();
+        globalThis.dispatchEvent(new CustomEvent('kaiwu:canvas-opened',{detail:{path}}));
         const draft=session.extras.editor;if(draft)openEditorDraft(draft);
     }
     function closeModal(){modal?.remove();modal=null;}
@@ -91,10 +85,12 @@ export function mountCanvas(host,ctx) {
         const error=el('p','nc-form-error'),actions=el('div','nc-form-actions'),apply=el('button','',action);apply.type='submit';actions.append(button('取消',closeModal),apply);f.append(heading,input,error,actions);overlay.append(f);pane.append(overlay);modal=overlay;
         f.addEventListener('submit',async event=>{event.preventDefault();apply.disabled=true;try{await submit(input.value);if(modal===overlay)closeModal();}catch(err){error.textContent=err.message;}finally{apply.disabled=false;}});input.focus();return f;
     }
-    function newBoard(){if(!library.vault)return;form('新建画布','',async name=>{
+    function newBoard(){if(!library.vault){showError(Error(library.reason||'请先配置笔记库'));return;}form('新建画布','',async name=>{
         await flushActive();stopMotion();const vault=library.vault,stamp=++epoch,result=await ctx.canvas.create(name.trim(),vault);
         if(dead||stamp!==epoch||vault!==library.vault||result.vault!==vault)return;
-        session?.dispose();session=createSession({...result,write:ctx.canvas.write,changed:updateStatus});selected.clear();resources.clear();clearConnection();vaultMismatch=false;title.textContent=name.trim();zoomLayout.sync(1);nav.set({x:40,y:40,scale:1});renderGraph();updateStatus();await refreshLibrary();
+        session?.dispose();session=createSession({...result,write:ctx.canvas.write,changed:updateStatus});selected.clear();resources.clear();clearConnection();vaultMismatch=false;zoomLayout.sync(1);nav.set({x:40,y:40,scale:1});renderGraph();updateStatus();await refreshLibrary();
+        globalThis.dispatchEvent(new CustomEvent('kaiwu:canvas-opened',{detail:{path:result.path}}));
+        globalThis.dispatchEvent(new Event('kaiwu:canvas-list-changed'));
     },{action:'创建',placeholder:'画布名称'});}
     function addNode(type,fields={},point){
         let origin;
@@ -105,9 +101,9 @@ export function mountCanvas(host,ctx) {
         if(!mutate(g=>g.nodes.push(n)))return;selected=new Set([n.id]);renderGraph();return n;
     }
     function addFile(file,point){if(!notePath(file)&&!imagePath(file)){showError(Error('只支持 Markdown、TXT 和位图素材'));return;}return addNode('file',{file},point);}
-    function addGroup(){if(!editable())return;const members=session.graph.nodes.filter(n=>selected.has(n.id));let area;
+    function addGroup(point){if(!editable())return;const members=session.graph.nodes.filter(n=>selected.has(n.id));let area;
         if(members.length){const x=Math.min(...members.map(n=>n.x)),y=Math.min(...members.map(n=>n.y));area={x:x-30,y:y-40,width:Math.max(...members.map(n=>n.x+n.width))-x+60,height:Math.max(...members.map(n=>n.y+n.height))-y+70};}
-        else{const p=center();area={x:p.x-210,y:p.y-150,width:420,height:300};}
+        else{const p=point??center();area={x:p.x-210,y:p.y-150,width:420,height:300};}
         const group={id:uid(),type:'group',label:'分组',...area};mutate(g=>g.nodes.push(group));selected=new Set([group.id]);renderGraph();}
     function linkForm(){if(!editable())return;form('添加网页链接','',url=>{if(!safeUrl(url))throw Error('只支持有效的 HTTP/HTTPS 链接');addNode('link',{url,label:url});},{action:'添加',placeholder:'https://…'});}
     async function importImages(files,point=center()){
@@ -119,7 +115,7 @@ export function mountCanvas(host,ctx) {
             addFile(result.file,point);point={x:point.x+32,y:point.y+32};
         }imageInput.value='';
     }
-    function exportDraft(){if(!session)return;const data={path:session.path,graph:session.graph,editDrafts:session.extras};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=el('a');a.href=url;a.download=`${title.textContent||'画布'}-草稿.json`;pane.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),0);}
+    function exportDraft(){if(!session)return;const data={path:session.path,graph:session.graph,editDrafts:session.extras};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=el('a');a.href=url;a.download=`${session.path.split('/').pop().replace(/\.canvas$/i,'')||'画布'}-草稿.json`;pane.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),0);}
 
     // The facade prevents img.src from ever being set on a real image element.
     const safeDoc={createTextNode:text=>doc.createTextNode(text),createElement:tag=>{
@@ -193,7 +189,7 @@ export function mountCanvas(host,ctx) {
             body.append(error);attachBodyScroll(body.querySelector('.live-markdown-content'),node.id);
         } else {card.dataset.nodeEditable=String(result.editable!==false&&!vaultMismatch);body.textContent=result.text;body.classList.add('nc-text-body');}
     }catch(error){if(validAsync(stamp,current)&&card.isConnected)body.textContent=error.message;}}
-    function renderGraph(){exitInlineEdit();clickCandidate=null;draggedPointer=false;clearNearbyPort();stopBodyMotion();nodes.replaceChildren();svg.replaceChildren();if(!session){empty.hidden=false;return;}empty.hidden=true;
+    function renderGraph(){exitInlineEdit();clickCandidate=null;draggedPointer=false;clearNearbyPort();stopBodyMotion();nodes.replaceChildren();svg.replaceChildren();if(!session)return;
         for(const node of [...session.graph.nodes].sort((a,b)=>(a.type==='group'?-1:0)-(b.type==='group'?-1:0)))nodes.append(nodeElement(node));paintSelection();if(portSource)cardById(portSource.node)?.querySelector(`.nc-port[data-side="${portSource.side}"]`)?.classList.add('connecting');renderEdges();}
     function endpoint(node,side='right'){return{x:node.x+(side==='left'?0:side==='right'?node.width:node.width/2),y:node.y+(side==='top'?0:side==='bottom'?node.height:node.height/2)};}
     function renderEdges(){svg.replaceChildren();if(!session)return;const lookup=new Map(session.graph.nodes.map(n=>[n.id,n]));
@@ -265,7 +261,9 @@ export function mountCanvas(host,ctx) {
         if(card&&!selected.has(card.dataset.nodeId)){selected=new Set([card.dataset.nodeId]);paintSelection();}
         const menu=el('div','nc-context'),r=pane.getBoundingClientRect();menu.style.left=`${Math.max(0,Math.min(r.width-150,event.clientX-r.left))}px`;menu.style.top=`${Math.max(0,Math.min(r.height-120,event.clientY-r.top))}px`;
         const act=fn=>()=>{menu.remove();fn();};if(edge){const data=session.graph.edges.find(e=>e.id===edge.dataset.edgeId);menu.append(button('编辑标签',act(()=>edgeForm(data))),button('移除连线',act(()=>{mutate(g=>g.edges=g.edges.filter(e=>e.id!==data.id));renderEdges();})));}
-        else menu.append(button('复制',act(copySelection)),button('粘贴',act(()=>paste(worldPoint(event.clientX,event.clientY)))),button('删除',act(deleteSelection)));pane.append(menu);
+        else if(card){const node=session.graph.nodes.find(item=>item.id===card.dataset.nodeId);if(node&&canClickEdit(node,card))menu.append(button('编辑',act(()=>void editNode(node.id).catch(showError))));menu.append(button('复制',act(copySelection)),button('粘贴',act(()=>paste(worldPoint(event.clientX,event.clientY)))),button('删除',act(deleteSelection)),button('导出草稿',act(exportDraft)));}
+        else {const point=worldPoint(event.clientX,event.clientY);menu.append(button('新建文本',act(()=>addNode('text',{text:''},point))),button('新建分组',act(()=>addGroup(point))),button('添加链接',act(linkForm)),button('添加图片',act(()=>imageInput.click())),button('粘贴',act(()=>paste(point))),button('立即保存',act(()=>void flushActive().catch(showError))),button('导出草稿',act(exportDraft)));}
+        pane.append(menu);
     }
     function pointerDown(event){if(event.button===2||!editable())return;draggedPointer=false;pane.querySelector('.nc-context')?.remove();const target=event.target,card=target.closest('.nc-node'),port=target.closest('.nc-port');
         if(target.closest('input,textarea,select,a,button,[contenteditable="true"]')&&!port)return;
@@ -289,6 +287,14 @@ export function mountCanvas(host,ctx) {
         if(action.kind==='pan'){saveViewport();if(action.started && performance.now()-action.lastTime<80)nav.coast(action.vx,action.vy);}
         else if(action.kind==='port'&&action.started){const port=doc.elementFromPoint(event.clientX,event.clientY)?.closest('.nc-port');clearConnection();if(port){portSource={node:action.node,side:action.side};connect(port.closest('.nc-node').dataset.nodeId,port.dataset.side);}}
     }
+    async function openCanvasFromList(path){
+        if(!canvasPath(path))throw Error('画布路径无效');
+        if(!library.boards.some(board=>board.path===path))await refreshLibrary();
+        if(!library.boards.some(board=>board.path===path))throw Error('当前笔记库中找不到该画布');
+        await openBoard(path);
+    }
+    listen(globalThis,'kaiwu:open-canvas',event=>{void openCanvasFromList(event.detail?.path).catch(showError);});
+    listen(globalThis,'kaiwu:create-canvas',()=>{void (async()=>{if(refreshing)await refreshing;if(dead)return;if(!library.vault)await refreshLibrary();if(dead)return;newBoard();})().catch(showError);});
     listen(pane,'pointerdown',event=>{const target=event.target,insideNode=target.closest?.('.nc-node');if(inlineEditId){const surface=cardById(inlineEditId)?.querySelector('.live-markdown-content');if(!surface?.contains(target))exitInlineEdit();}if(!insideNode)clickCandidate=null;});
     listen(canvas,'pointerdown',pointerDown);listen(canvas,'pointermove',pointerMove);listen(canvas,'pointerup',pointerUp);listen(canvas,'click',nodeClick);listen(canvas,'dblclick',createTextAtDoubleClick);listen(canvas,'pointerleave',clearNearbyPort);listen(canvas,'pointercancel',stopMotion);listen(canvas,'contextmenu',contextMenu);
     listen(canvas,'wheel',event=>{event.preventDefault();wheelNavigation(event);},{passive:false});
@@ -297,7 +303,7 @@ export function mountCanvas(host,ctx) {
     listen(canvas,'dragover',event=>event.preventDefault());listen(canvas,'drop',event=>{event.preventDefault();const point=worldPoint(event.clientX,event.clientY),internal=event.dataTransfer.getData('application/x-kaiwu-note');if(internal){try{const data=JSON.parse(internal);if(data.vault!==session?.vault)throw Error('素材来自其它笔记库');addFile(data.file,point);}catch(err){showError(err);}}else importImages([...event.dataTransfer.files],point).catch(showError);});
     listen(imageInput,'change',()=>importImages([...imageInput.files]).catch(showError));
     const unsubDrop=onEnd(event=>{if(dead||event.insideTree||!editable()||!visible())return;const r=canvas.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)return;const path=event.payload?.relPath;if(notePath(path)||imagePath(path))addFile(path,worldPoint(event.clientX,event.clientY));});unsubs.push(unsubDrop);
-    const observer=new ResizeObserver(()=>{pane.classList.toggle('narrow',host.clientWidth<600);if(!visible())stopMotion();});observer.observe(host);unsubs.push(()=>observer.disconnect());
+    const observer=new ResizeObserver(()=>{if(!visible())stopMotion();});observer.observe(host);unsubs.push(()=>observer.disconnect());
     listen(globalThis,'focus',()=>refreshLibrary());const interval=setInterval(()=>{if(!dead&&visible()&&!refreshing)void refreshLibrary();},2500);unsubs.push(()=>clearInterval(interval));
     void refreshLibrary();
     return ()=>{if(dead)return;dead=true;epoch++;listEpoch++;stopMotion();nav.dispose();zoomLayout.dispose();stopBodyMotion();unsubs.forEach(fn=>fn());if(editor&&session)session.setExtras({editor:{kind:editor.kind,nodeId:editor.nodeId,file:editor.file,text:editor.readText(),original:editor.original,revision:editor.revision,editable:editor.editable,reason:editor.reason}});session?.dispose();host.replaceChildren();};

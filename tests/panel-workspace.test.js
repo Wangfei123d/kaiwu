@@ -27,6 +27,11 @@ class ClassList {
     add(...names) { for (const n of names) if (n) this.set.add(n); this.sync(); }
     remove(...names) { for (const n of names) this.set.delete(n); this.sync(); }
     contains(n) { return this.set.has(n); }
+    toggle(n, force) {
+        const enabled = force === undefined ? !this.set.has(n) : Boolean(force);
+        if (enabled) this.add(n); else this.remove(n);
+        return enabled;
+    }
     sync() { this.el._className = [...this.set].join(' '); }
     reset(str) { this.set = new Set(String(str ?? '').split(/\s+/).filter(Boolean)); this.sync(); }
 }
@@ -51,6 +56,7 @@ class El {
     set className(v) { this.classList.reset(v); }
     setAttribute(k, v) { this.attrs[k] = String(v); }
     getAttribute(k) { return this.attrs[k] ?? null; }
+    removeAttribute(k) { delete this.attrs[k]; }
     addEventListener(t, fn) { (this._listeners[t] ??= []).push(fn); }
     removeEventListener(t, fn) { this._listeners[t] = (this._listeners[t] ?? []).filter((f) => f !== fn); }
     fire(type, ev = {}) {
@@ -616,37 +622,20 @@ test('拖标签:落到自己那一格上 = 取消(同槽位没有落点)', async
     assert.equal(h.saved.length, 0);
 });
 
-test('尺寸角标:文本永远是真的,而"显不显示"由状态决定(拖动 / 聚焦分隔条时才淡入)', async () => {
+test('尺寸角标已移除:静止、拖动及聚焦分隔条时均不显示面板大小', async () => {
     const h = await setup({ initialTree: flatTree([236, 700, 250]) });
     h.layout();
-    const sizeEl = (id) => h.handleOf(id).querySelector('.pw-size');
-    const shown = (id) => `${Math.round(h.byId(id).rect.width)}×${Math.round(h.byId(id).rect.height)}`;
-    // 文本一直写对(常驻或按需都不该写错);静止时工作台上没有"正在调尺寸"的标记
-    assert.equal(sizeEl('notes').textContent, shown('notes'));
-    assert.equal(h.desk.classList.contains('pw-resizing'), false, '静止:没有标记 → CSS 让角标淡出');
-
-    // 拖分隔条:按下就挂标记(所有面板的角标一起显形),松手摘掉
+    const assertNoBadge = () => assert.equal(findAll(h.stack, (node) => node.classList.contains('pw-size')).length, 0);
+    assertNoBadge();
     const g = h.gutter('navResizer');
     g.fire('pointerdown', { button: 0, clientX: 236, clientY: 300 });
-    assert.equal(h.desk.classList.contains('pw-resizing'), true, '拖动中:标记在 → 角标显形');
-    const before = sizeEl('notes').textContent;
-    h.win.fire('pointermove', { clientX: 316, clientY: 300 });
-    h.layout();                                     // 替身 DOM 的矩形跟着新树重算
     h.win.fire('pointermove', { clientX: 340, clientY: 300 });
-    assert.notEqual(sizeEl('notes').textContent, before, '拖动中角标要跟着变,不能停在旧数字上');
-    assert.equal(sizeEl('notes').textContent, shown('notes'), '它与这一片当前的尺寸一致');
+    assertNoBadge();
     h.win.fire('pointerup', {});
-    assert.equal(h.desk.classList.contains('pw-resizing'), false, '松手:标记摘掉 → 角标淡出');
-
-    // 键盘用户:分隔条**拿到焦点**就等于"正在调它"(方向键随时会按)
     g.fire('focus');
-    assert.equal(h.desk.classList.contains('pw-resizing'), true);
+    assertNoBadge();
     g.fire('blur');
-    assert.equal(h.desk.classList.contains('pw-resizing'), false);
-
-    // ⚠️ 旧实现还有一条"拖**整片面板**时角标也显形"(`.pw-dragging`)。那条手势已按规格删除,
-    //    连同 CSS 里 `.pw-pane.pw-dragging .pw-size` 一起 —— 所以这里不再断言它。
-    //    现在的显形时机只有三个:悬停标签条 / 标签条里有焦点 / 正在拖分隔条。
+    assertNoBadge();
 });
 
 // ---------- 拖分隔条 ----------
@@ -659,6 +648,7 @@ test('拖分隔条:只动相邻两片,其余片不动;拖动中不写存档,松�
     const before = h.ws.getTree();
     g.fire('pointerdown', { button: 0, clientX: 236, clientY: 300 });
     assert.equal(g.dataset.dragging, '1', '拖动中给个标记(CSS 用它点亮分隔条)');
+    assert.equal(h.desk.classList.contains('pw-resizing'), true, '拖动期间停用侧栏宽度过渡');
     assert.equal(h.win.count('pointermove'), 1, '移动挂在 window 上(拖快了指针会离开那 7px)');
     h.win.fire('pointermove', { clientX: 316, clientY: 300 });
     const during = h.ws.getTree();
@@ -672,6 +662,7 @@ test('拖分隔条:只动相邻两片,其余片不动;拖动中不写存档,松�
     assert.equal(h.saved.length, 1, '松手才落一次');
     assert.equal(h.win.count('pointermove'), 0, '松手后要摘掉 window 上的监听器');
     assert.equal(g.dataset.dragging, undefined);
+    assert.equal(h.desk.classList.contains('pw-resizing'), false, '松手恢复侧栏收展过渡');
     // 真的宽了 80px:236 → 316(用渲染读数换算,不看具体百分比)
     const after = h.ws.getTree();
     const pair = after.sizes[0] + after.sizes[1];

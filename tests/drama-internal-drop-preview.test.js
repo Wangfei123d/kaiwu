@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { wireDrop } from '../plugins/drama/drop-bus.js';
 
-test('笔记列表捕获指针时，仍按文档坐标在画布显示并收起 Word 预落位', async () => {
+test('笔记列表拖入文本文件不创建文本节点，并提示只支持手动输入', async () => {
     const documentListeners = new Map();
     const canvasListeners = new Map();
     const doc = {
@@ -24,30 +24,23 @@ test('笔记列表捕获指针时，仍按文档坐标在画布显示并收起 W
         current: () => payload,
         onEnd(fn) { endDrag = fn; return () => {}; },
     };
-    const calls = [];
-    const preview = {
-        show: (...args) => calls.push(['show', ...args]),
-        hide: () => calls.push(['hide']),
-    };
+    const statuses = [];
     const off = await wireDrop({
-        bus, preview,
+        bus,
         ctx: {}, el: { canvas },
         state: { view: { x: 0, y: 0, scale: 1 }, graph: { nodes: [] }, selection: new Set() },
-        nodeById: () => null, createNode: () => null,
-        scheduleSave: () => {}, setStatus: () => {},
+        nodeById: () => null, createNode: () => { throw new Error('不应创建文本节点'); },
+        scheduleSave: () => {}, setStatus: (text) => statuses.push(text),
     });
 
     documentListeners.get('pointermove')({ clientX: 210, clientY: 270 });
-    assert.equal(canvas.dataset.drop, 'armed');
-    assert.deepEqual(calls.at(-1), ['show', '分镜.docx', 210, 270]);
-
-    documentListeners.get('pointermove')({ clientX: 800, clientY: 270 });
     assert.equal(canvas.dataset.drop, undefined);
-    assert.deepEqual(calls.at(-1), ['hide']);
 
-    documentListeners.get('pointermove')({ clientX: 220, clientY: 270 });
     endDrag({ payload, clientX: 220, clientY: 270, insideTree: true });
-    assert.deepEqual(calls.at(-1), ['hide']);
+    assert.deepEqual(statuses, []);
+    endDrag({ payload, clientX: 220, clientY: 270, insideTree: false });
+    assert.match(statuses.at(-1), /只支持手动输入纯文本/);
+    assert.equal(canvas.dataset.drop, undefined);
     off();
     assert.equal(documentListeners.has('pointermove'), false);
 });

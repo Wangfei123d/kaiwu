@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>画布连接线断开方案</title>
+<style>
+:root{color-scheme:dark;--bg:#111213;--surface:#191b1c;--card:#202324;--line:#383c3e;--text:#e8eaeb;--muted:#969da1;--blue:#79c9ff;--red:#ff7777;--green:#86d9ad}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI","Microsoft YaHei",sans-serif}.page{max-width:1060px;margin:auto;padding:27px 22px 34px}.head{display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:18px}.eyebrow{color:var(--blue);font-size:10px;letter-spacing:.15em}.head h1{margin:4px 0 0;font-size:23px}.head p{margin:0;color:var(--muted);font-size:12px}.switcher{display:flex;gap:5px;margin-bottom:10px}.option{padding:8px 13px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);font:inherit;cursor:pointer}.option:hover{background:#1b1e1f;color:var(--text)}.option.active{border-color:#39586d;background:#1c2a32;color:#dceefa}.option b{display:inline-grid;width:20px;height:20px;margin-right:5px;place-items:center;border-radius:6px;background:#2c3032;color:var(--blue);font-size:11px}.option.active b{background:var(--blue);color:#101214}.stage{overflow:hidden;border:1px solid #303436;border-radius:13px;background:#141617;box-shadow:0 14px 42px #0004}.toolbar{display:flex;height:46px;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #2d3133;background:var(--surface);color:var(--muted);font-size:11px}.project{margin-right:auto;color:#d8dddf}.zoom{font:10px var(--mono,Consolas,monospace);color:#767e82}.canvas{position:relative;height:420px;overflow:hidden;background-color:#141617;background-image:linear-gradient(#ffffff08 1px,transparent 1px),linear-gradient(90deg,#ffffff08 1px,transparent 1px);background-size:22px 22px}.node{position:absolute;width:184px;height:112px;padding:12px;border:1px solid #393e40;border-radius:10px;background:#1b1d1ef5;box-shadow:0 5px 18px #0004}.node.source{left:10%;top:145px}.node.target{right:10%;top:145px}.node-title{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600}.dot{width:7px;height:7px;border-radius:50%;background:var(--blue);box-shadow:0 0 9px #79c9ff70}.target .dot{background:#b7a1ff;box-shadow:0 0 9px #b7a1ff70}.node-sub{margin-top:8px;color:#8d9599;font-size:10px}.node-copy{margin-top:14px;color:#c4cbce;font-size:11px}.node-copy span{color:var(--muted)}svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}.wire{fill:none;stroke:#79c9ff;stroke-width:2;opacity:.78;pointer-events:none;transition:opacity .15s,stroke .15s}.wire-halo{fill:none;stroke:#79c9ff;stroke-width:12;opacity:0;pointer-events:none}.wire-hit{fill:none;stroke:transparent;stroke-width:26;pointer-events:stroke;cursor:grab}.wire-hit:active{cursor:grabbing}.port-hit{fill:transparent;stroke:transparent;stroke-width:2;cursor:grab;pointer-events:all}.port{fill:#79c9ff;stroke:#12202a;stroke-width:2;pointer-events:none}.port.target-port{fill:#b7a1ff}.canvas[data-mode="a"] .port-hit.end,.canvas[data-mode="c"] .port-hit.end{cursor:grab}.trash{position:absolute;right:18px;top:16px;display:none;min-width:128px;padding:8px 10px;border:1px dashed #6a4a4a;border-radius:9px;background:#271a1acc;color:#c99494;font-size:11px;text-align:center;transition:.16s}.canvas[data-mode="c"] .trash{display:block}.trash .bin{display:inline-grid;width:18px;height:18px;margin-right:6px;place-items:center;border-radius:5px;background:#503131;color:#ffaaaa;font-size:13px;vertical-align:-3px}.trash.hot{border-color:var(--red);background:#4b2424ed;color:#fff;box-shadow:0 0 0 3px #ff777728,0 0 24px #ff777730;transform:scale(1.04)}.canvas[data-mode="a"].dragging .wire{stroke:var(--blue);opacity:1}.canvas[data-mode="a"].invalid-drop .wire{stroke:var(--red);stroke-dasharray:5 5}.canvas[data-mode="b"].dragging .wire{stroke:#b5e4ff;opacity:1;filter:drop-shadow(0 0 7px #79c9ff88)}.canvas[data-mode="c"].dragging .wire{stroke:#f3a0a0;opacity:1}.canvas[data-mode="b"].dragging .wire-hit{cursor:grabbing}.status{position:absolute;left:50%;bottom:17px;transform:translateX(-50%);padding:6px 10px;border:1px solid #353a3c;border-radius:8px;background:#17191aeF;color:#b6bdc0;font-size:11px;white-space:nowrap;pointer-events:none}.status strong{color:var(--blue);font-weight:550}.caption{display:flex;align-items:center;gap:10px;min-height:50px;padding:10px 14px;color:var(--muted);font-size:11px}.caption strong{color:var(--blue);font-weight:550}.caption .tip{margin-left:auto;color:#737b7f}.reset{padding:5px 9px;border:1px solid #3b4143;border-radius:7px;background:#202324;color:#c8ced1;font:inherit;font-size:11px;cursor:pointer}.reset:hover{border-color:#567185;color:var(--blue)}.description{display:grid;grid-template-columns:1fr auto;gap:6px 20px;padding:12px 14px;border-top:1px solid #292d2f;background:#17191a;color:var(--muted);font-size:11px}.description strong{color:#dce2e4;font-weight:550}.description .gesture{color:#aab2b6;text-align:right}@media(max-width:650px){.page{padding:18px 12px}.head{display:block}.head p{margin-top:8px}.switcher{overflow:auto}.option{flex:none}.canvas{height:390px}.node{width:145px;height:100px;padding:9px}.node.source{left:5%;top:142px}.node.target{right:5%;top:142px}.node-copy{margin-top:10px;font-size:10px}.node-sub{font-size:9px}.description{grid-template-columns:1fr}.description .gesture{text-align:left}.caption .tip{display:none}}
+</style>
+</head>
+<body>
+<main class="page">
+<header class="head"><div><div class="eyebrow">CANVAS CONNECTION OPTIONS</div><h1>拖动连接线断开</h1></div><p>切换方案并拖动蓝色连接端点或连线，体验断开反馈</p></header>
+<nav class="switcher" aria-label="断开方式">
+  <button class="option active" data-mode="a"><b>A</b>拖端点至空白</button>
+  <button class="option" data-mode="b"><b>B</b>拖动连线本身</button>
+  <button class="option" data-mode="c"><b>C</b>拖端点至断开区</button>
+</nav>
+<section class="stage">
+  <div class="toolbar"><span class="project">短剧画布　/　测试项目</span><span>文本</span><span>运行结果</span><span class="zoom">100%</span></div>
+  <div class="canvas" id="canvas" data-mode="a">
+    <div class="node source"><div class="node-title"><i class="dot"></i>文本</div><div class="node-sub">提示词输入</div><div class="node-copy">生成一段剧本<br><span>从右侧端点拖出连接</span></div></div>
+    <div class="node target"><div class="node-title"><i class="dot"></i>运行结果</div><div class="node-sub">Markdown 结果</div><div class="node-copy">预览输出内容<br><span>左侧输入已连接</span></div></div>
+    <div class="trash" id="trash"><span class="bin">×</span>拖到这里断开</div>
+    <svg id="wires" aria-label="画布连接线"></svg>
+    <div class="status" id="status"><strong>A · 拖动输入端点</strong>　松开到空白处即可断开</div>
+  </div>
+  <div class="caption"><strong id="captionTitle">A · 拖端点至空白</strong><span id="captionText">拖动运行结果左侧的连接点；松开到空白画布即断开，靠近兼容端口时可重新吸附。</span><button class="reset" id="reset">恢复连接</button><span class="tip">可在画布中直接拖动体验</span></div>
+  <div class="description"><strong id="summary">直接拖动输入端点，手势明确、断开与重连可一次完成。</strong><span class="gesture" id="gesture">断开：拖端点 → 空白处松开</span></div>
+</section>
+</main>
+<script>
+(()=>{
+  const canvas=document.querySelector('#canvas'),svg=document.querySelector('#wires'),status=document.querySelector('#status'),trash=document.querySelector('#trash');
+  const captions={
+    a:{title:'A · 拖端点至空白',text:'拖动运行结果左侧的连接点；松开到空白画布即断开，靠近兼容端口时可重新吸附。',summary:'直接拖动输入端点，手势明确、断开与重连可一次完成。',gesture:'断开：拖端点 → 空白处松开',hint:'A · 拖动输入端点　松开到空白处即可断开'},
+    b:{title:'B · 拖动连线本身',text:'直接抓住连接线任意位置拖开；线段发亮并跟随鼠标，超过阈值后松开即可断开。',summary:'连线本身是操作目标，不必精确瞄准端点；拖动距离达到阈值才断开。',gesture:'断开：抓住连线 → 拖离原路径',hint:'B · 抓住连线拖动　拖离原路径后松开'},
+    c:{title:'C · 拖端点至断开区',text:'拖动输入端点到右上角断开区；目标高亮后松开确认，误拖到其他位置会恢复原连接。',summary:'提供明确的投放目标，降低误断线风险，适合连线密集的画布。',gesture:'断开：拖端点 → 红色断开区松开',hint:'C · 拖动输入端点　放入右上角断开区'}
+  };
+  let mode='a',connected=true,gesture=null;
+  const src=()=>{const r=document.querySelector('.source').getBoundingClientRect(),b=canvas.getBoundingClientRect();return{x:r.right-b.left,y:r.top-b.top+r.height/2}};
+  const dst=()=>{const r=document.querySelector('.target').getBoundingClientRect(),b=canvas.getBoundingClientRect();return{x:r.left-b.left,y:r.top-b.top+r.height/2}};
+  const point=ev=>{const b=canvas.getBoundingClientRect();return{x:ev.clientX-b.left,y:ev.clientY-b.top}};
+  const path=(a,b)=>{const bend=Math.max(46,Math.abs(b.x-a.x)*.42);return`M ${a.x} ${a.y} C ${a.x+bend} ${a.y}, ${b.x-bend} ${b.y}, ${b.x} ${b.y}`};
+  function draw(){svg.replaceChildren();if(!connected&&!gesture){status.innerHTML='<strong>已断开</strong>　点击“恢复连接”重新体验';return}const a=src(),b=gesture?.end??dst();
+    if(gesture?.kind==='line'){const dx=gesture.current.x-gesture.start.x,dy=gesture.current.y-gesture.start.y;a.x+=dx*.35;a.y+=dy*.45;b.x+=dx*.35;b.y+=dy*.45}
+    const d=path(a,b);const make=(tag,cls)=>{const el=document.createElementNS('http://www.w3.org/2000/svg',tag);el.setAttribute('class',cls);el.setAttribute('d',d);return el};
+    svg.append(make('path','wire-halo'),make('path','wire'),make('path','wire-hit'));
+    const addPort=(p,cls)=>{const hit=document.createElementNS('http://www.w3.org/2000/svg','circle');hit.setAttribute('class',`port-hit ${cls}`);hit.setAttribute('cx',p.x);hit.setAttribute('cy',p.y);hit.setAttribute('r','16');svg.append(hit);const core=document.createElementNS('http://www.w3.org/2000/svg','circle');core.setAttribute('class',`port ${cls==='end'?'target-port':''}`);core.setAttribute('cx',p.x);core.setAttribute('cy',p.y);core.setAttribute('r','5.5');svg.append(core)};
+    if(mode!=='b'){addPort(a,'start');addPort(b,'end')}
+    if(gesture?.kind==='endpoint'){const ghost=document.createElementNS('http://www.w3.org/2000/svg','circle');ghost.setAttribute('cx',b.x);ghost.setAttribute('cy',b.y);ghost.setAttribute('r','7');ghost.setAttribute('fill','#79c9ff');ghost.setAttribute('opacity','.9');svg.append(ghost)}
+    status.innerHTML=gesture?`<strong>${mode.toUpperCase()} · 正在拖动</strong>　${mode==='c'?'将端点放入断开区':mode==='b'?'松开完成断开':'松开到空白处断开'}`:`<strong>${captions[mode].hint.split('　')[0]}</strong>　${captions[mode].hint.split('　')[1]}`;
+  }
+  const inTrash=p=>{const r=trash.getBoundingClientRect(),b=canvas.getBoundingClientRect();return p.x>=r.left-b.left-12&&p.x<=r.right-b.left+12&&p.y>=r.top-b.top-12&&p.y<=r.bottom-b.top+12};
+  svg.addEventListener('pointerdown',ev=>{if(!connected||gesture)return;const p=point(ev),target=ev.target;
+    if(mode==='a'&&target.classList.contains('port-hit')&&target.classList.contains('end'))gesture={kind:'endpoint',start:dst(),end:p,pointerId:ev.pointerId};
+    else if(mode==='b'&&target.classList.contains('wire-hit'))gesture={kind:'line',start:p,current:p,pointerId:ev.pointerId};
+    else if(mode==='c'&&target.classList.contains('port-hit')&&target.classList.contains('end'))gesture={kind:'endpoint',start:dst(),end:p,pointerId:ev.pointerId};
+    if(gesture){canvas.classList.add('dragging');svg.setPointerCapture(ev.pointerId);draw()}
+  });
+  svg.addEventListener('pointermove',ev=>{if(!gesture||gesture.pointerId!==ev.pointerId)return;const p=point(ev);if(gesture.kind==='endpoint')gesture.end=p;else gesture.current=p;const hot=mode==='c'&&inTrash(p);trash.classList.toggle('hot',hot);canvas.classList.toggle('invalid-drop',mode==='a'&&Math.hypot(p.x-gesture.start.x,p.y-gesture.start.y)>35);draw()});
+  function finish(ev,cancelled=false){if(!gesture||gesture.pointerId!==ev.pointerId)return;const p=point(ev),current=gesture;gesture=null;canvas.classList.remove('dragging','invalid-drop');trash.classList.remove('hot');try{svg.releasePointerCapture(ev.pointerId)}catch{}
+    if(!cancelled){if(mode==='a')connected=Math.hypot(p.x-current.start.x,p.y-current.start.y)<24;else if(mode==='b')connected=Math.hypot(p.x-current.start.x,p.y-current.start.y)<42;else if(mode==='c')connected=!inTrash(p)}draw()}
+  svg.addEventListener('pointerup',ev=>finish(ev));svg.addEventListener('pointercancel',ev=>finish(ev,true));
+  document.querySelectorAll('.option').forEach(button=>button.addEventListener('click',()=>{mode=button.dataset.mode;document.querySelectorAll('.option').forEach(item=>item.classList.toggle('active',item===button));canvas.dataset.mode=mode;document.querySelector('#captionTitle').textContent=captions[mode].title;document.querySelector('#captionText').textContent=captions[mode].text;document.querySelector('#summary').textContent=captions[mode].summary;document.querySelector('#gesture').textContent=captions[mode].gesture;connected=true;draw()}));
+  document.querySelector('#reset').addEventListener('click',()=>{connected=true;gesture=null;trash.classList.remove('hot');canvas.classList.remove('dragging','invalid-drop');draw()});draw();
+})();
+</script>
+</body>
+</html>

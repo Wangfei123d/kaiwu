@@ -33,19 +33,6 @@ export const SETTINGS_KEYS = Object.freeze({
 /** 「减少动态效果(强制关)」写在存档里的值。 */
 export const MOTION_OFF = 'off';
 
-/**
- * 设置视图的**三个 id 约定**(顶栏标签 / 整屏区块 / 视图名)。
- *
- * 为什么放在纯模块里当常量:它们是外壳与设置页之间的**接线契约** ——
- * 顶栏按钮的 `data-view`、外壳 `switchView` 里那个 hidden 开关、以及自检里点的那个 id,
- * 三处必须一致;分开写死过,改一处忘一处就是"点了标签没反应"。单测钉着它们。
- */
-export const SETTINGS_VIEW = Object.freeze({
-    view: 'settings',            // 顶栏按钮的 data-view
-    tabId: 'viewSettings',       // 顶栏按钮 id
-    paneId: 'paneSettings',      // 整屏区块 id
-});
-
 /** 存档里的值 → 开关状态。只认字面 `off`,别的(含空/脏数据)一律当"跟随系统"。 */
 export function motionOffFromSetting(raw) {
     return String(raw ?? '').trim() === MOTION_OFF;

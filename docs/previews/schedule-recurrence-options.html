@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>日程循环规则 · 方案预览</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101112;
+      --panel: #17191b;
+      --panel-raised: #1d2022;
+      --input: #111315;
+      --line: #303538;
+      --line-soft: #252a2d;
+      --text: #e8eaec;
+      --muted: #a8adb1;
+      --dim: #7f878c;
+      --faint: #626a70;
+      --blue: #83c7fa;
+      --blue-soft: #83c7fa1a;
+      --green: #7fc99d;
+      --purple: #b89bfa;
+      font: 13px/1.5 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 50% -28%, #28445b30, transparent 48%), var(--bg); }
+    button, input, select { color: inherit; font: inherit; }
+    button { cursor: pointer; }
+    .page { width: min(1440px, 100%); margin: 0 auto; padding: 28px clamp(14px, 3vw, 42px) 44px; }
+    .topline { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; color: var(--dim); font-size: 11px; letter-spacing: .04em; }
+    .mark { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #83c7fa40; border-radius: 6px; color: var(--blue); background: #83c7fa0c; }
+    .mark svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .topline-spacer { flex: 1; }
+    .preview-pill { padding: 4px 8px; border: 1px solid #3b4d58; border-radius: 999px; color: #b9e3ff; background: #83c7fa0d; font-size: 10px; letter-spacing: 0; }
+    h1 { margin: 0; font-size: clamp(24px, 3vw, 32px); font-weight: 650; letter-spacing: -.035em; }
+    .lead { max-width: 790px; margin: 8px 0 18px; color: var(--dim); font-size: 12px; }
+    .toolbar { display: flex; align-items: center; gap: 9px; margin-bottom: 17px; }
+    .toolbar-note { margin-right: auto; color: var(--faint); font-size: 10px; }
+    .toolbar-button { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #ffffff04; color: var(--muted); font-size: 10px; }
+    .toolbar-button:hover { border-color: #56636b; color: var(--text); }
+    .selection { min-width: 110px; color: var(--blue); font-size: 10px; text-align: right; }
+
+    .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 14px; }
+    .option { min-width: 0; overflow: hidden; border: 1px solid #2c3134; border-radius: 11px; background: linear-gradient(145deg, #ffffff06, #ffffff01); box-shadow: 0 10px 26px #0003; transition: border-color .18s, transform .18s, box-shadow .18s; }
+    .option:hover { transform: translateY(-1px); border-color: #465057; }
+    .option.selected { border-color: #83c7fa83; box-shadow: 0 0 0 1px #83c7fa1c, 0 12px 32px #0005; }
+    .option.expanded { grid-column: 1 / -1; }
+    .option-header { display: flex; align-items: flex-start; gap: 9px; padding: 12px 12px 10px; }
+    .letter { display: grid; place-items: center; flex: none; width: 25px; height: 25px; border: 1px solid #83c7fa39; border-radius: 7px; color: var(--blue); background: #83c7fa0d; font: 11px Consolas, monospace; }
+    .option-copy { flex: 1; min-width: 0; }
+    .option-copy h2 { margin: 0; font-size: 13px; font-weight: 630; }
+    .option-copy p { margin: 3px 0 0; color: var(--faint); font-size: 10px; }
+    .option-actions { display: flex; gap: 5px; }
+    .small-button, .choose-button { padding: 4px 7px; border: 1px solid #343a3e; border-radius: 5px; background: transparent; color: var(--dim); font-size: 9px; white-space: nowrap; }
+    .small-button:hover, .choose-button:hover, .option.selected .choose-button { border-color: #83c7fa76; color: var(--blue); background: #83c7fa0b; }
+    .mock-shell { margin: 0 8px 8px; overflow: hidden; border: 1px solid #303538; border-radius: 8px; background: #131618; }
+    .mock-titlebar { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 10px; border-bottom: 1px solid var(--line-soft); background: #191c1e; }
+    .mock-glyph { display: grid; place-items: center; width: 17px; height: 17px; color: var(--blue); }
+    .mock-glyph svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .mock-title { font-size: 11px; font-weight: 620; }
+    .mock-spacer { flex: 1; }
+    .local-label { color: var(--faint); font-size: 9px; }
+    .new-button { padding: 5px 8px; border: 1px solid #3d5666; border-radius: 5px; color: #b9e3ff; background: #83c7fa0d; font-size: 9px; }
+    .editor { padding: 12px; }
+    .editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .editor-heading strong { font-size: 12px; font-weight: 620; }
+    .close-button { width: 24px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: var(--dim); font-size: 17px; }
+    .close-button:hover { background: #ffffff0b; color: var(--text); }
+    .field { display: block; min-width: 0; margin-top: 9px; color: var(--muted); font-size: 9px; }
+    .field-label { display: block; margin-bottom: 5px; }
+    .input { width: 100%; min-width: 0; height: 31px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: var(--input); color: var(--text); font-size: 10px; }
+    .input:focus { border-color: #6db9ea; box-shadow: 0 0 0 2px #83c7fa15; }
+    .field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; border: 1px solid var(--line-soft); border-radius: 7px; background: #101214; }
+    .segment { min-height: 27px; border: 0; border-radius: 4px; background: transparent; color: var(--dim); font-size: 10px; }
+    .segment.active { color: #c7e9ff; background: #83c7fa18; box-shadow: inset 0 0 0 1px #83c7fa40; }
+    .repeat-section { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+    .repeat-label-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 7px; color: var(--muted); font-size: 9px; }
+    .frequency-row { display: flex; gap: 4px; }
+    .frequency { flex: 1; min-width: 0; padding: 5px 4px; border: 1px solid #303639; border-radius: 5px; background: #ffffff03; color: var(--dim); font-size: 9px; }
+    .frequency.active { border-color: #5a91b1; color: #b9e3ff; background: #83c7fa10; }
+    .days-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .day-chip { display: grid; place-items: center; flex: 1 0 32px; min-width: 29px; height: 27px; padding: 0 5px; border: 1px solid #303639; border-radius: 6px; background: #ffffff03; color: var(--dim); font-size: 9px; }
+    .day-chip.active { border-color: #5a91b1; color: #d5efff; background: #83c7fa17; }
+    .monthdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; margin-top: 8px; }
+    .monthday { min-width: 0; aspect-ratio: 1.25; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--dim); font-size: 8px; }
+    .monthday:hover, .monthday.active { border-color: #5a91b1; color: #c7e9ff; background: #83c7fa17; }
+    .rule-summary { margin: 8px 0 0; padding: 7px 8px; border-radius: 5px; color: #9bc9e7; background: #83c7fa0a; font-size: 9px; line-height: 1.45; }
+    .hidden { display: none !important; }
+    .end-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--faint); font-size: 9px; }
+    .end-row select { max-width: 144px; height: 26px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--input); font-size: 9px; }
+    .editor-actions { display: flex; align-items: center; gap: 6px; margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--line-soft); }
+    .editor-spacer { flex: 1; }
+    .text-button { padding: 5px 8px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--dim); font-size: 9px; }
+    .save-button { padding: 5px 9px; border: 1px solid #4c89b1; border-radius: 5px; background: #83c7fa19; color: #b9e3ff; font-size: 9px; }
+    .text-button:hover { color: var(--text); }
+    .save-button:hover { background: #83c7fa2a; }
+
+    /* B：规律卡片把循环设置与日程基本信息分区。 */
+    .rule-card { margin-top: 10px; padding: 9px; border: 1px solid #30373b; border-radius: 7px; background: #ffffff03; }
+    .rule-card-head { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+    .rule-icon { display: grid; place-items: center; width: 21px; height: 21px; border-radius: 6px; color: var(--blue); background: #83c7fa13; font-size: 12px; }
+    .rule-card-head strong { font-size: 9px; font-weight: 600; }
+    .rule-card-head span:last-child { margin-left: auto; color: var(--faint); font-size: 8px; }
+    .rule-card .segmented { margin-bottom: 8px; }
+    .selection-preview { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding: 7px; border: 1px solid #252d31; border-radius: 5px; background: #0f1214; }
+    .selection-preview b { color: var(--green); font-size: 8px; font-weight: 500; }
+    .selection-preview span { color: var(--muted); font-size: 8px; }
+
+    /* C：日历与规则同步高亮，直接看见重复落在哪些日期。 */
+    .calendar-preview { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(120px, .85fr); gap: 10px; margin-top: 10px; padding: 9px; border: 1px solid #30373b; border-radius: 7px; background: #ffffff03; }
+    .mini-calendar { min-width: 0; }
+    .mini-calendar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; color: var(--muted); font-size: 9px; }
+    .mini-calendar-head strong { color: var(--text); font-size: 10px; font-weight: 600; }
+    .mini-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; text-align: center; }
+    .mini-weekday { padding: 2px 0; color: var(--faint); font-size: 7px; }
+    .mini-day { display: grid; place-items: center; min-width: 0; aspect-ratio: 1; border-radius: 4px; color: var(--dim); font-size: 8px; }
+    .mini-day.other { color: #444d52; }
+    .mini-day.repeat { color: #d5efff; background: #83c7fa20; box-shadow: inset 0 0 0 1px #83c7fa4a; }
+    .mini-day.start { color: #10171b; background: var(--blue); font-weight: 700; }
+    .next-list { min-width: 0; padding-left: 9px; border-left: 1px solid var(--line-soft); }
+    .next-list h4 { margin: 0 0 7px; color: var(--faint); font-size: 8px; font-weight: 500; }
+    .next-item { display: flex; align-items: flex-start; gap: 5px; margin: 6px 0; color: var(--muted); font-size: 8px; }
+    .next-item i { flex: none; width: 5px; height: 5px; margin-top: 4px; border-radius: 50%; background: var(--blue); }
+    .next-item small { display: block; color: var(--faint); font-size: 7px; }
+
+    .option.expanded .mock-shell { max-width: 780px; margin-right: auto; margin-left: auto; }
+    .option.expanded .editor { padding: 18px; }
+    .option.expanded .input { height: 36px; }
+    .option.expanded .monthday { aspect-ratio: 1.8; font-size: 10px; }
+    .options.has-expanded .option:not(.expanded) { display: none; }
+    .toast { position: fixed; right: 20px; bottom: 18px; z-index: 5; padding: 9px 12px; border: 1px solid #354c5a; border-radius: 7px; background: #1b252b; color: #c5e7fc; font-size: 10px; opacity: 0; transform: translateY(5px); transition: opacity .18s, transform .18s; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 1050px) { .options { grid-template-columns: repeat(2, minmax(0, 1fr)); } .option.expanded { grid-column: 1 / -1; } }
+    @media (max-width: 680px) { .page { padding: 19px 11px 32px; } .options { grid-template-columns: minmax(0, 1fr); } .toolbar { flex-wrap: wrap; } .toolbar-note { flex-basis: 100%; } .selection { flex: 1; } .option.expanded { grid-column: auto; } .calendar-preview { grid-template-columns: minmax(0, 1.1fr) minmax(112px, .9fr); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="topline">
+      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16M8 13h.01M12 13h.01M16 13h.01"/></svg></span>
+      <span>KAIWU · 日程面板</span><span class="topline-spacer"></span><span class="preview-pill">循环规则 · 交互预览</span>
+    </div>
+    <h1>单次与循环日程</h1>
+    <p class="lead">比较三种日程编辑方式。选择单次或循环后，可设为每天、每周指定星期，或每月指定日期；每个方案都可以切换规则、选择日期并查看规则摘要。</p>
+    <div class="toolbar">
+      <span class="toolbar-note">示例日程：产品周会 · 2026 年 10 月 · 09:30</span>
+      <button class="toolbar-button" data-reset type="button">重置预览</button>
+      <span class="selection" aria-live="polite">尚未选择方案</span>
+    </div>
+
+    <section class="options" aria-label="循环日程编辑方案">
+      <article class="option" data-option="a">
+        <header class="option-header"><span class="letter">A</span><div class="option-copy"><h2>表单内快速切换</h2><p>循环开关与规则紧邻日期，适合轻量录入</p></div><div class="option-actions"><button class="small-button" data-expand type="button">放大</button><button class="choose-button" data-choose type="button">选择方案</button></div></header>
+        <div class="mock-shell">
+          <div class="mock-titlebar"><span class="mock-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16"/></svg></span><span class="mock-title">日程</span><span class="mock-spacer"></span><span class="local-label">本地</span></div>
+          <form class="editor" data-editor>
+            <div class="editor-heading"><strong>新建日程</strong><button class="close-button" type="button" aria-label="关闭">×</button></div>
+            <label class="field"><span class="field-label">事项</span><input class="input" value="产品周会" aria-label="事项"></label>
+            <div class="field-row"><label class="field"><span class="field-label">日期</span><input class="input" type="date" value="2026-10-26" aria-label="日期"></label><label class="field"><span class="field-label">开始时间</span><input class="input" type="time" value="09:30" aria-label="开始时间"></label></div>
+            <div class="repeat-section">
+              <div class="repeat-label-row"><span>重复</span><span class="local-label">可随时修改</span></div>
+              <div class="segmented" role="group" aria-label="重复方式"><button class="segment active" type="button" data-repeat="once">单次</button><button class="segment" type="button" data-repeat="repeat">循环</button></div>
+              <div data-repeat-fields class="hidden">
+                <div class="frequency-row"><button class="frequency" type="button" data-frequency="daily">每天</button><button class="frequency active" type="button" data-frequency="weekly">每周</button><button class="frequency" type="button" data-frequency="monthly">每月</button></div>
+                <div class="days-row" data-weekdays>
+                  <button class="day-chip" type="button" data-weekday="1">一</button><button class="day-chip active" type="button" data-weekday="2">二</button><button class="day-chip" type="button" data-weekday="3">三</button><button class="day-chip" type="button" data-weekday="4">四</button><button class="day-chip" type="button" data-weekday="5">五</button><button class="day-chip" type="button" data-weekday="6">六</button><button class="day-chip" type="button" data-weekday="0">日</button>
+                </div>
+                <div class="monthdays hidden" data-monthdays></div>
+                <p class="rule-summary" data-summary>每周二重复</p>
+              </div>
+            </div>
+            <div class="editor-actions"><button class="text-button" type="button">取消</button><span class="editor-spacer"></span><button class="save-button" type="button" data-save>保存日程</button></div>
+          </form>
+        </div>
+      </article>
+
+      <article class="option" data-option="b">
+        <header class="option-header"><span class="letter">B</span><div class="option-copy"><h2>独立循环规则卡</h2><p>把循环设置整理成一块，规则层次更清楚</p></div><div class="option-actions"><button class="small-button" data-expand type="button">放大</button><button class="choose-button" data-choose type="button">选择方案</button></div></header>
+        <div class="mock-shell">
+          <div class="mock-titlebar"><span class="mock-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16"/></svg></span><span class="mock-title">日程</span><span class="mock-spacer"></span><button class="new-button" type="button">＋ 新建</button></div>
+          <form class="editor" data-editor>
+            <div class="editor-heading"><strong>新建日程</strong><button class="close-button" type="button" aria-label="关闭">×</button></div>
+            <label class="field"><span class="field-label">事项</span><input class="input" value="产品周会" aria-label="事项"></label>
+            <div class="field-row"><label class="field"><span class="field-label">日期</span><input class="input" type="date" value="2026-10-26" aria-label="日期"></label><label class="field"><span class="field-label">时间</span><input class="input" type="time" value="09:30" aria-label="时间"></label></div>
+            <section class="rule-card" aria-label="循环规则">
+              <div class="rule-card-head"><span class="rule-icon">↻</span><strong>重复规则</strong><span>单次也可切换</span></div>
+              <div class="segmented" role="group" aria-label="重复方式"><button class="segment active" type="button" data-repeat="once">仅一次</button><button class="segment" type="button" data-repeat="repeat">循环日程</button></div>
+              <div data-repeat-fields class="hidden">
+                <div class="frequency-row"><button class="frequency" type="button" data-frequency="daily">每天</button><button class="frequency active" type="button" data-frequency="weekly">每周</button><button class="frequency" type="button" data-frequency="monthly">每月</button></div>
+                <div class="days-row" data-weekdays>
+                  <button class="day-chip active" type="button" data-weekday="1">一</button><button class="day-chip" type="button" data-weekday="2">二</button><button class="day-chip" type="button" data-weekday="3">三</button><button class="day-chip" type="button" data-weekday="4">四</button><button class="day-chip active" type="button" data-weekday="5">五</button><button class="day-chip" type="button" data-weekday="6">六</button><button class="day-chip" type="button" data-weekday="0">日</button>
+                </div>
+                <div class="monthdays hidden" data-monthdays></div>
+                <div class="selection-preview"><b>规则摘要</b><span data-summary>每周一、五重复</span></div>
+                <div class="end-row"><span>结束方式</span><select aria-label="结束方式"><option>长期循环</option><option>到指定日期</option></select></div>
+              </div>
+            </section>
+            <div class="editor-actions"><button class="text-button" type="button">取消</button><span class="editor-spacer"></span><button class="save-button" type="button" data-save>保存日程</button></div>
+          </form>
+        </div>
+      </article>
+
+      <article class="option" data-option="c">
+        <header class="option-header"><span class="letter">C</span><div class="option-copy"><h2>日历联动预览</h2><p>编辑规则时同步标出将发生日程的日期</p></div><div class="option-actions"><button class="small-button" data-expand type="button">放大</button><button class="choose-button" data-choose type="button">选择方案</button></div></header>
+        <div class="mock-shell">
+          <div class="mock-titlebar"><span class="mock-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="3"/><path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16"/></svg></span><span class="mock-title">日程</span><span class="mock-spacer"></span><button class="new-button" type="button">＋ 新建</button></div>
+          <form class="editor" data-editor>
+            <div class="editor-heading"><strong>新建日程</strong><button class="close-button" type="button" aria-label="关闭">×</button></div>
+            <label class="field"><span class="field-label">事项</span><input class="input" value="产品周会" aria-label="事项"></label>
+            <div class="field-row"><label class="field"><span class="field-label">开始日期</span><input class="input" type="date" value="2026-10-26" aria-label="开始日期"></label><label class="field"><span class="field-label">时间</span><input class="input" type="time" value="09:30" aria-label="时间"></label></div>
+            <div class="repeat-label-row" style="margin-top:11px"><span>重复</span><span class="local-label">日历即时预览</span></div>
+            <div class="segmented" role="group" aria-label="重复方式"><button class="segment active" type="button" data-repeat="once">单次</button><button class="segment" type="button" data-repeat="repeat">循环</button></div>
+            <div data-repeat-fields class="hidden">
+              <div class="frequency-row" style="margin-top:8px"><button class="frequency" type="button" data-frequency="daily">每天</button><button class="frequency active" type="button" data-frequency="weekly">每周</button><button class="frequency" type="button" data-frequency="monthly">每月</button></div>
+              <div class="days-row" data-weekdays>
+                <button class="day-chip active" type="button" data-weekday="1">一</button><button class="day-chip" type="button" data-weekday="2">二</button><button class="day-chip" type="button" data-weekday="3">三</button><button class="day-chip" type="button" data-weekday="4">四</button><button class="day-chip active" type="button" data-weekday="5">五</button><button class="day-chip" type="button" data-weekday="6">六</button><button class="day-chip" type="button" data-weekday="0">日</button>
+              </div>
+              <div class="monthdays hidden" data-monthdays></div>
+              <div class="calendar-preview">
+                <div class="mini-calendar"><div class="mini-calendar-head"><span>2026 年</span><strong>10 月</strong></div><div class="mini-grid" data-mini-calendar></div></div>
+                <div class="next-list"><h4>接下来</h4><div data-next-list></div></div>
+              </div>
+              <p class="rule-summary" data-summary>每周一、五重复</p>
+            </div>
+            <div class="editor-actions"><button class="text-button" type="button">取消</button><span class="editor-spacer"></span><button class="save-button" type="button" data-save>保存日程</button></div>
+          </form>
+        </div>
+      </article>
+    </section>
+  </main>
+  <div class="toast" role="status" aria-live="polite"></div>
+  <script>
+    (() => {
+      const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+      const states = new WeakMap();
+      const toast = document.querySelector('.toast');
+      let toastTimer;
+
+      function makeState(option) {
+        return { repeat: false, frequency: 'weekly', weekdays: new Set(option.dataset.option === 'a' ? ['2'] : ['1', '5']), monthdays: new Set(['5', '20']) };
+      }
+      function summaryFor(state) {
+        if (!state.repeat) return '仅此一次';
+        if (state.frequency === 'daily') return '每天重复';
+        if (state.frequency === 'weekly') {
+          const days = [...state.weekdays].sort((a, b) => Number(a) - Number(b)).map((day) => `周${dayNames[Number(day)]}`);
+          return days.length ? `每周${days.join('、')}重复` : '请选择至少一个星期';
+        }
+        const dates = [...state.monthdays].map(Number).sort((a, b) => a - b);
+        return dates.length ? `每月 ${dates.join('、')} 日重复` : '请选择至少一个日期';
+      }
+      function occurs(date, state) {
+        if (!state.repeat) return false;
+        if (state.frequency === 'daily') return true;
+        if (state.frequency === 'weekly') return state.weekdays.has(String(date.getDay()));
+        return state.monthdays.has(String(date.getDate()));
+      }
+      function renderCalendar(option, state) {
+        const grid = option.querySelector('[data-mini-calendar]');
+        if (!grid) return;
+        grid.replaceChildren();
+        for (const weekday of ['一', '二', '三', '四', '五', '六', '日']) {
+          const label = document.createElement('span');
+          label.className = 'mini-weekday';
+          label.textContent = weekday;
+          grid.append(label);
+        }
+        const first = new Date(2026, 9, 1);
+        const offset = (first.getDay() + 6) % 7;
+        const start = new Date(2026, 9, 1 - offset);
+        for (let i = 0; i < 35; i += 1) {
+          const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+          const cell = document.createElement('span');
+          cell.className = 'mini-day';
+          cell.textContent = String(date.getDate());
+          if (date.getMonth() !== 9) cell.classList.add('other');
+          if (date.getFullYear() === 2026 && date.getMonth() === 9 && date.getDate() === 26) cell.classList.add('start');
+          else if (date.getMonth() === 9 && occurs(date, state)) cell.classList.add('repeat');
+          grid.append(cell);
+        }
+        const nextList = option.querySelector('[data-next-list]');
+        nextList.replaceChildren();
+        const cursor = new Date(2026, 9, 26);
+        let added = 0;
+        for (let offsetDays = 0; offsetDays < 45 && added < 3; offsetDays += 1) {
+          const date = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + offsetDays);
+          if (!occurs(date, state)) continue;
+          const item = document.createElement('div');
+          item.className = 'next-item';
+          const dot = document.createElement('i');
+          const text = document.createElement('span');
+          text.textContent = `${date.getMonth() + 1}月${date.getDate()}日 · 周${dayNames[date.getDay()]}`;
+          const time = document.createElement('small');
+          time.textContent = '09:30 产品周会';
+          text.append(time);
+          item.append(dot, text);
+          nextList.append(item);
+          added += 1;
+        }
+      }
+      function render(option) {
+        const state = states.get(option);
+        const repeatFields = option.querySelector('[data-repeat-fields]');
+        repeatFields.classList.toggle('hidden', !state.repeat);
+        option.querySelectorAll('[data-repeat]').forEach((button) => button.classList.toggle('active', button.dataset.repeat === (state.repeat ? 'repeat' : 'once')));
+        option.querySelectorAll('[data-frequency]').forEach((button) => button.classList.toggle('active', button.dataset.frequency === state.frequency));
+        option.querySelectorAll('[data-weekday]').forEach((button) => button.classList.toggle('active', state.weekdays.has(button.dataset.weekday)));
+        const weekRow = option.querySelector('[data-weekdays]');
+        const monthGrid = option.querySelector('[data-monthdays]');
+        weekRow.classList.toggle('hidden', state.frequency !== 'weekly');
+        monthGrid.classList.toggle('hidden', state.frequency !== 'monthly');
+        option.querySelectorAll('[data-summary]').forEach((summary) => { summary.textContent = summaryFor(state); });
+        renderCalendar(option, state);
+      }
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 1700);
+      }
+
+      document.querySelectorAll('[data-option]').forEach((option) => {
+        const state = makeState(option);
+        states.set(option, state);
+        const monthGrid = option.querySelector('[data-monthdays]');
+        if (monthGrid) {
+          for (let day = 1; day <= 31; day += 1) {
+            const button = document.createElement('button');
+            button.className = `monthday${state.monthdays.has(String(day)) ? ' active' : ''}`;
+            button.type = 'button';
+            button.dataset.monthday = String(day);
+            button.textContent = String(day);
+            monthGrid.append(button);
+          }
+        }
+        render(option);
+        option.addEventListener('click', (event) => {
+          const repeat = event.target.closest('[data-repeat]');
+          if (repeat) { state.repeat = repeat.dataset.repeat === 'repeat'; render(option); return; }
+          const frequency = event.target.closest('[data-frequency]');
+          if (frequency) { state.frequency = frequency.dataset.frequency; render(option); return; }
+          const weekday = event.target.closest('[data-weekday]');
+          if (weekday) {
+            const key = weekday.dataset.weekday;
+            state.weekdays.has(key) ? state.weekdays.delete(key) : state.weekdays.add(key);
+            render(option);
+            return;
+          }
+          const monthday = event.target.closest('[data-monthday]');
+          if (monthday) {
+            const key = monthday.dataset.monthday;
+            state.monthdays.has(key) ? state.monthdays.delete(key) : state.monthdays.add(key);
+            monthday.classList.toggle('active', state.monthdays.has(key));
+            render(option);
+            return;
+          }
+          const choose = event.target.closest('[data-choose]');
+          if (choose) {
+            document.querySelectorAll('[data-option]').forEach((item) => item.classList.toggle('selected', item === option));
+            document.querySelector('.selection').textContent = `已选择方案 ${option.dataset.option.toUpperCase()}`;
+            showToast(`已选择方案 ${option.dataset.option.toUpperCase()}`);
+            return;
+          }
+          const expand = event.target.closest('[data-expand]');
+          if (expand) {
+            const opening = !option.classList.contains('expanded');
+            document.querySelectorAll('.option.expanded').forEach((item) => { item.classList.remove('expanded'); item.querySelector('[data-expand]').textContent = '放大'; });
+            document.querySelector('.options').classList.toggle('has-expanded', opening);
+            option.classList.toggle('expanded', opening);
+            expand.textContent = opening ? '收起' : '放大';
+            return;
+          }
+          const save = event.target.closest('[data-save]');
+          if (save) { event.preventDefault(); showToast(`预览规则：${summaryFor(state)}`); }
+        });
+      });
+
+      document.querySelector('[data-reset]').addEventListener('click', () => {
+        document.querySelectorAll('[data-option]').forEach((option) => {
+          option.classList.remove('selected', 'expanded');
+          option.querySelector('[data-expand]').textContent = '放大';
+          const state = makeState(option);
+          states.set(option, state);
+          option.querySelectorAll('[data-monthday]').forEach((button) => button.classList.toggle('active', state.monthdays.has(button.dataset.monthday)));
+          render(option);
+        });
+        document.querySelector('.options').classList.remove('has-expanded');
+        document.querySelector('.selection').textContent = '尚未选择方案';
+        showToast('已恢复默认预览');
+      });
+    })();
+  </script>
+</body>
+</html>

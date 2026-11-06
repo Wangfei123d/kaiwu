@@ -20,7 +20,7 @@
         <!-- 平铺可停靠面板(工作台)的样式。必须在 shell.css **之后** ——
              它要压过 .pane-notes 的 grid 定义(靠 .pw-host 这个新类,不靠顺序)。 -->
         <link rel="stylesheet" href="toolbox://shell/styles/panel-workspace.css">
-        <!-- 设置视图(方案 D)的样式 + 「减少动态效果(强制关)」那条全局规则。 -->
+        <!-- Preferences 窗口共享设置样式 + 「减少动态效果(强制关)」那条全局规则。 -->
         <link rel="stylesheet" href="toolbox://shell/styles/settings-page.css">
     </head>
     <body>
@@ -52,43 +52,36 @@
         </div>
 
         <div class="shell" id="shell" hidden>
-            <!-- 顶栏:视图切换 + 笔记库 -->
+            <!-- 顶栏:合并品牌、应用菜单与 Windows 原生窗口控制区 -->
             <header class="topbar">
-                <!-- 品牌:RB1 线形标记 + 「开物」字标。
-                     标记只用 currentColor 与 --accent,不写死颜色 ——
-                     以后做浅色主题时它自动跟着走,不用回来改这里。 -->
-                <div class="topbar-brand">
-                    <svg class="brand-mark" viewBox="0 0 100 100"
-                         aria-hidden="true" focusable="false">
-                        <g fill="none" stroke="currentColor" stroke-width="16"
-                           stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M28 20 V80"/>
-                            <path d="M28 50 L72 21"/>
-                            <path d="M28 50 L72 79"/>
-                        </g>
-                        <circle cx="28" cy="50" r="14" fill="var(--accent)"/>
-                    </svg>开物
+                <!-- 图形标记也是 Windows 合并标题栏后的菜单入口。 -->
+                <div class="topbar-menu" id="applicationMenu">
+                    <button class="topbar-brand" id="topbarBrand" type="button"
+                            aria-label="开物菜单" aria-haspopup="menu" aria-expanded="false"
+                            title="开物菜单">
+                        <svg class="brand-mark" viewBox="0 0 100 100"
+                             aria-hidden="true" focusable="false">
+                            <g fill="none" stroke="currentColor" stroke-width="16"
+                               stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M28 20 V80"/>
+                                <path d="M28 50 L72 21"/>
+                                <path d="M28 50 L72 79"/>
+                            </g>
+                            <circle cx="28" cy="50" r="14" fill="var(--accent)"/>
+                        </svg>
+                    </button>
+                    <div class="app-menu-popup" id="applicationMenuPopup" role="menu"
+                         aria-label="应用菜单" hidden></div>
                 </div>
 
-                <nav class="topbar-views" role="tablist" aria-label="主视图">
-                    <button class="view-tab" id="viewNotes" type="button" role="tab"
-                            aria-selected="true" data-view="notes">笔记</button>
-                    <!-- 设置是整屏视图,不属于平铺工作台,布局树管不到它。 -->
-                    <button class="view-tab" id="viewSettings" type="button" role="tab"
-                            aria-selected="false" data-view="settings">设置</button>
-                </nav>
-
-                <!-- 顶栏的「库路径 + 更换」按用户要求**撤掉**了:换库这件事现在只剩设置里那一个入口
-                     (设置 → 笔记库,走 onboarding.open())。这里不留空槽、不留占位。 -->
+                <!-- 库路径与更换入口在「编辑 → 首选项…」的独立窗口里。 -->
 
             </header>
 
             <!-- 笔记视图:左列表 + 中编辑 + 右链接 + 右 AI(四格)。
-                 面板**同时**是平铺工作台里的一格:JS 起来后会把下面这四个面板
-                 (以及底部那 24px 的读数条)交给工作台,由布局树决定它们的位置。
-                 ⚠️ JS 没起来/工作台挂载失败时,.pw-host 不会被加上,.pw-desk /
-                 .pw-bar 保持 display:none —— 这时走上面那条 grid 兜底(四格依次排开,
-                 链接与 AI 各占旧右栏的一半),一点不变。 -->
+                 面板**同时**是平铺工作台里的一格。JS 没起来/工作台挂载失败时，
+                 .pw-host 不会被加上，这时走上面那条 grid 兜底(四格依次排开，
+                 链接与 AI 各占旧右栏的一半)。 -->
             <section class="pane-notes" id="paneNotes">
                 <!-- 工作台:树画在 #panelTree 里,提示浮层叠在 .pw-desk 之上 -->
                 <div class="pw-desk" id="panelWorkspace">
@@ -97,14 +90,6 @@
                     <div class="pw-hint" id="panelHint"></div>
                     <div class="pw-hint pw-band" id="panelBand"></div>
                 </div>
-                <!-- 拖乱之后的唯一出口 + 用户明确要的"证据"(实时布局树文本) -->
-                <div class="pw-bar">
-                    <button class="btn btn-sm" id="layoutReset" type="button"
-                            title="恢复成默认布局(链接与 AI 叠在右侧)">重置布局</button>
-                    <span class="pw-tree-label">布局树</span>
-                    <span class="pw-tree" id="layoutTree" aria-label="当前布局树"></span>
-                </div>
-
                 <aside class="notes-nav">
                     <div class="notes-nav-head">
                         <input type="search" id="noteSearch" placeholder="搜索笔记…" aria-label="搜索笔记">
@@ -233,21 +218,14 @@
                     <!-- 输入区(方案 4:卡片式)。**必须是消息滚动区的兄弟,不是它的孩子** ——
                          挂进 #agentMessages 就会跟着消息一起滚:实测面板 456px、消息区撑满
                          406px,而输入栏落在 409–466,往上翻历史时它就滚出视野了。
-                         卡片三行:上下文(**平时整行 hidden,不占高度** —— 连状态点也按用户
-                         要求删了;只有 Agent 不正常时才多出「停止进程」)/ 输入框 / 动作。 -->
+                         卡片三行:上下文(只在连接中显示)/ 输入框 / 动作。 -->
                     <footer class="agent-footer">
-                        <!-- 那一行平时**整行 hidden、不占高度**(用户要求:聊天框上面干净)。
-                             它有两个用途,都只在"Agent 不正常"时出现:
-                               · 「正在连接 Agent…」—— 握手最长 35 秒,那段时间面板不能一片静止;
-                               · 「停止进程」—— 卡住时的退路,位置一直在同一处,不用重新学;
-                                 另一条常驻入口在「设置 → AI 与 Agent → 停止 Agent 进程」。
-                             显隐与文案都由 panel.js 的 renderStatus() 控制。
+                        <!-- 连接提示只在握手期间显示；停止 Agent 的入口保留在「设置 → AI 与 Agent」。
+                             显隐与文案由 panel.js 的 renderStatus() 控制。
                              「这次会带上哪篇笔记」不丢:改挂在**输入框**上(placeholder 短句 +
                              title 全句,见 panel.js 的 renderContext())。 -->
                         <div class="agent-ctx-row" hidden>
                             <span class="agent-ctx-hint" hidden></span>
-                            <button class="agent-ctx-stop" id="agentKill" type="button" hidden
-                                    aria-label="停止 Agent 进程" title="停止 Agent 进程">停止进程</button>
                         </div>
                         <!-- 输入区 = 方案 ③「底部小栏」(用户拍板):
                                上面是**铺满卡片**的多行 textarea —— 它没有自己的边框/底色/圆角/焦点环,
@@ -288,23 +266,6 @@
                 </section>
             </section>
 
-            <!-- 设置视图(设计稿方案 D:左导航 + 搜索 + 表单)。
-                 骨架只放"搜索框 / 左导航 / 表单容器 / 顶部总览"四个**空**节点,
-                 每一项都由 app/settings/settings-view.js 用 createElement 画出来 ——
-                 那些项的读数是活的(密钥状态、布局树、索引篇数),写死在 HTML 里只会过期。 -->
-            <section class="pane-settings" id="paneSettings" hidden>
-                <div class="settings-head">
-                    <input type="search" class="settings-search" id="settingsSearch"
-                           placeholder="搜索设置项(试试:密钥 / 布局 / 服务 / 动效)"
-                           aria-label="搜索设置项">
-                    <span class="settings-overview" id="settingsOverview"></span>
-                </div>
-                <div class="settings-split">
-                    <nav class="settings-nav" id="settingsNav" role="tablist"
-                         aria-label="设置分区"></nav>
-                    <div class="settings-body" id="settingsBody"></div>
-                </div>
-            </section>
         </div>
 
         <div id="toast" role="status" aria-live="polite"></div>

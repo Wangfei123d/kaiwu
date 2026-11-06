@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>面板拖动回归检查</title>
+<link rel="stylesheet" href="../../app/styles/tokens.css">
+<link rel="stylesheet" href="../../app/styles/base.css">
+<link rel="stylesheet" href="../../app/styles/shell.css">
+<link rel="stylesheet" href="../../app/styles/panel-workspace.css">
+<main class="shell">
+  <header class="topbar">面板拖动回归检查</header>
+  <section class="pane-notes" id="host">
+    <div class="pw-desk" id="desk"><div class="pw-stack" id="stack"></div></div>
+  </section>
+</main>
+<script type="module">
+import { createPanelWorkspace } from '../../app/shell/panel-workspace.js';
+import { split, pane } from '../../app/lib/panel-tree.js';
+
+window.resizeSaves = 0;
+const initialTree = split('row', [30, 36, 34], [
+  split('col', [52, 48], [pane('notes'), pane('links')]), pane('doc'), pane('ai'),
+]);
+const panes = Object.fromEntries(['notes', 'links', 'doc', 'ai'].map(id => [id, {
+  title: id, el: document.createElement('div'),
+}]));
+const workspace = createPanelWorkspace({
+  desk: document.querySelector('#desk'), stack: document.querySelector('#stack'),
+  host: document.querySelector('#host'), panes, initialTree,
+  store: { load: async () => ({ ok: false }), save: async () => { window.resizeSaves++; } },
+});
+await workspace.mount();
+window.resizeReady = true;
+window.resizeGeometry = selector => [...document.querySelectorAll(selector)].map(el => {
+  const rect = el.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+});
+</script>
+</html>

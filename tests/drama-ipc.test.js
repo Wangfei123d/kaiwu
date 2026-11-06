@@ -256,28 +256,6 @@ function putProject(root, name, { nodes = 1, shots = 2, title = null } = {}) {
 
 const graphOf = (root, name) => JSON.parse(fs.readFileSync(path.join(root, name, 'graph.json'), 'utf8'));
 
-/** 只含 word/document.xml 的最小未压缩 zip，足够驱动真实 docx 解析器。 */
-function minimalDocx(text) {
-    const name = Buffer.from('word/document.xml', 'utf8');
-    const data = Buffer.from(`<w:document><w:body><w:p><w:t>${text}</w:t></w:p></w:body></w:document>`, 'utf8');
-    const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(name.length, 26);
-    local.writeUInt32LE(data.length, 18);
-    const central = Buffer.alloc(46);
-    central.writeUInt32LE(0x02014b50, 0);
-    central.writeUInt16LE(name.length, 28);
-    central.writeUInt32LE(data.length, 20);
-    const centralOffset = local.length + name.length + data.length;
-    const end = Buffer.alloc(22);
-    end.writeUInt32LE(0x06054b50, 0);
-    end.writeUInt16LE(1, 8);
-    end.writeUInt16LE(1, 10);
-    end.writeUInt32LE(central.length + name.length, 12);
-    end.writeUInt32LE(centralOffset, 16);
-    return Buffer.concat([local, name, data, central, name, end]);
-}
-
 test('drama:projects 一次给两份:老的名字数组 + 新的结构化 items', async () => {
     const { call, root } = harness();
     putProject(root, '被除名的养女', { nodes: 3, shots: 2 });
@@ -639,24 +617,6 @@ test('drama:readText:找不到 / 不是文件 / 超过上限,三条都拒而且�
     const big = path.join(root, '太大.txt');
     fs.writeFileSync(big, 'a'.repeat(200 * 1024 + 10));
     await assert.rejects(() => call('drama:readText', { path: big }), /超过 200 KB 的导入上限/);
-});
-
-test('drama:readDroppedText 只从 docx 字节提取正文,不需要也不接受路径', async () => {
-    const { call } = harness();
-    const r = await call('drama:readDroppedText', { name: '台词终稿.docx', bytes: minimalDocx('第一场 雨声') });
-    assert.equal(r.name, '台词终稿.docx');
-    assert.equal(r.kind, 'docx');
-    assert.equal(r.text, '第一场 雨声');
-    assert.equal(r.chars, r.text.length);
-});
-
-test('drama:readDroppedText 拒绝旧 doc、空字节和过大的字节载荷', async () => {
-    const { call } = harness();
-    await assert.rejects(() => call('drama:readDroppedText', { name: '旧稿.doc', bytes: Uint8Array.of(1) }), /另存为 .docx/);
-    await assert.rejects(() => call('drama:readDroppedText', { name: '空.docx', bytes: new Uint8Array() }), /文件为空/);
-    await assert.rejects(() => call('drama:readDroppedText', {
-        name: '太大.docx', bytes: new Uint8Array(200 * 1024 + 1),
-    }), /超过 200 KB 的导入上限/);
 });
 
 test('老节点一次性搬运:inputs/ 里的正文搬进 value,老字段清掉(id 与别的参数不动)', async () => {

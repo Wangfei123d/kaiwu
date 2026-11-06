@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>开物 · 动态翻译图标方案</title>
+  <style>
+    :root { color-scheme:dark; --bg:#111110; --panel:#191817; --edge:#33312d; --text:#e9e5df; --dim:#aca59b; --faint:#79746c; --accent:#8bccf5; --icon-size:25px; font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-width:340px; min-height:100vh; background:radial-gradient(ellipse at 46% -22%,#23303b55,transparent 58%),var(--bg); color:var(--text); }
+    button { font:inherit; }
+    button:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+    button { -webkit-tap-highlight-color:transparent; }
+    .page { max-width:1210px; margin:auto; padding:30px 30px 42px; }
+    .top { display:flex; align-items:center; justify-content:space-between; margin-bottom:38px; gap:12px; }
+    .brand { display:flex; align-items:center; gap:9px; font-size:12px; letter-spacing:.03em; color:#bdb7ae; }
+    .brand svg { width:19px; height:22px; }
+    .preview-note { color:var(--faint); font-size:11px; }
+    .intro { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:26px; }
+    .eyebrow { margin:0 0 9px; color:var(--accent); font-size:10px; letter-spacing:.14em; }
+    h1 { margin:0; font-size:clamp(25px,3.6vw,36px); font-weight:570; letter-spacing:-.035em; }
+    .lead { margin:12px 0 0; font-size:12px; line-height:1.9; color:var(--dim); }
+    .toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; flex:none; }
+    .control { color:#c1bbb2; background:#24221f; border:1px solid #3a3732; border-radius:8px; padding:8px 11px; cursor:pointer; font-size:11px; transition:background .18s,border-color .18s; }
+    .control:hover { background:#302c27; border-color:#625c53; }
+    .control.primary { color:#b3ddf7; border-color:#416079; background:#20313e; }
+    .control svg { width:12px; height:12px; vertical-align:-2px; margin-right:4px; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+    .option { min-width:0; background:linear-gradient(145deg,#1d1b19,var(--panel) 70%); border:1px solid var(--edge); border-radius:14px; padding:19px; }
+    .option-title { display:flex; align-items:center; gap:9px; }
+    .number { color:#706c64; font:10px/1 ui-monospace,Consolas,monospace; }
+    h2 { font-size:14px; font-weight:550; margin:0; }
+    .recommend { color:var(--accent); font-size:9px; letter-spacing:.02em; border:1px solid #3c5768; padding:2px 6px; border-radius:4px; }
+    .description { color:#918b82; font-size:11px; margin:8px 0 18px; line-height:1.7; }
+    .stage { position:relative; background:#141413; border:1px solid #2c2a27; border-radius:10px; padding:13px 15px 15px; }
+    .thought-head { display:flex; align-items:center; gap:6px; height:30px; color:#969087; font-size:11px; }
+    .caret { width:10px; height:10px; color:#7f7a72; }
+    .duration { color:#747068; margin-left:2px; font:10.5px ui-monospace,Consolas,monospace; }
+    .thought-tools { display:flex; margin-left:auto; align-items:center; }
+    .translate { position:relative; display:grid; place-items:center; width:34px; height:32px; padding:3px; border:0; border-radius:7px; color:#9c978e; background:transparent; cursor:pointer; isolation:isolate; transition:color .2s,background .2s; }
+    .translate:hover { color:#d5e9f8; background:#23303a5c; }
+    .translate[data-state="zh"] { color:var(--accent); }
+    .translate[data-state="busy"] { color:#aedbfa; cursor:wait; }
+    .translate svg { width:var(--icon-size); height:var(--icon-size); overflow:visible; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; }
+    .translate::after { content:attr(data-tooltip); position:absolute; z-index:5; right:-2px; bottom:calc(100% + 8px); pointer-events:none; padding:6px 9px; white-space:nowrap; font-size:10px; font-weight:400; color:#d9d4cc; background:#302d28; border:1px solid #4d473f; border-radius:6px; box-shadow:0 4px 18px #0005; opacity:0; transform:translateY(3px); transition:opacity .16s,transform .16s; }
+    .translate:hover::after,.translate:focus-visible::after { opacity:1; transform:none; }
+    .thought-body { min-height:123px; padding-top:9px; color:#bfb9b0; font-size:12px; line-height:1.9; }
+    .thought-body p { margin:0 0 8px; }
+    .thought-body p:last-child { margin-bottom:0; }
+    .thought-body.changing { animation:body-change .3s ease both; }
+    @keyframes body-change { from { opacity:.45; } to { opacity:1; } }
+    .option-foot { margin-top:15px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .state-list { display:flex; align-items:center; gap:6px; color:#615e58; font-size:10px; }
+    .state-list span { transition:color .2s; }
+    .state-list .on { color:#b0cedf; }
+    .state-list i { font-style:normal; color:#484640; }
+    .replay { font-size:10px; color:#969087; background:none; border:0; padding:5px 0 5px 8px; cursor:pointer; }
+    .replay:hover { color:#c7e5f7; }
+    .detail { display:flex; align-items:center; gap:13px; margin-top:16px; padding-top:14px; border-top:1px solid #2c2a26; }
+    .detail-icon { display:grid; place-items:center; flex:none; width:44px; height:44px; border-radius:10px; background:#25231f; }
+    .detail-icon svg { width:31px; height:31px; fill:none; stroke:#7c9caf; stroke-width:1.1; stroke-linecap:round; stroke-linejoin:round; }
+    .detail-copy { color:#817c73; font-size:10px; line-height:1.8; }
+    .detail-copy strong { color:#b8b0a5; font-weight:400; }
+    .page-foot { display:flex; justify-content:space-between; gap:18px; margin-top:23px; color:#736e65; font-size:10px; line-height:1.8; }
+    .page-foot span:last-child { text-align:right; }
+
+    /* A / 文路径直接绘制，图标缩放不依赖字体。 */
+    .glyph-en,.glyph-cn { transform-box:fill-box; transform-origin:center; transition:opacity .32s,transform .42s cubic-bezier(.2,.8,.2,1); }
+    .swap-arrows { transform-origin:16px 16px; }
+    .swap .cn-mark { opacity:.56; transition:opacity .25s; }
+    .swap .en-mark { opacity:.86; transition:opacity .25s; }
+    .swap[data-state="zh"] .cn-mark { opacity:1; }
+    .swap[data-state="zh"] .en-mark { opacity:.5; }
+    .swap .arrow-upper,.swap .arrow-lower { transform-box:fill-box; transform-origin:center; }
+    .swap:hover .arrow-upper { animation:upper-pass .7s ease both; }
+    .swap:hover .arrow-lower { animation:lower-pass .7s ease both; }
+    .swap[data-state="busy"] .swap-arrows { animation:arrows-turn 1.7s cubic-bezier(.48,.05,.34,1) infinite; }
+    .swap[data-state="busy"] .cn-mark { animation:language-pulse 1.2s ease-in-out infinite alternate; }
+    .swap[data-state="busy"] .en-mark { animation:language-pulse 1.2s ease-in-out .6s infinite alternate; }
+    @keyframes upper-pass { 0%,100% { transform:translateX(0); } 45% { transform:translateX(2.5px); } }
+    @keyframes lower-pass { 0%,100% { transform:translateX(0); } 45% { transform:translateX(-2.5px); } }
+    @keyframes arrows-turn { 0%,12% { transform:rotate(0); } 80%,100% { transform:rotate(360deg); } }
+    @keyframes language-pulse { from { opacity:.35; } to { opacity:1; } }
+
+    /* 折页：文字面切换，纸张外形保持，翻译中是轻缓翻页。 */
+    .page-sheet { transform-origin:16px 16px; }
+    .page-icon .glyph-cn { opacity:0; transform:scaleX(.25); }
+    .page-icon[data-state="zh"] .glyph-cn { opacity:1; transform:scaleX(1); }
+    .page-icon[data-state="zh"] .glyph-en { opacity:0; transform:scaleX(.25); }
+    .page-icon:hover .fold { animation:fold-light .75s ease both; }
+    .page-icon[data-state="busy"] .page-sheet { animation:page-turn 1.35s ease-in-out infinite; }
+    .page-icon .page-scan { opacity:0; stroke-width:1; }
+    .page-icon[data-state="busy"] .page-scan { opacity:.75; animation:page-scan 1.35s ease-in-out infinite; }
+    @keyframes page-turn { 0%,100% { transform:perspective(90px) rotateY(0); } 50% { transform:perspective(90px) rotateY(-35deg); } }
+    @keyframes page-scan { 0%,100% { transform:translateY(-4px); opacity:0; } 35%,65% { opacity:.85; } 75% { transform:translateY(7px); opacity:0; } }
+    @keyframes fold-light { 0%,100% { opacity:.55; } 45% { opacity:1; stroke:#dcf1ff; } }
+
+    /* 光轨：轨道保持静止，只让光点沿弧线移动。 */
+    .orbit .orbit-trails { opacity:.38; }
+    .orbit-runner { transform-origin:16px 16px; }
+    .orbit-dot { fill:currentColor; stroke:0; }
+    .orbit .glyph-cn { opacity:0; transform:scale(.8); }
+    .orbit[data-state="zh"] .glyph-cn { opacity:1; transform:scale(1); }
+    .orbit[data-state="zh"] .glyph-en { opacity:0; transform:scale(.8); }
+    .orbit:hover .orbit-runner { animation:orbit-travel 1.1s cubic-bezier(.2,.7,.2,1) both; }
+    .orbit[data-state="busy"] .orbit-runner { animation:orbit-travel 1.8s linear infinite; }
+    .orbit[data-state="busy"] .orbit-dot { filter:drop-shadow(0 0 2px #a6dcffb0); }
+    .orbit[data-state="busy"] .glyph-en { animation:language-pulse 1.1s ease-in-out infinite alternate; }
+    @keyframes orbit-travel { to { transform:rotate(360deg); } }
+
+    /* 笔画：A / 文在同一中心描画，保持图标轮廓紧凑。 */
+    .ink .glyph-cn { opacity:0; transform:translateY(2px); }
+    .ink[data-state="zh"] .glyph-cn { opacity:1; transform:none; }
+    .ink[data-state="zh"] .glyph-en { opacity:0; transform:translateY(-2px); }
+    .ink .draw-stroke { stroke-dasharray:70; stroke-dashoffset:0; }
+    .ink:hover .draw-stroke { animation:write-ink .8s cubic-bezier(.2,.65,.2,1) both; }
+    .ink .pen-spark { transform-origin:25px 6px; opacity:.6; }
+    .ink:hover .pen-spark { animation:spark-open .7s ease both; }
+    .ink[data-state="busy"] .glyph-en { animation:ink-exchange 1.5s ease-in-out infinite; }
+    .ink[data-state="busy"] .glyph-cn { animation:ink-exchange 1.5s ease-in-out -.75s infinite; }
+    .ink[data-state="busy"] .draw-stroke { animation:write-ink 1.5s ease infinite; }
+    .ink[data-state="busy"] .pen-spark { animation:spark-open 1.5s ease infinite; }
+    @keyframes write-ink { 0% { stroke-dashoffset:70; opacity:.3; } 75%,100% { stroke-dashoffset:0; opacity:1; } }
+    @keyframes spark-open { 0%,100% { transform:scale(.7) rotate(0); opacity:.45; } 50% { transform:scale(1.15) rotate(70deg); opacity:1; } }
+    @keyframes ink-exchange { 0%,12%,100% { opacity:0; transform:translateY(2px); } 30%,62% { opacity:1; transform:translateY(0); } 80% { opacity:0; transform:translateY(-2px); } }
+
+    @media (min-width:1000px) { .thought-body { min-height:123px; } }
+    @media (max-width:780px) { .page { padding:24px 16px 30px; }.top { margin-bottom:27px; }.intro { align-items:flex-start; flex-direction:column; gap:18px; }.grid { grid-template-columns:1fr; }.option { padding:16px; }.page-foot { flex-direction:column; gap:4px; }.page-foot span:last-child { text-align:left; } }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none !important; transition:none !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="top">
+      <div class="brand"><svg viewBox="0 0 20 24" aria-hidden="true"><path d="M6 3v18M7 11l10-7M7 13l10 7" stroke="#e3dfd8" stroke-width="3" stroke-linecap="round"/><circle cx="4" cy="12" r="3.2" fill="#8bccf5"/></svg><span>开物 / AI 面板</span></div>
+      <span class="preview-note">翻译控件 · HTML 方案预览</span>
+    </header>
+    <section class="intro">
+      <div><p class="eyebrow">TRANSLATION IN MOTION</p><h1>一个图标，完成换译</h1><p class="lead">移除「中文 / 原文」文字按钮与字数，只留下一个动态矢量图标。<br>点击图标体验翻译、查看中文，再切回原文。</p></div>
+      <div class="toolbar"><button class="control" id="enlarge" type="button" aria-pressed="false">放大图标</button><button class="control primary" id="playAll" type="button"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="m6 3 6 5-6 5Z"/></svg>一起播放</button></div>
+    </section>
+    <section class="grid" aria-label="动态翻译图标方案">
+      <article class="option" data-option="swap">
+        <div class="option-title"><span class="number">01</span><h2>双向换译</h2><span class="recommend">已采用</span></div>
+        <p class="description">A 与文保持可辨认，双向箭头沿中心轻旋。</p>
+        <div class="stage"><div class="thought-head"><svg class="caret" viewBox="0 0 10 10" aria-hidden="true"><path d="m1 3 4 5 4-5Z" fill="currentColor"/></svg><span>已思考</span><span class="duration">2.8 秒</span><div class="thought-tools">
+          <button class="translate swap" type="button" data-state="source" data-tooltip="翻译为中文" aria-label="翻译为中文">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><g class="cn-mark"><path d="M4.5 11h11m-5.5-3v3m-3 0c.3 4.8 3.4 8.2 8.2 10M13 11c-.8 4.7-3.6 8-8 10"/></g><g class="en-mark"><path d="m17 23 4-11 4 11m-6.6-3.7h5.2"/></g><g class="swap-arrows"><path class="arrow-upper" d="M17 5h9l-2.7-2.5"/><path class="arrow-lower" d="M15 27H6l2.7 2.5"/></g></svg>
+          </button>
+        </div></div><div class="thought-body"></div></div>
+        <div class="option-foot"><div class="state-list"><span data-step="source">原文</span><i>→</i><span data-step="busy">翻译中</span><i>→</i><span data-step="zh">中文</span></div><button class="replay" type="button">再看一次 ↗</button></div>
+        <div class="detail"><div class="detail-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M4.5 11h11m-5.5-3v3m-3 0c.3 4.8 3.4 8.2 8.2 10M13 11c-.8 4.7-3.6 8-8 10m12 2 4-11 4 11m-6.6-3.7h5.2M17 5h9l-2.7-2.5M15 27H6l2.7 2.5"/></svg></div><div class="detail-copy"><strong>语义最直观 · 适合常用入口</strong><br>悬停时箭头轻移，翻译中循环换向；译好后变为浅蓝色。</div></div>
+      </article>
+      <article class="option" data-option="page-icon">
+        <div class="option-title"><span class="number">02</span><h2>折页换面</h2></div>
+        <p class="description">一张纸，两种语言；轻微翻页，文字随之换面。</p>
+        <div class="stage"><div class="thought-head"><svg class="caret" viewBox="0 0 10 10" aria-hidden="true"><path d="m1 3 4 5 4-5Z" fill="currentColor"/></svg><span>已思考</span><span class="duration">2.8 秒</span><div class="thought-tools">
+          <button class="translate page-icon" type="button" data-state="source" data-tooltip="翻译为中文" aria-label="翻译为中文">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><g class="page-sheet"><path d="M8 4h11l5 5v19H8Z"/><path class="fold" d="M19 4v6h5"/><g class="glyph-en"><path d="m12 22 4-10 4 10m-6.6-3.4h5.2"/></g><g class="glyph-cn"><path d="M11 14h10m-5-3v3m-3 0c.5 4.3 2.7 7 7.7 10M19 14c-.7 4.1-3.5 7.5-7.7 10"/></g><path class="page-scan" d="M10.5 12h11"/></g></svg>
+          </button>
+        </div></div><div class="thought-body"></div></div>
+        <div class="option-foot"><div class="state-list"><span data-step="source">原文</span><i>→</i><span data-step="busy">翻译中</span><i>→</i><span data-step="zh">中文</span></div><button class="replay" type="button">再看一次 ↗</button></div>
+        <div class="detail"><div class="detail-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M8 4h11l5 5v19H8ZM19 4v6h5m-12 12 4-10 4 10m-6.6-3.4h5.2"/></svg></div><div class="detail-copy"><strong>文档感更强 · 动效较柔和</strong><br>翻译中纸张轻翻；完成后 A 换成文，下一次点击切回原文。</div></div>
+      </article>
+      <article class="option" data-option="orbit">
+        <div class="option-title"><span class="number">03</span><h2>光轨穿梭</h2></div>
+        <p class="description">轮廓保持稳定，只有一颗光点沿语言轨道移动。</p>
+        <div class="stage"><div class="thought-head"><svg class="caret" viewBox="0 0 10 10" aria-hidden="true"><path d="m1 3 4 5 4-5Z" fill="currentColor"/></svg><span>已思考</span><span class="duration">2.8 秒</span><div class="thought-tools">
+          <button class="translate orbit" type="button" data-state="source" data-tooltip="翻译为中文" aria-label="翻译为中文">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><g class="orbit-trails"><path d="M5.3 13a11 11 0 0 1 20-3.4M26.7 19a11 11 0 0 1-20 3.4"/></g><g class="orbit-runner"><circle class="orbit-dot" cx="26.7" cy="13" r="1.6"/><circle cx="5.3" cy="19" r="1.3" opacity=".5"/></g><g class="glyph-en"><path d="m11.5 22 4.5-12 4.5 12m-7.5-4h6"/></g><g class="glyph-cn"><path d="M10 13h12m-6-4v4m-3 0c.5 4.5 3.4 7.7 8.6 10M20 13c-.7 4.5-3.8 8.3-9.5 10"/></g></svg>
+          </button>
+        </div></div><div class="thought-body"></div></div>
+        <div class="option-foot"><div class="state-list"><span data-step="source">原文</span><i>→</i><span data-step="busy">翻译中</span><i>→</i><span data-step="zh">中文</span></div><button class="replay" type="button">再看一次 ↗</button></div>
+        <div class="detail"><div class="detail-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M5.3 13a11 11 0 0 1 20-3.4M26.7 19a11 11 0 0 1-20 3.4"/><path d="m11.5 22 4.5-12 4.5 12m-7.5-4h6"/><circle cx="26.7" cy="13" r="1.5" fill="currentColor" stroke="none"/></svg></div><div class="detail-copy"><strong>轻盈、安静 · 接近星辰横移的风格</strong><br>悬停绕行一圈，翻译中连续穿梭；完成后轨道停住、字形切换。</div></div>
+      </article>
+      <article class="option" data-option="ink">
+        <div class="option-title"><span class="number">04</span><h2>笔画重组</h2></div>
+        <p class="description">由 A 逐笔描成文，用笔画变化表达语言切换。</p>
+        <div class="stage"><div class="thought-head"><svg class="caret" viewBox="0 0 10 10" aria-hidden="true"><path d="m1 3 4 5 4-5Z" fill="currentColor"/></svg><span>已思考</span><span class="duration">2.8 秒</span><div class="thought-tools">
+          <button class="translate ink" type="button" data-state="source" data-tooltip="翻译为中文" aria-label="翻译为中文">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 8V5h5M25 24v3h-5" opacity=".4"/><g class="glyph-en"><path class="draw-stroke" d="m10 24 6-15 6 15m-10.2-5h8.4"/></g><g class="glyph-cn"><path class="draw-stroke" d="M8 13h16m-8-5v5m-5 0c.6 5.1 4.5 9 12.2 13M21 13c-1 5.8-5.5 10.4-12.2 13"/></g><path class="pen-spark" d="M25 2.5v7M21.5 6h7"/></svg>
+          </button>
+        </div></div><div class="thought-body"></div></div>
+        <div class="option-foot"><div class="state-list"><span data-step="source">原文</span><i>→</i><span data-step="busy">翻译中</span><i>→</i><span data-step="zh">中文</span></div><button class="replay" type="button">再看一次 ↗</button></div>
+        <div class="detail"><div class="detail-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M7 8V5h5M25 24v3h-5m-10-3L16 9l6 15m-10.2-5h8.4M25 2.5v7M21.5 6h7"/></svg></div><div class="detail-copy"><strong>更有辨识度 · 动态表达更明显</strong><br>翻译中两种字形交替描画；完成后笔画收稳，回到清晰的静态图标。</div></div>
+      </article>
+    </section>
+    <footer class="page-foot"><span>首次打开自动演示一次。点击浅蓝图标切回原文，再点即可查看中文。</span><span>所有图标均为 SVG · 无字数显示 · 支持键盘操作与减少动态效果</span></footer>
+  </main>
+  <script>
+    (() => {
+      const text = {
+        source: ['Good design gives the content room to breathe. A small translation control should be easy to recognize and quiet when it is not in use.', 'A brief movement can show that translation is in progress. Once it is ready, the icon should settle and let the reader continue.'],
+        zh: ['好的界面会给内容留下呼吸的空间。一个小小的翻译入口，应该容易辨认，也应该在不用时安静地待在一旁。', '短暂的动作可以表达翻译正在进行。译文准备好后，图标就应收稳，让阅读自然继续。']
+      };
+      const cards = [...document.querySelectorAll('.option')];
+      const timers = new Map();
+      function renderText(card, language) {
+        const body = card.querySelector('.thought-body');
+        body.replaceChildren(...text[language].map(value => {
+          const paragraph = document.createElement('p');
+          paragraph.textContent = value;
+          return paragraph;
+        }));
+        body.lang = language === 'zh' ? 'zh-CN' : 'en';
+        body.classList.remove('changing');
+        void body.offsetWidth;
+        body.classList.add('changing');
+      }
+      function setState(card, state) {
+        const button = card.querySelector('.translate');
+        button.dataset.state = state;
+        button.disabled = state === 'busy';
+        button.setAttribute('aria-busy', String(state === 'busy'));
+        button.setAttribute('aria-pressed', String(state === 'zh'));
+        const label = state === 'busy' ? '正在翻译为中文' : state === 'zh' ? '当前为中文，点击查看原文' : card.dataset.cached === 'true' ? '当前为原文，点击查看中文' : '翻译为中文';
+        button.setAttribute('aria-label', label);
+        button.dataset.tooltip = label;
+        card.querySelectorAll('[data-step]').forEach(item => item.classList.toggle('on', item.dataset.step === state));
+      }
+      function play(card, delay = 0) {
+        clearTimeout(timers.get(card));
+        card.dataset.cached = 'false';
+        setState(card, 'source');
+        renderText(card, 'source');
+        timers.set(card, setTimeout(() => {
+          setState(card, 'busy');
+          timers.set(card, setTimeout(() => {
+            card.dataset.cached = 'true';
+            setState(card, 'zh');
+            renderText(card, 'zh');
+            timers.delete(card);
+          }, 2100));
+        }, delay));
+      }
+      cards.forEach((card, index) => {
+        setState(card, 'source'); renderText(card, 'source');
+        card.querySelector('.translate').addEventListener('click', () => {
+          const state = card.querySelector('.translate').dataset.state;
+          if (state === 'busy') return;
+          if (card.dataset.cached !== 'true') { play(card); return; }
+          const language = state === 'zh' ? 'source' : 'zh';
+          setState(card, language); renderText(card, language);
+        });
+        card.querySelector('.replay').addEventListener('click', () => play(card));
+        play(card, 650 + index * 180);
+      });
+      document.getElementById('playAll').addEventListener('click', () => cards.forEach(card => play(card)));
+      document.getElementById('enlarge').addEventListener('click', event => {
+        const enlarged = event.currentTarget.getAttribute('aria-pressed') !== 'true';
+        event.currentTarget.setAttribute('aria-pressed', String(enlarged));
+        event.currentTarget.textContent = enlarged ? '恢复实际尺寸' : '放大图标';
+        document.documentElement.style.setProperty('--icon-size', enlarged ? '33px' : '25px');
+      });
+      window.addEventListener('pagehide', () => {
+        timers.forEach(clearTimeout); timers.clear();
+        cards.forEach(card => {
+          if (card.querySelector('.translate').dataset.state === 'busy') {
+            setState(card, 'source'); renderText(card, 'source');
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

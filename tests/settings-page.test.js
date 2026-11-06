@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-    MOTION_OFF, RESTART_NOTICE, SETTINGS_KEYS, SETTINGS_NS, SETTINGS_SECTIONS, SETTINGS_VIEW,
+    MOTION_OFF, RESTART_NOTICE, SETTINGS_KEYS, SETTINGS_NS, SETTINGS_SECTIONS,
     badgeCounts, describeAgentProcess, emptySearchText, filterSettings, itemCount, itemSearchText,
     matchesQuery, motionOffFromSetting, motionSettingFromToggle, savePathResultText, validatePathSetting,
 } from '../app/lib/settings-page.js';
@@ -30,13 +30,7 @@ test('设置键与命名空间:与 electron/main.js 读的是同一批(不许另
 
 // ---------- 分区与项目 ----------
 
-test('视图切换 id:顶栏 data-view / 标签 id / 整屏区块 id 三处是同一份约定', () => {
-    // 这三处分别在 index.html(标签与区块)、app/main.js(switchView 里的 hidden 开关)
-    // 与自检(点那个 id)里出现 —— 分开写死过,改一处忘一处就是"点了标签没反应"。
-    assert.deepEqual(SETTINGS_VIEW, { view: 'settings', tabId: 'viewSettings', paneId: 'paneSettings' });
-    assert.equal(SETTINGS_VIEW.view, 'settings', 'data-view 的值');
-    assert.match(SETTINGS_VIEW.tabId, /^view[A-Z]/);
-    assert.match(SETTINGS_VIEW.paneId, /^pane[A-Z]/);
+test('首选项分区 id 仅使用小写字母', () => {
     // 分区 id 只用小写字母(它们是 dataset 值,自检与搜索都按它取值)
     for (const sec of SETTINGS_SECTIONS) assert.match(sec.id, /^[a-z]+$/);
 });
