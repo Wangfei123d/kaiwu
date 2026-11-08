@@ -5,15 +5,14 @@
 //      这个模块只负责"读出来画上、写回去",判据全在 app/lib/settings-page.js 里(有单测)。
 //   ② **绝不回显密钥**:密钥那一项与 AI 面板密钥卡走同一个通道,输入框永远是空的、
 //      状态只显示 `{ ok, source, reason }` 三个叶子字段;看不见的值不画、也不留在 DOM 里。
-//   ③ **改了要重启才生效的项必须写明**:服务根目录与 DSH_HOME 都是"下次启动才读"的值,
-//      界面上当场写出 RESTART_NOTICE,不让用户以为立刻生效。
+//   ③ 设置页只保留控件与简短状态;辅助说明不放进界面。
 //
 // 渲染只用 createElement / textContent(绝不用 innerHTML),事件用 addEventListener。
 
 import {
-    RESTART_NOTICE, SETTINGS_KEYS, SETTINGS_NS, SETTINGS_SECTIONS,
-    badgeCounts, describeAgentProcess, emptySearchText, filterSettings, itemCount,
-    motionOffFromSetting, motionSettingFromToggle, savePathResultText, validatePathSetting,
+    SETTINGS_KEYS, SETTINGS_NS, SETTINGS_SECTIONS,
+    describeAgentProcess, emptySearchText, filterSettings,
+    motionOffFromSetting, motionSettingFromToggle, validatePathSetting,
 } from '../lib/settings-page.js';
 import { describeVideoKeyStatus } from '../lib/agent-video.js';
 
@@ -28,14 +27,13 @@ function el(doc, tag, className, text) {
 /**
  * @param {object} deps
  * @param {object} deps.doc / deps.win 注入(单测给替身)
- * @param {object} deps.els 骨架里的几个节点(searchEl / navEl / bodyEl / overviewEl)
+ * @param {object} deps.els 骨架里的几个节点(searchEl / navEl / bodyEl)
  * @param {object} deps.bridge IPC 通道(只走既有的那些)
  * @param {() => object|null} [deps.getIndex] 笔记索引(索引状态那一项读它,不另建一份)
  * @param {() => string} [deps.getVaultPath] 当前库路径(顶栏那份读数)
- * @param {() => string} [deps.getLayoutText] 当前布局树文本(工作台那份读数)
  * @param {() => void} [deps.onResetLayout] 「重置布局」—— 复用工作台那个按钮的能力
  * @param {() => void} [deps.onChangeVault] 「更换」—— 复用顶栏那个按钮的能力
- * @param {(off:boolean)=>void} [deps.onMotionChange] 动效开关翻转(外壳负责落盘 + 通知星空)
+ * @param {(off:boolean)=>void} [deps.onMotionChange] 动效开关翻转(外壳负责落盘并应用全局样式)
  */
 export function createSettingsView({
     doc = globalThis.document,
@@ -44,7 +42,6 @@ export function createSettingsView({
     bridge,
     getIndex = () => null,
     getVaultPath = () => '',
-    getLayoutText = () => '',
     onResetLayout = () => {},
     onChangeVault = () => {},
     onMotionChange = () => {},
@@ -119,22 +116,10 @@ export function createSettingsView({
 
     // ---------------- 文案(每一项的"右半边") ----------------
 
-    function videoModelText() {
-        const v = state.video;
-        if (v === null) return '读不到(video:status 没回话)';
-        const list = Array.isArray(v.models) ? v.models : [];
-        const hit = list.find((m) => m.id === v.model);
-        if (!hit) return String(v.model ?? '—');
-        // 模型清单里的 label 已经带上了 id(例如「qwen3-vl-flash(便宜、快)」),
-        // 别把 id 再拼一遍 —— 读起来像两件事。
-        return String(hit.label).includes(String(hit.id)) ? String(hit.label) : `${hit.label}(${hit.id})`;
-    }
-
     function credentialText() {
         const c = state.credential;
-        if (c === null) return '读不到(agent:credentials 没回话)';
-        if (c.ok === true) return `已配置${c.source ? `(${c.source})` : ''}`;
-        return `未配置${c.reason ? ` —— ${c.reason}` : ''}`;
+        if (c === null) return '不可用';
+        return c.ok === true ? '已配置' : '未配置';
     }
 
     /**
@@ -147,8 +132,7 @@ export function createSettingsView({
      */
     function videoKeyText() {
         const d = describeVideoKeyStatus(state.video ?? {});
-        const storage = d.storageLabel === '' ? '' : `,${d.storageLabel}`;
-        return { status: `密钥:${d.label}${storage}`, warning: d.warning, detail: d.detail };
+        return { status: d.configured ? '已配置' : '未配置', configured: d.configured, warning: d.warning };
     }
 
     function indexText() {
@@ -192,14 +176,6 @@ export function createSettingsView({
         }
     }
 
-    /** 顶部那行总览:分区数 / 项目数 / 徽标分布。 */
-    function renderOverview() {
-        if (!els.overviewEl) return;
-        const counts = badgeCounts();
-        els.overviewEl.textContent = `${SETTINGS_SECTIONS.length} 个分区 · ${itemCount()} 项 · `
-            + `已有通道 ${counts.has} · 需要新做 ${counts.isNew}`;
-    }
-
     /** 一项右侧的控件。 */
     function renderControl(item) {
         const box = el(doc, 'div', 'settings-ctrl');
@@ -207,7 +183,7 @@ export function createSettingsView({
             const input = el(doc, 'input', 'settings-input');
             input.type = 'password';
             input.id = 'settingsImageKey';
-            input.placeholder = 'sk-…(不回显)';
+            input.placeholder = 'sk-…';
             input.setAttribute('aria-label', 'APINebula 图片服务密钥(不回显)');
             const save = el(doc, 'button', 'btn btn-sm btn-primary', '保存');
             save.type = 'button';
@@ -219,9 +195,8 @@ export function createSettingsView({
             note.id = 'settingsImageKeyNote';
             const status = el(doc, 'span', 'settings-note', '');
             status.id = 'settingsImageKeyStatus';
-            status.textContent = state.image?.ok === true
-                ? `已配置 · ${state.image.model ?? 'gpt-image-2.5'} · ${state.image.storage ?? '本机'}`
-                : `未配置${state.image?.reason ? ` · ${state.image.reason}` : ''}`;
+            status.textContent = state.image?.ok === true ? '已配置' : '未配置';
+            status.dataset.state = state.image?.ok === true ? 'ok' : 'bad';
             on(save, 'click', async () => {
                 const value = String(input.value ?? '').trim();
                 if (value === '') { setNote(note.id, '请先输入图片密钥', false); return; }
@@ -230,7 +205,7 @@ export function createSettingsView({
                 const result = await pending;
                 await loadReadings();
                 renderBody();
-                setNote(note.id, result?.ok === true ? '已保存(密钥不回显)' : `保存失败:${result?.reason ?? '通道无响应'}`,
+                setNote(note.id, result?.ok === true ? '已保存' : `保存失败:${result?.reason ?? '通道无响应'}`,
                     result?.ok === true);
             });
             on(clear, 'click', async () => {
@@ -249,7 +224,7 @@ export function createSettingsView({
             const input = el(doc, 'input', 'settings-input');
             input.type = 'password';
             input.id = 'settingsVideoKey';
-            input.placeholder = 'sk-…(不回显)';
+            input.placeholder = 'sk-…';
             input.setAttribute('aria-label', 'DashScope 密钥(不回显)');
             const save = el(doc, 'button', 'btn btn-sm btn-primary', '保存');
             save.type = 'button';
@@ -272,9 +247,7 @@ export function createSettingsView({
                 input.value = '';
                 await loadReadings();
                 renderBody();
-                setNote(note.id,
-                    r?.ok === true ? '已保存(密文/明文由系统决定,不进日志)' : `保存失败:${r?.reason ?? '通道没回话'}`,
-                    r?.ok === true);
+                setNote(note.id, r?.ok === true ? '已保存' : `保存失败:${r?.reason ?? '通道没回话'}`, r?.ok === true);
             });
             on(clear, 'click', async () => {
                 const r = await invoke('video:key:clear');
@@ -287,13 +260,11 @@ export function createSettingsView({
             const keys = videoKeyText();
             const status = el(doc, 'span', 'settings-note', keys.status);
             status.id = 'settingsVideoKeyStatus';
+            status.dataset.state = keys.configured ? 'ok' : 'bad';
             const warn = el(doc, 'span', 'settings-warn', keys.warning);
             warn.id = 'settingsVideoKeyWarn';
             warn.hidden = keys.warning === '';
-            const detail = el(doc, 'span', 'settings-note', keys.detail);
-            detail.id = 'settingsVideoKeyDetail';
-            detail.hidden = keys.detail === '';
-            box.append(input, save, clear, note, status, warn, detail);
+            box.append(input, save, clear, note, status, warn);
             return box;
         }
         if (item.ctrl === 'kill') {
@@ -305,9 +276,9 @@ export function createSettingsView({
             const line = el(doc, 'div', 'settings-stat');
             const dot = el(doc, 'span', 'settings-dot');
             dot.dataset.state = info.state === 'ready' ? 'ok' : 'bad';
-            const value = el(doc, 'span', null,
-                `Agent:${info.label}${info.detail === '' ? '' : `(${info.detail})`}`);
+            const value = el(doc, 'span', null, `Agent:${info.label}`);
             value.id = 'settingsAgentState';
+            value.dataset.state = info.state === 'ready' ? 'ok' : 'bad';
             line.append(dot, value);
             const btn = el(doc, 'button', 'btn btn-sm', '停止进程');
             btn.type = 'button';
@@ -321,12 +292,9 @@ export function createSettingsView({
                 renderBody();
                 // ⚠️ 停掉之后**必须**说清下一步按哪儿:面板上「发送」会变灰,
                 // 而「重试」只有在提示卡里才出现(见 panel.js 的 killProcess / onEvent)。
-                const after = describeAgentProcess(state.agent);
                 const ok = r === null ? false : (r?.ok === false ? false : true);
                 setNote(note.id,
-                    ok
-                        ? `已停止(现在是:${after.label})—— 回对话面板点「重试」再连`
-                        : '没停成(通道没回话或报错),再试一次',
+                    ok ? '已停止' : '停止失败',
                     ok);
             });
             box.append(line, btn, note);
@@ -340,6 +308,7 @@ export function createSettingsView({
             dot.dataset.state = ok === true ? 'ok' : 'bad';
             const value = el(doc, 'span', null, text);
             value.id = `settingsValue-${item.id}`;
+            value.dataset.state = ok ? 'ok' : 'bad';
             line.append(dot, value);
             box.appendChild(line);
             return box;
@@ -349,10 +318,7 @@ export function createSettingsView({
             btn.type = 'button';
             btn.id = 'settingsLayoutReset';
             on(btn, 'click', () => { onResetLayout(); renderBody(); });
-            const tree = el(doc, 'span', 'settings-mono', String(getLayoutText() ?? ''));
-            tree.id = 'settingsLayoutTree';
-            tree.title = String(getLayoutText() ?? '');
-            box.append(btn, tree);
+            box.appendChild(btn);
             return box;
         }
         if (item.ctrl === 'toggle') {
@@ -364,6 +330,9 @@ export function createSettingsView({
             input.setAttribute('aria-label', '减少动态效果(强制关)');
             const track = el(doc, 'i');
             label.append(input, track);
+            const note = el(doc, 'span', 'settings-note', '');
+            note.id = 'settingsMotionNote';
+            note.hidden = true;
             on(input, 'change', async () => {
                 const off = input.checked === true;
                 state.motionOff = off;
@@ -371,11 +340,10 @@ export function createSettingsView({
                     pluginId: SETTINGS_NS, key: SETTINGS_KEYS.motion, value: motionSettingFromToggle(off),
                 });
                 onMotionChange(off);
-                const note = box.querySelector?.('.settings-note');
-                if (note) note.textContent = wrote === null ? '没写进设置(通道出错)' : (off ? '已强制关掉动效' : '已恢复跟随系统');
+                note.hidden = wrote !== null;
+                note.textContent = wrote === null ? '保存失败' : '';
+                note.dataset.state = wrote === null ? 'bad' : '';
             });
-            const note = el(doc, 'span', 'settings-note', state.motionOff === true ? '已强制关掉动效' : '跟随系统');
-            note.id = 'settingsMotionNote';
             box.append(label, note);
             return box;
         }
@@ -384,14 +352,13 @@ export function createSettingsView({
             input.type = 'text';
             input.id = `settingsPath-${item.id}`;
             input.value = state.paths[item.id] ?? '';
-            input.placeholder = '留空 = 用默认';
+            input.placeholder = '';
             input.setAttribute('aria-label', item.title);
             const save = el(doc, 'button', 'btn btn-sm btn-primary', '保存');
             save.type = 'button';
             save.id = `settingsPathSave-${item.id}`;
-            const note = el(doc, 'span', 'settings-note', item.restart === true ? RESTART_NOTICE : '');
+            const note = el(doc, 'span', 'settings-note', '');
             note.id = `settingsPathNote-${item.id}`;
-            note.dataset.restart = String(item.restart === true);
             on(save, 'click', async () => {
                 const verdict = validatePathSetting(input.value);
                 if (verdict.ok !== true) {
@@ -405,7 +372,7 @@ export function createSettingsView({
                 state.paths[item.id] = verdict.value;
                 input.value = verdict.value;
                 note.dataset.state = wrote === null ? 'bad' : 'ok';
-                note.textContent = savePathResultText(verdict, wrote !== null, item.restart === true);
+                note.textContent = wrote === null ? '保存失败' : (verdict.empty ? '已恢复默认' : '已保存');
             });
             box.append(input, save, note);
             return box;
@@ -437,7 +404,8 @@ export function createSettingsView({
             select.appendChild(op);
         }
         for (const m of models) {
-            const op = el(doc, 'option', null, m.label);
+            const modelLabel = String(m.id ?? m.label ?? '').replace(/\s*[（(].*[）)]\s*$/, '').trim();
+            const op = el(doc, 'option', null, modelLabel);
             op.value = m.id;
             if (m.id === state.video?.model) op.selected = true;
             select.appendChild(op);
@@ -454,9 +422,7 @@ export function createSettingsView({
                 : null;
             if (boxAfter !== null) boxAfter.appendChild(fresh);
         });
-        const current = el(doc, 'span', 'settings-note', videoModelText());
-        current.id = 'settingsVideoModelNow';
-        box.append(select, current);
+        box.appendChild(select);
         return box;
     }
 
@@ -469,10 +435,6 @@ export function createSettingsView({
         title.appendChild(el(doc, 'span', `settings-badge ${item.badge === 'has' ? 'has' : 'new'}`,
             item.badge === 'has' ? '已有通道' : '需要新做'));
         label.appendChild(title);
-        label.appendChild(el(doc, 'div', 'settings-hint', item.hint));
-        const restart = el(doc, 'div', 'settings-restart',
-            item.restart === true ? `⚠ ${RESTART_NOTICE}(服务/子进程启动时就读了它)` : '');
-        label.appendChild(restart);
         row.append(label, renderControl(item));
         return row;
     }
@@ -494,7 +456,6 @@ export function createSettingsView({
             // 搜索时标题带命中数(设计稿的行为);不搜索时显示这一节有多少项
             const heading = state.query.trim() === '' ? sec.name : `${sec.name}(${sec.hits})`;
             section.appendChild(el(doc, 'h2', 'settings-section-title', heading));
-            if (state.query.trim() === '') section.appendChild(el(doc, 'div', 'settings-section-desc', `${sec.hits} 项`));
             const card = el(doc, 'div', 'settings-card');
             for (const item of sec.items) card.appendChild(renderItem(item));
             section.appendChild(card);
@@ -506,7 +467,6 @@ export function createSettingsView({
     /** 按当前分区/查询重画(不动数据)。 */
     function render() {
         renderNav();
-        renderOverview();
         renderBody();
     }
 

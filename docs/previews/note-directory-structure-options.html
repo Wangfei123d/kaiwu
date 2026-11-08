@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>笔记目录结构 · 三种方案</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #111210;
+      --panel: #191a18;
+      --panel-raised: #20211f;
+      --line: #343531;
+      --line-soft: #292a27;
+      --text: #eeeDE9;
+      --muted: #a29f96;
+      --quiet: #77756e;
+      --blue: #7ec8ff;
+      --blue-soft: #243541;
+      --green: #a8c9ad;
+      --amber: #d8bd82;
+      --purple: #bda8e8;
+      --radius: 12px;
+      font: 14px/1.45 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+      background: var(--page);
+      color: var(--text);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--page); }
+    button { color: inherit; font: inherit; }
+    .page { width: min(1160px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 52px; }
+    .eyebrow { color: var(--blue); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 8px 0 6px; font-size: clamp(24px, 3.4vw, 34px); line-height: 1.2; letter-spacing: -.035em; }
+    .intro { margin: 0; max-width: 540px; color: var(--muted); font-size: 13px; }
+    .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 28px; align-items: start; }
+    .option { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 15px; background: #151614; }
+    .option-head { display: flex; align-items: center; gap: 10px; min-height: 30px; }
+    .letter { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border: 1px solid #557185; border-radius: 8px; background: #1c2a32; color: var(--blue); font: 600 12px/1 ui-monospace, Consolas, monospace; }
+    .option h2 { margin: 0; font-size: 14px; font-weight: 650; }
+    .option-desc { min-height: 36px; margin: 4px 0 12px 36px; color: var(--quiet); font-size: 11.5px; }
+    .mock { min-height: 426px; overflow: hidden; border: 1px solid #3b3c38; border-radius: 10px; background: var(--panel); box-shadow: 0 16px 36px #0002; }
+    .mock-top { display: flex; align-items: center; gap: 8px; height: 39px; padding: 0 12px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font-size: 11px; }
+    .mock-top svg { width: 14px; height: 14px; color: var(--quiet); fill: none; stroke: currentColor; stroke-width: 1.5; }
+    .mock-caption { margin-left: auto; color: #66665f; font: 10px/1 ui-monospace, Consolas, monospace; }
+    .tree { padding: 9px 8px 12px; }
+    .tree-row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: 34px; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); text-align: left; cursor: pointer; }
+    .tree-row:hover { background: #ffffff08; color: var(--text); }
+    .tree-row.selected { background: var(--blue-soft); color: #f3f4f2; }
+    .tree-row.folder { color: #d5d2cb; }
+    .tree-row.subtle { color: #99978e; }
+    .tree-row .name { overflow: hidden; min-width: 0; text-overflow: ellipsis; white-space: nowrap; }
+    .tree-row .meta { flex: none; margin-left: auto; color: var(--quiet); font: 10px/1 ui-monospace, Consolas, monospace; }
+    .caret { width: 12px; flex: none; color: #77776f; font-size: 9px; text-align: center; transition: transform .15s ease; }
+    [aria-expanded="false"] > .caret { transform: rotate(-90deg); }
+    .folder-icon { width: 15px; height: 15px; flex: none; fill: none; stroke: #aeb7ac; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+    .file-icon { display: grid; place-items: center; width: 15px; height: 17px; flex: none; border: 1px solid #5b6a72; border-radius: 3px; color: #a8cee0; font: 8px/1 ui-monospace, Consolas, monospace; }
+    .file-icon.image { border-color: #786c93; color: var(--purple); }
+    .file-icon.text { border-color: #6a7966; color: var(--green); }
+    .tree-branch { margin-left: 13px; padding-left: 9px; border-left: 1px solid #41423c; }
+    .tree-branch > .tree-row { position: relative; }
+    .tree-branch > .tree-row::before { position: absolute; left: -10px; width: 8px; border-top: 1px solid #41423c; content: ""; }
+    .tree-branch[hidden], [hidden] { display: none !important; }
+    .section-label { display: flex; align-items: center; gap: 7px; margin: 12px 0 5px; padding: 0 8px; color: #77756e; font-size: 10px; letter-spacing: .08em; }
+    .count { margin-left: auto; color: #66655e; font: 10px/1 ui-monospace, Consolas, monospace; letter-spacing: 0; }
+    .group-card { margin: 7px 2px; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 8px; background: #1c1d1b; }
+    .group-card .tree-row { min-height: 39px; border-radius: 0; }
+    .group-card .tree-row.folder { background: #ffffff03; }
+    .group-card .tree-row.folder:hover { background: #ffffff08; }
+    .group-body { padding: 2px 5px 7px; border-top: 1px solid #2a2b28; }
+    .group-body .tree-row { min-height: 32px; }
+    .group-body .tree-row .name { font-size: 11.5px; }
+    .group-body .meta { font-size: 9.5px; }
+    .crumbs { display: flex; align-items: center; gap: 6px; padding: 12px 12px 10px; color: #73736c; font-size: 10.5px; }
+    .crumbs strong { color: #dedbd3; font-weight: 600; }
+    .crumbs .slash { color: #50514c; }
+    .directory-title { display: flex; align-items: baseline; gap: 8px; padding: 0 12px 12px; }
+    .directory-title strong { font-size: 17px; letter-spacing: -.02em; }
+    .directory-title span { color: var(--quiet); font-size: 10px; }
+    .contents { margin: 0 9px 12px; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 8px; }
+    .content-row { display: flex; align-items: center; gap: 9px; min-height: 41px; padding: 6px 9px; border-bottom: 1px solid #292a27; color: #d0cec7; cursor: pointer; }
+    .content-row:last-child { border-bottom: 0; }
+    .content-row:hover { background: #ffffff08; }
+    .content-row.selected { background: var(--blue-soft); }
+    .content-row .content-info { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 2px; }
+    .content-row .content-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+    .content-row .content-path { overflow: hidden; color: #73736c; text-overflow: ellipsis; white-space: nowrap; font-size: 9.5px; }
+    .kind { flex: none; color: #74736c; font-size: 9px; }
+    .kind.folder-kind { color: var(--blue); }
+    .content-row .meta { flex: none; color: #77756e; font: 9px/1 ui-monospace, Consolas, monospace; }
+    .note { display: flex; align-items: flex-start; gap: 8px; margin: 13px 4px 0; padding: 10px; border-top: 1px solid var(--line-soft); color: var(--quiet); font-size: 10.5px; }
+    .note-mark { color: var(--blue); }
+    @media (max-width: 900px) { .options { grid-template-columns: 1fr; max-width: 480px; margin-right: auto; margin-left: auto; } .mock { min-height: 0; } .option-desc { min-height: 0; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="eyebrow">开物 · 笔记列表</div>
+    <h1>目录结构，清楚一点</h1>
+    <p class="intro">三种方式呈现「短剧 / 测试」下的文件夹和内容。点击文件夹可以展开或收起，点击条目可以查看选中状态。</p>
+
+    <div class="options">
+      <section class="option" aria-labelledby="option-a-title">
+        <div class="option-head"><span class="letter">A</span><h2 id="option-a-title">层级导线</h2></div>
+        <p class="option-desc">用连续的层级线显示每个文件夹属于谁。</p>
+        <div class="mock">
+          <div class="mock-top"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h4l1.5 1.5H14v7H2z"/><path d="M2 6h12"/></svg><span>笔记目录</span><span class="mock-caption">树形</span></div>
+          <div class="tree">
+            <button class="tree-row folder" data-toggle aria-expanded="true"><span class="caret">▼</span><svg class="folder-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.7 4.2a1 1 0 0 1 1-1h3l1.4 1.5h6.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.7a1 1 0 0 1-1-1z"/></svg><span class="name">短剧</span></button>
+            <div class="tree-branch">
+              <button class="tree-row folder" data-toggle aria-expanded="true"><span class="caret">▼</span><svg class="folder-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.7 4.2a1 1 0 0 1 1-1h3l1.4 1.5h6.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.7a1 1 0 0 1-1-1z"/></svg><span class="name">测试</span><span class="meta">3 个文件夹</span></button>
+              <div class="tree-branch">
+                <button class="tree-row folder" data-toggle aria-expanded="true"><span class="caret">▼</span><svg class="folder-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.7 4.2a1 1 0 0 1 1-1h3l1.4 1.5h6.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.7a1 1 0 0 1-1-1z"/></svg><span class="name">files</span></button>
+                <div class="tree-branch"><button class="tree-row selected" data-select><span class="file-icon image">▧</span><span class="name">456705f7-bded-4ef5-ad4e-37249d…</span><span class="meta">8.3 KB</span></button></div>
+                <button class="tree-row folder" data-toggle aria-expanded="false"><span class="caret">▼</span><svg class="folder-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.7 4.2a1 1 0 0 1 1-1h3l1.4 1.5h6.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.7a1 1 0 0 1-1-1z"/></svg><span class="name">inputs</span><span class="meta">2 项</span></button>
+                <div class="tree-branch" hidden><button class="tree-row" data-select><span class="file-icon text">T</span><span class="name">提示词.md</span></button><button class="tree-row" data-select><span class="file-icon image">▧</span><span class="name">参考图.png</span></button></div>
+                <button class="tree-row folder" data-toggle aria-expanded="true"><span class="caret">▼</span><svg class="folder-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.7 4.2a1 1 0 0 1 1-1h3l1.4 1.5h6.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.7a1 1 0 0 1-1-1z"/></svg><span class="name">outputs</span></button>
+                <div class="tree-branch"><button class="tree-row" data-select><span class="file-icon text">T</span><span class="name">1d650c94-4aa1-4774-be05-bf4d72…</span><span class="meta">1.6 KB</span></button><button class="tree-row" data-select><span class="file-icon text">T</span><span class="name">2b6a4568-0615-4f8f-85e8-19ee25…</span><span class="meta">237 B</span></button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="note"><span class="note-mark">01</span><span>适合保留完整路径感；层级再深时也能顺着线找到归属。</span></div>
+      </section>
+
+      <section class="option" aria-labelledby="option-b-title">
+        <div class="option-head"><span class="letter">B</span><h2 id="option-b-title">分类分组</h2></div>
+        <p class="option-desc">项目名突出显示，files、inputs、outputs 分块排列。</p>
+        <div class="mock">
+          <div class="mock-top"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h4l1.5 1.5H14v7H2z"/><path d="M2 6h12"/></svg><span>短剧项目</span><span class="mock-caption">分组</span></div>
+          <div class="tree">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 9px 12px;border-bottom:1px solid var(--line-soft)">
+              <div style="display:grid;place-items:center;width:32px;height:32px;border:1px solid #3d555d;border-radius:9px;background:#202c2e;color:var(--blue);font-size:15px">T</div>
+              <div style="min-width:0"><div style="font-weight:650;font-size:13px">测试</div><div style="color:var(--quiet);font-size:10px">短剧项目 · 3 个目录</div></div>
+              <span style="margin-left:auto;color:#66665f;font-size:10px">•••</span>
+            </div>
+            <div class="group-card">
+              <button class="tree-row folder" data-toggle aria-expanded="true"><span class="caret">▼</span><svg class="folder-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.7 4.2a1 1 0 0 1 1-1h3l1.4 1.5h6.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.7a1 1 0 0 1-1-1z"/></svg><span class="name">files</span><span class="count">01</span></button>
+              <div class="group-body"><button class="tree-row selected" data-select><span class="file-icon image">▧</span><span class="name">456705f7-bded-4ef5-ad4e-37249d…</span><span class="meta">8.3 KB</span></button></div>
+            </div>
+            <div class="group-card">
+              <button class="tree-row folder" data-toggle aria-expanded="false"><span class="caret">▼</span><svg class="folder-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.7 4.2a1 1 0 0 1 1-1h3l1.4 1.5h6.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.7a1 1 0 0 1-1-1z"/></svg><span class="name">inputs</span><span class="count">02</span></button>
+              <div class="group-body" hidden><button class="tree-row" data-select><span class="file-icon text">T</span><span class="name">提示词.md</span></button><button class="tree-row" data-select><span class="file-icon image">▧</span><span class="name">参考图.png</span></button></div>
+            </div>
+            <div class="group-card">
+              <button class="tree-row folder" data-toggle aria-expanded="true"><span class="caret">▼</span><svg class="folder-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.7 4.2a1 1 0 0 1 1-1h3l1.4 1.5h6.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.7a1 1 0 0 1-1-1z"/></svg><span class="name">outputs</span><span class="count">02</span></button>
+              <div class="group-body"><button class="tree-row" data-select><span class="file-icon text">T</span><span class="name">1d650c94-4aa1-4774-be05-bf4d72…</span><span class="meta">1.6 KB</span></button><button class="tree-row" data-select><span class="file-icon text">T</span><span class="name">2b6a4568-0615-4f8f-85e8-19ee25…</span><span class="meta">237 B</span></button></div>
+            </div>
+          </div>
+        </div>
+        <div class="note"><span class="note-mark">02</span><span>适合内容较多的项目；分类清楚，目录层级一眼可扫。</span></div>
+      </section>
+
+      <section class="option" aria-labelledby="option-c-title">
+        <div class="option-head"><span class="letter">C</span><h2 id="option-c-title">路径 + 内容</h2></div>
+        <p class="option-desc">顶部固定当前位置，下面只列当前目录的直接内容。</p>
+        <div class="mock">
+          <div class="mock-top"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h4l1.5 1.5H14v7H2z"/><path d="M2 6h12"/></svg><span>项目文件</span><span class="mock-caption">当前位置</span></div>
+          <div class="crumbs"><span>短剧</span><span class="slash">/</span><strong>测试</strong></div>
+          <div class="directory-title"><strong>测试</strong><span>3 个文件夹 · 5 项</span></div>
+          <div class="contents">
+            <button class="content-row" data-select><span class="file-icon">▱</span><span class="content-info"><span class="content-name">files</span><span class="content-path">文件夹 · 1 项</span></span><span class="kind folder-kind">目录</span><span class="caret">›</span></button>
+            <button class="content-row selected" data-select><span class="file-icon image">▧</span><span class="content-info"><span class="content-name">456705f7-bded-4ef5-ad4e-37249d…</span><span class="content-path">files · 图片素材</span></span><span class="meta">8.3 KB</span></button>
+            <button class="content-row" data-select><span class="file-icon">▱</span><span class="content-info"><span class="content-name">inputs</span><span class="content-path">文件夹 · 2 项</span></span><span class="kind folder-kind">目录</span><span class="caret">›</span></button>
+            <button class="content-row" data-select><span class="file-icon">▱</span><span class="content-info"><span class="content-name">outputs</span><span class="content-path">文件夹 · 2 项</span></span><span class="kind folder-kind">目录</span><span class="caret">›</span></button>
+            <button class="content-row" data-select><span class="file-icon text">T</span><span class="content-info"><span class="content-name">1d650c94-4aa1-4774-be05-bf4d72…</span><span class="content-path">outputs · 文本结果</span></span><span class="meta">1.6 KB</span></button>
+            <button class="content-row" data-select><span class="file-icon text">T</span><span class="content-info"><span class="content-name">2b6a4568-0615-4f8f-85e8-19ee25…</span><span class="content-path">outputs · 文本结果</span></span><span class="meta">237 B</span></button>
+          </div>
+          <div style="padding:0 12px 12px;color:var(--quiet);font-size:10px">点开文件夹后，路径会更新，列表显示该目录内容。</div>
+        </div>
+        <div class="note"><span class="note-mark">03</span><span>适合需要查看完整文件名和类型的场景；当前路径始终明确。</span></div>
+      </section>
+    </div>
+  </main>
+  <script>
+    document.addEventListener('click', event => {
+      const toggle = event.target.closest('[data-toggle]');
+      if (toggle) {
+        const nextOpen = toggle.getAttribute('aria-expanded') !== 'true';
+        toggle.setAttribute('aria-expanded', String(nextOpen));
+        const children = toggle.nextElementSibling;
+        if (children) children.hidden = !nextOpen;
+        return;
+      }
+      const row = event.target.closest('[data-select]');
+      if (!row) return;
+      row.closest('.option').querySelectorAll('[data-select].selected').forEach(item => item.classList.remove('selected'));
+      row.classList.add('selected');
+    });
+  </script>
+</body>
+</html>

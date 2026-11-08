@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>笔记列表滚动条 · 方案预览</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #10100f;
+      --panel: #151413;
+      --panel-head: #131211;
+      --line: #292725;
+      --text: #e8e6e3;
+      --muted: #a7a29c;
+      --quiet: #706c67;
+      --accent: #7ec8ff;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .page { width: min(1220px, 100%); margin: 0 auto; padding: 30px 26px 42px; }
+    .page-head { margin: 0 0 22px; }
+    .page-head h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: .01em; }
+    .page-head p { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+    .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .option { min-width: 0; }
+    .option-title { display: flex; align-items: center; gap: 9px; margin: 0 0 9px; }
+    .option-letter {
+      display: grid; place-items: center; width: 24px; height: 24px; flex: none;
+      border: 1px solid #373431; border-radius: 7px; color: var(--accent);
+      font: 600 12px/1 ui-monospace, Consolas, monospace;
+    }
+    .option-title h2 { margin: 0; font-size: 14px; font-weight: 600; }
+    .option-title small { margin-left: auto; color: var(--quiet); font-size: 10px; white-space: nowrap; }
+    .mock-pane {
+      height: 470px; min-width: 0; overflow: hidden;
+      background: var(--panel); border: 1px solid #282624; border-radius: 11px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, .17);
+    }
+    .mock-head {
+      height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px;
+      background: var(--panel-head); border-bottom: 1px solid var(--line);
+    }
+    .grip { color: #4c4945; font-size: 10px; letter-spacing: -2px; }
+    .tab {
+      height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+      color: var(--text); font-size: 12px; white-space: nowrap;
+      border: 1px solid #4a4642; border-bottom-color: var(--panel); border-radius: 9px 9px 0 0;
+      align-self: flex-end;
+    }
+    .tab-close { color: var(--quiet); font-size: 12px; }
+    .search-row { display: flex; gap: 8px; padding: 10px 11px 8px; }
+    .search {
+      flex: 1; min-width: 0; height: 32px; padding: 0 10px;
+      color: #85817b; background: #121110; border: 1px solid #2e2b28;
+      border-radius: 7px; font-size: 11px; line-height: 30px;
+    }
+    .icon-button {
+      display: grid; place-items: center; width: 33px; height: 32px; flex: none;
+      color: #d8d5d0; background: #1d1b19; border: 1px solid #373431;
+      border-radius: 7px; font-size: 17px; line-height: 1;
+    }
+    .list-frame { position: relative; height: calc(100% - 90px); min-height: 0; }
+    .list-scroll {
+      height: 100%; overflow: auto; padding: 0 19px 8px 0;
+      overscroll-behavior: contain; scrollbar-width: none; outline: none;
+    }
+    .list-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    .list-scroll ul { list-style: none; margin: 0; padding: 0 7px 8px; }
+    .list-scroll li {
+      min-height: 37px; display: flex; align-items: center; gap: 7px; padding: 7px 9px;
+      color: #b8b4af; border-bottom: 1px solid rgba(255, 255, 255, .035);
+      font-size: 12px; line-height: 1.35;
+    }
+    .list-scroll li.folder { color: #d2cfca; font-weight: 550; }
+    .list-scroll li.indent { padding-left: 25px; color: #8f8b85; }
+    .list-scroll li.selected { color: #dcecf8; background: #1c2226; border-radius: 5px; }
+    .caret { color: #77726c; font-size: 9px; }
+    .kind { color: #85817b; font: 10px/1 ui-monospace, Consolas, monospace; }
+    .scroll-track {
+      position: absolute; z-index: 3; top: 6px; right: 5px; bottom: 8px; width: 9px;
+      background: transparent; opacity: 1; pointer-events: none;
+    }
+    .scroll-thumb {
+      position: absolute; top: 0; right: 1px; width: 7px; min-height: 30px;
+      background: #696560; border-radius: 99px; opacity: .86;
+      pointer-events: auto; cursor: default;
+    }
+    .scroll-thumb:hover { background: #89847e; opacity: 1; }
+    .option-b .scroll-track, .option-c .scroll-track { opacity: 0; }
+    .option-b .scroll-track.visible { opacity: 1; }
+    .option-b .scroll-track:not(.visible) .scroll-thumb,
+    .option-c .scroll-track:not(.visible) .scroll-thumb { pointer-events: none; }
+    .option-b .scroll-thumb { cursor: grab; }
+    .option-b .scroll-thumb:active { cursor: grabbing; }
+    .option-c .scroll-track {
+      transform: translateX(4px) scaleY(.96);
+      filter: blur(.35px);
+      transition:
+        opacity 150ms cubic-bezier(.22, .8, .22, 1),
+        transform 260ms cubic-bezier(.16, 1, .3, 1),
+        filter 180ms ease-out;
+    }
+    .option-c .scroll-track::before,
+    .option-c .scroll-track::after {
+      content: ""; position: absolute; top: 3px; bottom: 3px; pointer-events: none;
+      opacity: 0; transition: opacity 220ms ease-out, transform 300ms cubic-bezier(.16, 1, .3, 1);
+    }
+    .option-c .scroll-track::before {
+      left: 3px; width: 1px; border-radius: 99px;
+      background: linear-gradient(180deg, transparent, rgba(191, 224, 242, .42) 18%, rgba(126, 200, 255, .58) 50%, rgba(191, 224, 242, .32) 82%, transparent);
+      transform: scaleY(.42); transform-origin: center;
+    }
+    .option-c .scroll-track::after {
+      left: 1px; width: 5px; border-radius: 99px;
+      background: rgba(126, 200, 255, .16); filter: blur(4px);
+    }
+    .option-c .scroll-track.visible {
+      opacity: 1; transform: translateX(0) scaleY(1); filter: blur(0);
+    }
+    .option-c .scroll-track.visible::before { opacity: .72; transform: scaleY(1); }
+    .option-c .scroll-track.visible::after { opacity: .75; }
+    .option-c .scroll-thumb {
+      right: 3px; width: 4px; overflow: visible; background: transparent; opacity: 1; cursor: grab;
+    }
+    .option-c .scroll-thumb::before {
+      content: ""; position: absolute; inset: 0; border-radius: inherit;
+      border: 1px solid rgba(237, 246, 250, .36);
+      background: linear-gradient(90deg, rgba(201, 215, 222, .38), rgba(238, 246, 249, .8) 48%, rgba(163, 204, 224, .68));
+      box-shadow: 0 0 9px rgba(126, 200, 255, .16), inset 0 0 3px rgba(255, 255, 255, .38);
+      opacity: 0; clip-path: inset(48% 0 round 99px);
+      transition: clip-path 150ms cubic-bezier(.16, 1, .3, 1), opacity 110ms ease-out;
+    }
+    .option-c .scroll-track.visible .scroll-thumb::before {
+      opacity: .9; clip-path: inset(0 0 round 99px);
+    }
+    .option-c .scroll-thumb::after {
+      content: ""; position: absolute; top: -18px; left: 1px; right: 1px; height: 18px;
+      border-radius: 99px; pointer-events: none; opacity: 0; filter: blur(.35px);
+      background: linear-gradient(180deg, transparent, rgba(223, 244, 255, .84) 48%, rgba(126, 200, 255, .55) 62%, transparent);
+    }
+    .option-c .scroll-track.visible .scroll-thumb::after {
+      animation: c-lighttrace 440ms cubic-bezier(.16, 1, .3, 1) both;
+    }
+    @keyframes c-lighttrace {
+      0% { top: -18px; opacity: 0; }
+      18% { opacity: .68; }
+      72% { opacity: .4; }
+      100% { top: calc(100% + 18px); opacity: 0; }
+    }
+    .option-c .scroll-thumb:active { cursor: grabbing; }
+    .hint { display: flex; justify-content: space-between; gap: 10px; margin: 10px 2px 0; color: var(--quiet); font-size: 11px; }
+    .hint span:last-child { color: #8a857f; }
+    @media (max-width: 860px) {
+      .page { padding: 24px 16px 34px; }
+      .options { grid-template-columns: 1fr; gap: 20px; }
+      .mock-pane { height: 390px; }
+      .option-title small { margin-left: auto; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="page-head">
+      <h1>笔记列表滚动条</h1>
+      <p>滚动任一列表，比较三种显示方式。</p>
+    </header>
+
+    <section class="options" aria-label="滚动条样式方案">
+      <article class="option option-a" data-option="a">
+        <div class="option-title"><span class="option-letter">A</span><h2>简洁常显</h2><small>纤细 · 低对比</small></div>
+        <div class="mock-pane">
+          <div class="mock-head"><span class="grip">⠿</span><div class="tab">笔记列表 <span class="tab-close">×</span></div></div>
+          <div class="search-row"><div class="search">搜索笔记…</div><div class="icon-button">▱</div><div class="icon-button">＋</div></div>
+          <div class="list-frame">
+            <div class="list-scroll" tabindex="0" aria-label="方案 A 笔记列表"><ul></ul></div>
+            <div class="scroll-track"><div class="scroll-thumb"></div></div>
+          </div>
+        </div>
+        <div class="hint"><span>滚动条保持可见</span><span>无额外动效</span></div>
+      </article>
+
+      <article class="option option-b" data-option="b">
+        <div class="option-title"><span class="option-letter">B</span><h2>滚动时显示</h2><small>立即出现 · 停下后隐藏</small></div>
+        <div class="mock-pane">
+          <div class="mock-head"><span class="grip">⠿</span><div class="tab">笔记列表 <span class="tab-close">×</span></div></div>
+          <div class="search-row"><div class="search">搜索笔记…</div><div class="icon-button">▱</div><div class="icon-button">＋</div></div>
+          <div class="list-frame">
+            <div class="list-scroll" tabindex="0" aria-label="方案 B 笔记列表"><ul></ul></div>
+            <div class="scroll-track"><div class="scroll-thumb"></div></div>
+          </div>
+        </div>
+        <div class="hint"><span>仅滚动时出现</span><span>停下约 0.8 秒后隐藏</span></div>
+      </article>
+
+      <article class="option option-c" data-option="c">
+        <div class="option-title"><span class="option-letter">C</span><h2>微光收束</h2><small>冷光掠过 · 迅速收拢</small></div>
+        <div class="mock-pane">
+          <div class="mock-head"><span class="grip">⠿</span><div class="tab">笔记列表 <span class="tab-close">×</span></div></div>
+          <div class="search-row"><div class="search">搜索笔记…</div><div class="icon-button">▱</div><div class="icon-button">＋</div></div>
+          <div class="list-frame">
+            <div class="list-scroll" tabindex="0" aria-label="方案 C 笔记列表"><ul></ul></div>
+            <div class="scroll-track"><div class="scroll-thumb"></div></div>
+          </div>
+        </div>
+        <div class="hint"><span>短光痕 · 玻璃质感收束</span><span>停下约 0.1 秒即淡出</span></div>
+      </article>
+    </section>
+  </main>
+  <script>
+    const sample = [
+      ['folder', '▾', '短剧'], ['folder', '▾', '测试'], ['folder indent', '▾', 'files'],
+      ['file', 'MD', '人物设定'], ['file', 'MD', '故事大纲'], ['file', 'DOCX', '分镜脚本（测试）'],
+      ['folder', '▾', '灵感'], ['file', 'MD', '对话节奏与角色关系'], ['file', 'MD', '镜头语言参考'],
+      ['folder', '▾', '项目资料'], ['folder indent', '▾', 'inputs'], ['file', 'MD', '场景需求'],
+      ['folder indent', '▾', 'outputs'], ['file', 'DOCX', '初稿.docx'], ['file', 'TXT', '旁白稿.txt'],
+      ['folder', '▾', '日常'], ['file selected', 'MD', '今天的记录'], ['file', 'MD', '周末计划'],
+      ['folder', '▾', '读书笔记'], ['file', 'MD', '《人类简史》摘录'], ['file', 'MD', '写作方法'],
+      ['folder', '▾', '素材'], ['folder indent', '▾', '图片'], ['file', 'PNG', '封面草图.png'],
+      ['file', 'MD', '未分类笔记'], ['file', 'MD', '新的想法'], ['file', 'MD', '工作记录'],
+      ['folder', '▾', '归档'], ['file', 'MD', '旧项目总结'], ['file', 'DOCX', '会议纪要.docx'],
+    ];
+
+    document.querySelectorAll('.option').forEach((option) => {
+      const list = option.querySelector('ul');
+      for (const [kind, icon, label] of sample) {
+        const li = document.createElement('li');
+        li.className = kind;
+        const badge = document.createElement('span');
+        badge.className = kind.includes('folder') ? 'caret' : 'kind';
+        badge.textContent = icon;
+        const text = document.createElement('span');
+        text.textContent = label;
+        li.append(badge, text);
+        list.appendChild(li);
+      }
+
+      const frame = option.querySelector('.list-frame');
+      const scroll = option.querySelector('.list-scroll');
+      const track = option.querySelector('.scroll-track');
+      const thumb = option.querySelector('.scroll-thumb');
+      let hideTimer = 0;
+      let drag = null;
+
+      const updateThumb = () => {
+        const trackHeight = track.clientHeight;
+        const maxScroll = scroll.scrollHeight - scroll.clientHeight;
+        if (trackHeight <= 0 || maxScroll <= 0) {
+          track.hidden = true;
+          return;
+        }
+        track.hidden = false;
+        const thumbHeight = Math.max(32, Math.round(trackHeight * scroll.clientHeight / scroll.scrollHeight));
+        const travel = Math.max(0, trackHeight - thumbHeight);
+        const top = maxScroll > 0 ? travel * scroll.scrollTop / maxScroll : 0;
+        thumb.style.height = `${thumbHeight}px`;
+        thumb.style.transform = `translateY(${top}px)`;
+      };
+
+      const reveal = () => {
+        if (option.dataset.option === 'a') return;
+        track.classList.add('visible');
+        clearTimeout(hideTimer);
+        const idleDelay = option.dataset.option === 'c' ? 90 : 850;
+        hideTimer = setTimeout(() => track.classList.remove('visible'), idleDelay);
+      };
+
+      scroll.addEventListener('scroll', () => { updateThumb(); reveal(); }, { passive: true });
+      window.addEventListener('resize', updateThumb);
+      thumb.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        reveal();
+        thumb.setPointerCapture(event.pointerId);
+        drag = { pointerY: event.clientY, scrollTop: scroll.scrollTop };
+      });
+      thumb.addEventListener('pointermove', (event) => {
+        if (!drag) return;
+        const trackHeight = track.clientHeight;
+        const thumbHeight = thumb.offsetHeight;
+        const maxScroll = scroll.scrollHeight - scroll.clientHeight;
+        const travel = Math.max(1, trackHeight - thumbHeight);
+        const nextTop = Math.max(0, Math.min(travel, (drag.scrollTop / Math.max(1, maxScroll)) * travel + event.clientY - drag.pointerY));
+        scroll.scrollTop = (nextTop / travel) * maxScroll;
+      });
+      const endDrag = () => { drag = null; reveal(); };
+      thumb.addEventListener('pointerup', endDrag);
+      thumb.addEventListener('pointercancel', endDrag);
+      track.addEventListener('pointerdown', (event) => {
+        if (event.target === thumb) return;
+        const rect = track.getBoundingClientRect();
+        const target = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+        scroll.scrollTop = target * (scroll.scrollHeight - scroll.clientHeight);
+        reveal();
+      });
+      requestAnimationFrame(updateThumb);
+    });
+  </script>
+</body>
+</html>

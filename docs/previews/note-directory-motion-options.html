@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>笔记目录动效 · 四种方案</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #101110;
+      --panel: #171816;
+      --panel-raised: #1d1f1d;
+      --line: #30322f;
+      --text: #ecebe7;
+      --muted: #a7a69f;
+      --quiet: #77776f;
+      --blue: #83cbff;
+      font: 14px/1.45 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+      background: var(--page);
+      color: var(--text);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(ellipse at 50% -20%, #202522 0, transparent 55%), var(--page); }
+    button { color: inherit; font: inherit; }
+    .page { width: min(1120px, calc(100% - 36px)); margin: 0 auto; padding: 34px 0 52px; }
+    .eyebrow { color: #8dbbd2; font-size: 10px; letter-spacing: .16em; }
+    h1 { margin: 8px 0 7px; font-size: clamp(23px, 3vw, 32px); letter-spacing: -.035em; line-height: 1.2; }
+    .intro { margin: 0; max-width: 630px; color: var(--muted); font-size: 12px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+    .legend span { padding: 4px 9px; border: 1px solid #333632; border-radius: 999px; color: #999a92; font-size: 10px; }
+    .options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 24px; align-items: stretch; }
+    .option { --accent: #84cbff; --accent-rgb: 132,203,255; --rail: rgba(170,177,171,.22); min-width: 0; padding: 13px; border: 1px solid #30322f; border-radius: 14px; background: linear-gradient(145deg, #191a18, #141513); box-shadow: 0 14px 36px #0003; }
+    .scheme-tech { --accent: #6bd9ff; --accent-rgb: 107,217,255; --rail: rgba(103,192,224,.28); }
+    .scheme-luxe { --accent: #dfcca0; --accent-rgb: 223,204,160; --rail: rgba(205,191,157,.27); }
+    .scheme-minimal { --accent: #aeb8bb; --accent-rgb: 174,184,187; --rail: rgba(165,173,173,.2); }
+    .scheme-orbit { --accent: #a9c8fa; --accent-rgb: 169,200,250; --rail: rgba(148,176,222,.24); }
+    .option-head { display: flex; align-items: center; gap: 9px; min-height: 30px; }
+    .letter { display: grid; place-items: center; flex: none; width: 25px; height: 25px; border: 1px solid color-mix(in srgb, var(--accent) 42%, #343633); border-radius: 8px; background: color-mix(in srgb, var(--accent) 9%, #1b1d1b); color: var(--accent); font: 600 11px/1 ui-monospace, Consolas, monospace; }
+    .option h2 { margin: 0; font-size: 13px; font-weight: 650; }
+    .tag { margin-left: auto; padding: 3px 7px; border: 1px solid #343632; border-radius: 99px; color: #92938c; font-size: 9px; }
+    .desc { min-height: 30px; margin: 4px 0 10px 34px; color: var(--quiet); font-size: 10.5px; }
+    .mock { min-height: 312px; overflow: hidden; border: 1px solid #343632; border-radius: 10px; background: #131412; }
+    .mock-top { display: flex; align-items: center; gap: 7px; height: 35px; padding: 0 11px; border-bottom: 1px solid #242623; color: #aaa9a1; font-size: 10px; }
+    .mock-top svg { flex: none; width: 13px; height: 13px; fill: none; stroke: var(--accent); stroke-width: 1.4; }
+    .project { overflow: hidden; max-width: 95px; color: #66675f; text-overflow: ellipsis; white-space: nowrap; font: 9px/1 ui-monospace, Consolas, monospace; }
+    .replay { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 23px; margin-left: auto; padding: 0 8px; border: 1px solid #343632; border-radius: 6px; background: #1a1c1a; color: #9c9d95; cursor: pointer; font-size: 9px; transition: border-color .2s, color .2s, background .2s; }
+    .replay:hover { border-color: color-mix(in srgb, var(--accent) 52%, #343632); color: var(--accent); background: #202320; }
+    .replay svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .tree { --row-h: 31px; position: relative; padding: 9px 8px 12px; }
+    .tree-row { --i: 0; position: relative; z-index: 0; display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; min-height: var(--row-h); padding: 4px 8px; border: 0; border-radius: 5px; background: transparent; color: #a8a79f; text-align: left; cursor: pointer; isolation: isolate; transition: color .22s, background .22s, transform .26s, box-shadow .26s; }
+    .tree-row:hover { color: #f0efea; background: #ffffff08; }
+    .tree-row.selected { color: #f3f4f1; background: #202d33; }
+    .tree-row.folder { color: #d2d0c9; }
+    .tree-row .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tree-row .meta { flex: none; margin-left: auto; color: #666860; font: 9px/1 ui-monospace, Consolas, monospace; }
+    .caret { display: grid; place-items: center; flex: none; width: 10px; height: 14px; color: #6f716a; font-size: 8px; transform: rotate(0); transition: transform .28s cubic-bezier(.2,.8,.2,1), color .2s; }
+    .tree-row[aria-expanded="false"] .caret { transform: rotate(-90deg); }
+    .tree-row[aria-expanded="true"] .caret { color: var(--accent); }
+    .folder-icon { flex: none; width: 14px; height: 14px; fill: none; stroke: #aeb5aa; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; transition: stroke .22s, transform .35s, filter .3s; }
+    .tree-row[aria-expanded="true"] .folder-icon { stroke: #c4d1ca; }
+    .file-icon { display: grid; place-items: center; flex: none; width: 13px; height: 15px; border: 1px solid #63736f; border-radius: 3px; color: #a9cfc2; font: 7px/1 ui-monospace, Consolas, monospace; }
+    .file-icon.image { border-color: #766a91; color: #c3a8ea; }
+    .file-icon.text { border-color: #697767; color: #aec5a9; }
+    .tree-branch { --branch: 0; position: relative; display: grid; grid-template-rows: 1fr; margin-left: 14px; padding-left: 8px; border-left: 1px solid var(--rail); opacity: 1; transition: grid-template-rows .42s cubic-bezier(.2,.8,.2,1), opacity .27s ease, border-color .25s; }
+    .tree-branch[data-open="false"] { grid-template-rows: 0fr; opacity: 0; pointer-events: none; border-color: transparent; }
+    .tree-branch-inner { min-height: 0; overflow: hidden; }
+    .tree-branch::before { position: absolute; top: -16px; left: -1px; height: 16px; border-left: 1px solid var(--rail); content: ""; transition: border-color .25s; }
+    .tree-branch > .tree-branch-inner > .tree-row::before { position: absolute; z-index: -1; top: 50%; left: -9px; width: 8px; height: 1px; background: var(--rail); content: ""; transition: background .25s, box-shadow .25s; }
+    .tree-branch > .tree-branch-inner > .tree-row.folder::before { left: -9px; }
+    .footer { display: flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 2px; color: #686a63; font-size: 9.5px; }
+    .footer-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 42%, transparent); opacity: .8; }
+
+    /* A · 科技感：蓝白扫描光沿目录连线缓慢巡航，悬停时线与节点同步激活。 */
+    .scheme-tech .tree-branch { overflow: hidden; }
+    .scheme-tech .tree-branch::after { position: absolute; z-index: 1; top: -35%; left: -2px; width: 2px; height: 31%; background: linear-gradient(180deg, transparent, #61dfff, #c8f5ff, transparent); content: ""; opacity: .75; filter: drop-shadow(0 0 4px #4ccfff); animation: tech-scan 4.6s cubic-bezier(.45,0,.55,1) infinite; animation-delay: calc(var(--branch) * .28s); }
+    .scheme-tech .tree-row:hover .folder-icon, .scheme-tech .tree-row[aria-expanded="true"] .folder-icon { stroke: var(--accent); filter: drop-shadow(0 0 4px rgba(107,217,255,.5)); transform: scale(1.06); }
+    .scheme-tech .tree-row:hover::before, .scheme-tech .tree-row.selected::before { background: var(--accent); box-shadow: 0 0 7px var(--accent); }
+    .scheme-tech .tree-row:hover { box-shadow: inset 2px 0 0 rgba(107,217,255,.62); }
+    .scheme-tech .footer-dot { animation: tech-ping 2.6s ease-in-out infinite; }
+    @keyframes tech-scan { 0%, 12% { transform: translateY(0); opacity: 0; } 28% { opacity: .85; } 80% { opacity: .68; } 100% { transform: translateY(450%); opacity: 0; } }
+    @keyframes tech-ping { 0%,100% { transform: scale(.85); opacity: .55; } 50% { transform: scale(1.5); opacity: 1; } }
+
+    /* B · 高级感：暖珍珠光、柔和景深与克制的逐项显影。 */
+    .scheme-luxe .tree-row { transform: translateY(0); }
+    .scheme-luxe .tree-row:hover { background: linear-gradient(90deg, rgba(223,204,160,.1), rgba(223,204,160,.025)); box-shadow: inset 1px 0 0 rgba(223,204,160,.6); transform: translateX(2px); }
+    .scheme-luxe .tree-row[aria-expanded="true"] .folder-icon { stroke: var(--accent); filter: drop-shadow(0 0 3px rgba(223,204,160,.24)); }
+    .scheme-luxe .tree-branch[data-open="true"] > .tree-branch-inner > .tree-row { animation: luxe-arrive .62s both; animation-delay: calc(var(--i) * 65ms); }
+    .scheme-luxe .tree-branch { border-radius: 0 0 0 4px; }
+    .scheme-luxe .tree-branch::before { transition: border-color .5s; }
+    .scheme-luxe .tree-row.selected { background: linear-gradient(90deg, rgba(223,204,160,.13), rgba(255,255,255,.018)); }
+    .scheme-luxe .footer-dot { box-shadow: 0 0 0 3px rgba(223,204,160,.06), 0 0 10px rgba(223,204,160,.25); }
+    @keyframes luxe-arrive { from { opacity: .12; transform: translateY(5px); filter: blur(1px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+
+    /* C · 简洁：短距离淡入，线条低对比，不添加发光与装饰。 */
+    .scheme-minimal .tree-row { transition-duration: .18s; }
+    .scheme-minimal .tree-row:hover { background: #ffffff0a; }
+    .scheme-minimal .tree-row[aria-expanded="true"] .folder-icon { stroke: #c5ccca; }
+    .scheme-minimal .tree-branch { transition-duration: .24s; transition-timing-function: ease-out; }
+    .scheme-minimal .tree-branch[data-open="true"] > .tree-branch-inner > .tree-row { animation: minimal-in .25s both; animation-delay: calc(var(--i) * 22ms); }
+    .scheme-minimal .footer-dot { width: 4px; height: 4px; box-shadow: none; opacity: .45; }
+    @keyframes minimal-in { from { opacity: .35; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* D · 星轨引导：悬停时微光从层级导线滑向目标行，行本身轻柔吸附。 */
+    .scheme-orbit .tree-row { overflow: hidden; }
+    .scheme-orbit .tree-row::after { position: absolute; top: calc(50% - 2px); left: -8px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px rgba(169,200,250,.75); content: ""; opacity: 0; transform: translateX(0) scale(.55); pointer-events: none; }
+    .scheme-orbit .tree-row:hover::after, .scheme-orbit .tree-row.selected::after { animation: orbit-travel .75s cubic-bezier(.22,.8,.2,1) forwards; }
+    .scheme-orbit .tree-row:hover { background: linear-gradient(90deg, rgba(169,200,250,.1), rgba(169,200,250,.015) 78%); transform: translateX(2px); }
+    .scheme-orbit .tree-row[aria-expanded="true"] .folder-icon { stroke: var(--accent); transform: rotate(-5deg); }
+    .scheme-orbit .tree-branch[data-open="true"] { animation: orbit-open .58s cubic-bezier(.18,.9,.25,1) both; }
+    .scheme-orbit .footer-dot { animation: orbit-breathe 3.2s ease-in-out infinite; }
+    @keyframes orbit-travel { 0% { opacity: 0; transform: translateX(0) scale(.5); } 18% { opacity: .95; transform: translateX(5px) scale(1); } 100% { opacity: .22; transform: translateX(38px) scale(.7); } }
+    @keyframes orbit-open { 0% { filter: brightness(.74); } 55% { filter: brightness(1.16); } 100% { filter: brightness(1); } }
+    @keyframes orbit-breathe { 0%,100% { transform: scale(.8); opacity: .48; } 50% { transform: scale(1.35); opacity: .9; } }
+
+    .scheme-tech.motion-replay .tree-branch::after { animation: tech-scan-replay 1.5s ease-out 1; }
+    .scheme-luxe.motion-replay .tree-row { animation: luxe-arrive .62s both; animation-delay: calc(var(--i) * 65ms); }
+    .scheme-minimal.motion-replay .tree-row { animation: minimal-in .25s both; animation-delay: calc(var(--i) * 22ms); }
+    .scheme-orbit.motion-replay .tree-branch[data-open="true"] { animation: orbit-open .58s cubic-bezier(.18,.9,.25,1) both; }
+    @keyframes tech-scan-replay { from { transform: translateY(0); opacity: 0; } 16% { opacity: .9; } to { transform: translateY(450%); opacity: 0; } }
+    @media (max-width: 780px) { .options { grid-template-columns: 1fr; max-width: 540px; margin-right: auto; margin-left: auto; } .mock { min-height: 300px; } .desc { min-height: 0; } }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="eyebrow">开物 · 笔记目录</div>
+    <h1>让层级导线有一点回应</h1>
+    <p class="intro">四种动效方向。每个预览都能展开文件夹、选中文件，也可以重播示例动效；感受不同方案的速度、亮度与反馈力度。</p>
+    <div class="legend"><span>悬停目录看反馈</span><span>点击目录展开 / 收起</span><span>点击「重播」看完整动效</span></div>
+
+    <div class="options" id="options">
+      <section class="option scheme-tech" data-scheme="tech">
+        <div class="option-head"><span class="letter">A</span><h2>蓝脉冲</h2><span class="tag">科技感</span></div>
+        <p class="desc">扫描光沿层级线巡航；悬停时连接点与文件夹同步点亮。</p>
+        <div class="mock"><div class="mock-top"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 4.4h4l1.3 1.4h7.1v6.7H1.8z"/><path d="M1.8 6h12.4"/></svg><span>笔记目录</span><span class="project">短剧 / 测试</span><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 6A5.3 5.3 0 1 0 14 8M13.4 2.8V6h-3.2"/></svg>重播</button></div><div class="tree"></div></div>
+        <div class="footer"><i class="footer-dot"></i><span>光脉移动 · 节点响应 · 分支巡航</span></div>
+      </section>
+
+      <section class="option scheme-luxe" data-scheme="luxe">
+        <div class="option-head"><span class="letter">B</span><h2>珍珠显影</h2><span class="tag">高级感</span></div>
+        <p class="desc">温润的珍珠光依次显现，层级展开有轻微景深与柔和回弹。</p>
+        <div class="mock"><div class="mock-top"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 4.4h4l1.3 1.4h7.1v6.7H1.8z"/><path d="M1.8 6h12.4"/></svg><span>笔记目录</span><span class="project">短剧 / 测试</span><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 6A5.3 5.3 0 1 0 14 8M13.4 2.8V6h-3.2"/></svg>重播</button></div><div class="tree"></div></div>
+        <div class="footer"><i class="footer-dot"></i><span>柔光显影 · 缓动展开 · 温和选中</span></div>
+      </section>
+
+      <section class="option scheme-minimal" data-scheme="minimal">
+        <div class="option-head"><span class="letter">C</span><h2>轻触显现</h2><span class="tag">简洁</span></div>
+        <p class="desc">只保留短距离淡入与轻微位移，让目录动作清楚但不抢视线。</p>
+        <div class="mock"><div class="mock-top"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 4.4h4l1.3 1.4h7.1v6.7H1.8z"/><path d="M1.8 6h12.4"/></svg><span>笔记目录</span><span class="project">短剧 / 测试</span><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 6A5.3 5.3 0 1 0 14 8M13.4 2.8V6h-3.2"/></svg>重播</button></div><div class="tree"></div></div>
+        <div class="footer"><i class="footer-dot"></i><span>轻淡入 · 短位移 · 低对比导线</span></div>
+      </section>
+
+      <section class="option scheme-orbit" data-scheme="orbit">
+        <div class="option-head"><span class="letter">D</span><h2>星轨引导</h2><span class="tag">动态交互</span></div>
+        <p class="desc">微光从层级线滑向当前行；选中与展开时有轻柔吸附感。</p>
+        <div class="mock"><div class="mock-top"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 4.4h4l1.3 1.4h7.1v6.7H1.8z"/><path d="M1.8 6h12.4"/></svg><span>笔记目录</span><span class="project">短剧 / 测试</span><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 6A5.3 5.3 0 1 0 14 8M13.4 2.8V6h-3.2"/></svg>重播</button></div><div class="tree"></div></div>
+        <div class="footer"><i class="footer-dot"></i><span>光点滑行 · 轻柔吸附 · 节点呼吸</span></div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const sample = [
+      { name: '短剧', type: 'folder', children: [
+        { name: '测试', type: 'folder', meta: '3 个文件夹', children: [
+          { name: 'files', type: 'folder', children: [
+            { name: '456705f7-bded-4ef5-ad4e-37249d…', type: 'image', meta: '8.3 KB' }
+          ] },
+          { name: 'inputs', type: 'folder', meta: '2 项', children: [
+            { name: '提示词.md', type: 'text' },
+            { name: '参考图.png', type: 'image' }
+          ] },
+          { name: 'outputs', type: 'folder', children: [
+            { name: '1d650c94-4aa1-4774-be05-bf4d72…', type: 'text', meta: '1.6 KB' },
+            { name: '2b6a4568-0615-4f8f-85e8-19ee25…', type: 'text', meta: '237 B' }
+          ] }
+        ] }
+      ] }
+    ];
+    const folderIcon = '<svg class="folder-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.7 4.2a1 1 0 0 1 1-1h3l1.4 1.5h6.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.7a1 1 0 0 1-1-1z"/></svg>';
+
+    function buildRows(nodes, parent, path = '0') {
+      nodes.forEach((node, index) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = `tree-row ${node.type === 'folder' ? 'folder' : ''}`;
+        row.style.setProperty('--i', index);
+        row.dataset.select = '';
+        if (node.type === 'folder') {
+          row.setAttribute('aria-expanded', 'true');
+          row.dataset.toggle = '';
+          row.insertAdjacentHTML('beforeend', '<span class="caret" aria-hidden="true">▾</span>');
+          row.insertAdjacentHTML('beforeend', folderIcon);
+        } else {
+          const icon = document.createElement('span');
+          icon.className = `file-icon ${node.type}`;
+          icon.setAttribute('aria-hidden', 'true');
+          icon.textContent = node.type === 'image' ? '▧' : 'T';
+          row.appendChild(icon);
+        }
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = node.name;
+        row.appendChild(name);
+        if (node.meta) {
+          const meta = document.createElement('span');
+          meta.className = 'meta';
+          meta.textContent = node.meta;
+          row.appendChild(meta);
+        }
+        parent.appendChild(row);
+
+        if (node.children) {
+          const branch = document.createElement('div');
+          branch.className = 'tree-branch';
+          branch.dataset.open = 'true';
+          branch.style.setProperty('--branch', path.split('.').length);
+          const inner = document.createElement('div');
+          inner.className = 'tree-branch-inner';
+          branch.appendChild(inner);
+          parent.appendChild(branch);
+          buildRows(node.children, inner, `${path}.${index}`);
+        }
+      });
+    }
+
+    document.querySelectorAll('.option').forEach((option) => {
+      buildRows(sample, option.querySelector('.tree'));
+      option.querySelectorAll('.tree-row').forEach((row) => {
+        if (row.classList.contains('folder')) return;
+        if (row.textContent.includes('456705f7')) row.classList.add('selected');
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      const replay = event.target.closest('[data-replay]');
+      if (replay) {
+        const option = replay.closest('.option');
+        option.classList.remove('motion-replay');
+        void option.offsetWidth;
+        option.classList.add('motion-replay');
+        window.setTimeout(() => option.classList.remove('motion-replay'), 1800);
+        return;
+      }
+      const toggle = event.target.closest('[data-toggle]');
+      if (toggle) {
+        const isOpen = toggle.getAttribute('aria-expanded') === 'true';
+        const branch = toggle.nextElementSibling;
+        toggle.setAttribute('aria-expanded', String(!isOpen));
+        branch.dataset.open = String(!isOpen);
+        return;
+      }
+      const row = event.target.closest('[data-select]');
+      if (row) {
+        const option = row.closest('.option');
+        option.querySelectorAll('.tree-row.selected').forEach((item) => item.classList.remove('selected'));
+        row.classList.add('selected');
+      }
+    });
+  </script>
+</body>
+</html>

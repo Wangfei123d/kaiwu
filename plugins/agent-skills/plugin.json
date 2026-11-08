@@ -1,0 +1,19 @@
+{
+  "id": "agent-skills",
+  "name": "Skills",
+  "version": "0.1.0",
+  "description": "查看 Agent 可用的技能",
+  "author": "wangfei",
+  "entry": "index.js",
+  "order": 76,
+  "permissions": ["log", "agentSkills"],
+  "contributes": {
+    "panes": [
+      {
+        "id": "agent-skills",
+        "title": "Skills",
+        "fullTitle": "Agent Skills"
+      }
+    ]
+  }
+}

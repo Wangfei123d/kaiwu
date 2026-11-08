@@ -43,6 +43,68 @@ const root=path.resolve(__dirname,'..');
         browser=await chromium.launch({channel:'msedge',headless:true});const page=await browser.newPage({viewport:{width:1250,height:820}});const errors=[],remote=[];
         page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:'))remote.push(r.url())});
         const baseUrl='http://127.0.0.1:'+server.address().port;
+        if(process.argv.includes('--double-click')){
+            page.setDefaultTimeout(5000);
+            await page.emulateMedia({reducedMotion:'reduce'});
+            const library=page.waitForResponse(r=>r.url().endsWith('/ipc/library'));
+            await page.goto(baseUrl);
+            await (await library).finished();
+            const area=await page.locator('.nc-canvas').boundingBox();
+            const point=(x,y)=>({x:area.x+x,y:area.y+y});
+            const click=({x,y},options)=>page.mouse.click(x,y,options);
+            const double=({x,y})=>page.mouse.dblclick(x,y);
+            const cards=page.locator('.nc-node[data-type="text"]');
+            const active=page.locator('.nc-node.editing .live-markdown-content');
+            async function assertNewCard(at,count){
+                await active.waitFor();
+                assert.equal(await cards.count(),count);
+                assert.equal(await active.textContent(),'');
+                assert.equal(await active.evaluate(el=>el===el.ownerDocument.activeElement&&el.isContentEditable),true);
+                const box=await active.locator('xpath=ancestor::article').boundingBox();
+                assert.ok(Math.abs(box.x+box.width/2-at.x)<=2 && Math.abs(box.y+box.height/2-at.y)<=2,
+                    'New card must be centered at the click in the current view');
+            }
+
+            const first=point(410,300);
+            await double(first);
+            await page.getByRole('button',{name:'创建',exact:true}).waitFor();
+            assert.equal((await handlers.get('canvas:library')({},{})).boards.length,0,'No file before confirming its name');
+            await page.locator('.nc-form input').fill('双击画布');
+            await page.getByRole('button',{name:'创建',exact:true}).click();
+            await assertNewCard(first,1);
+            const write=page.waitForResponse(r=>r.url().endsWith('/ipc/write'));
+            await page.keyboard.insertText('直接输入第一张卡片');
+            assert.equal((await (await write).json()).error,undefined);
+            const disk=JSON.parse(fs.readFileSync(path.join(temp,'画布','双击画布.canvas'),'utf8'));
+            assert.equal(disk.nodes[0].text,'直接输入第一张卡片');
+            await double(first);
+            assert.equal(await cards.count(),1,'Double-click on an existing card must not add another');
+
+            const zoomed=point(690,315);
+            await click(zoomed);
+            await page.keyboard.down('Control');
+            await page.mouse.wheel(0,-160);
+            await page.keyboard.up('Control');
+            await page.waitForFunction(()=>parseFloat(document.querySelector('.nc-zoom').style.zoom)>1);
+            await double(zoomed);
+            await assertNewCard(zoomed,2);
+
+            const grouped=point(965,560);
+            await click(grouped);
+            await page.keyboard.down('Space');
+            await double(grouped);
+            await page.keyboard.up('Space');
+            assert.equal(await cards.count(),2,'Space pan gesture does not create cards');
+            await click(grouped,{button:'right'});
+            await page.getByRole('button',{name:'新建分组',exact:true}).click();
+            await page.locator('.nc-node[data-type="group"]').waitFor();
+            await double(grouped);
+            await assertNewCard(grouped,3);
+            assert.equal(await page.locator('.nc-overlay').count(),0,'Group background does not open its rename dialog');
+            assert.deepEqual(errors,[]);
+            console.log('PASS note canvas double-click: first canvas, inline typing and saving, existing card, zoom, pan, and group background.');
+            return;
+        }
         async function connectionRegression(kind){
             const regression=await browser.newPage({viewport:{width:1250,height:820}});regression.setDefaultTimeout(8000);
             try {

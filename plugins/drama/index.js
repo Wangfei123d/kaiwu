@@ -11,9 +11,8 @@
      · 指针捕获**只在手势真正开始时**做:
          一 pointerdown 就捕获会让卡片里的按钮收不到 click,还会把"点空白取消选中"
          误判成点到画布(现象是"点节点选不中")。
-     · 单击进编辑要**推迟重建**:选中变化只改高亮(repaintSelection),
-         正在卡片里打字时推迟整块重建 —— 否则浏览器正要聚焦的元素被换掉,
-         "第二下进编辑"永远失败。
+     · 文本节点单击即进编辑:只有切换到编辑器时才重建节点;编辑期间输入不重建 DOM,
+         否则浏览器正要聚焦的元素被换掉,光标会丢失。
      · 画布不用原生滚动:平移/缩放只作用在 #world 这一层,
          节点的 x/y 永远是**图坐标**,唯一的换算是"拖节点时除以 scale"。
    ============================================================ */
@@ -611,6 +610,8 @@ function setup(host, ctx, store) {
     }
 
     function renderInputSlots(node, type, body) {
+        // 运行节点只显示动作控件；输入端口和连接线负责表达连接关系。
+        if (node.type === 'run') return;
         const inbound = inboundOf(node.id);
         (type?.inputs ?? []).forEach((label, index) => {
             const sources = inbound[index] ?? [];
@@ -633,8 +634,7 @@ function setup(host, ctx, store) {
                 const caption = document.createElement('span');
                 caption.textContent = multiple
                     ? (edge ? `${sourceIndex + 1} ${from}` : label === '技能' ? '连入技能后，按提示词需求启用'
-                        : node.type === 'skill' ? '可连入多个来源'
-                            : node.type === 'run' ? '连接文本节点后运行' : '暂无上游，使用节点提示词')
+                        : node.type === 'skill' ? '可连入多个来源' : '暂无上游，使用节点提示词')
                     : `${index} ${label}${from ? ' ← ' + from : ''}`;
                 caption.title = caption.textContent;
                 slot.appendChild(caption);
@@ -778,7 +778,6 @@ function setup(host, ctx, store) {
             fileCard.append(icon, details);
             body.appendChild(fileCard);
         } else if (node.type === 'run') {
-            renderInputSlots(node, type, body);
             body.appendChild(renderRunControl(node, run));
         } else if (node.type === 'result') {
             const out = document.createElement('div');
@@ -1070,13 +1069,17 @@ function setup(host, ctx, store) {
             event.stopPropagation();
             void runGraph(node.id, true, true);
         });
-        const status = document.createElement('div');
-        status.className = `drama-run-state drama-run-state-${statusKey(run)}`;
-        status.setAttribute('aria-live', 'polite');
-        status.textContent = run?.status === 'running' ? '正在运行'
+        const stateLabel = run?.status === 'running' ? '正在运行'
             : run?.status === 'failed' ? (run.error ?? '运行失败')
-                : run?.status === 'ok' || run?.status === 'cached' ? '已完成' : '等待提示词连接';
-        box.append(button, status);
+                : run?.status === 'ok' || run?.status === 'cached' ? '已完成' : '';
+        box.appendChild(button);
+        if (stateLabel !== '') {
+            const status = document.createElement('div');
+            status.className = `drama-run-state drama-run-state-${statusKey(run)}`;
+            status.setAttribute('aria-live', 'polite');
+            status.textContent = stateLabel;
+            box.appendChild(status);
+        }
         return box;
     }
 
@@ -1892,9 +1895,10 @@ function setup(host, ctx, store) {
             // Shift 保留原生选字；运行结果正文的普通单击要继续进入节点选中流程。
             if (ev.shiftKey && (control || contentRegion)) return;
             const content = isResultText ? null : contentRegion;
+            const textBodyClick = node.type === 'text' && content?.classList.contains('drama-text-content');
             if (!control && !content) ev.preventDefault();
             gesture = { pointerId: ev.pointerId, x: ev.clientX, y: ev.clientY,
-                moved: false, nativeClick: Boolean(control || content), target };
+                moved: false, nativeClick: Boolean(control || (content && !textBodyClick)), target };
             // 临时跟踪文档，快速划出节点时也能跨过阈值；捕获仍延迟到实际拖动。
             doc.addEventListener('pointermove', moveGesture, true);
             doc.addEventListener('pointerup', endGesture, true);
@@ -2000,7 +2004,15 @@ function setup(host, ctx, store) {
                 return;
             }
             if (ended.nativeClick) return;
-            // 没拖动 = 一次点击:第一次选中,已选中则进编辑
+            if (node.type === 'text') {
+                state.selection.clear();
+                state.selection.add(node.id);
+                state.editing = node.id;
+                render();
+                el.world.querySelector(`.drama-node[data-node-id="${node.id}"] .live-markdown-content`)?.focus();
+                return;
+            }
+            // 其他可编辑节点保持原来的行为:首次选择,再次点击进入编辑。
             if (state.selection.size === 1 && state.selection.has(node.id)) {
                 state.editing = node.id;
                 render();
@@ -2168,10 +2180,12 @@ function setup(host, ctx, store) {
             additive: gesture.additive,
         });
         if (cancelled) return;
+        const wasEditing = state.editing !== null;
         state.selection.clear();
         for (const id of next) state.selection.add(id);
         state.editing = null;
-        repaintSelection();
+        if (wasEditing) render();
+        else repaintSelection();
     }
 
     el.canvas.addEventListener('pointerdown', (ev) => {
@@ -2479,8 +2493,7 @@ function setup(host, ctx, store) {
     /**
      * 建一个菜单并贴到鼠标处。
      *
-     * @param {Array<object>} items 每项:`{caption}` 顶部说明 / `{group}` 分类小标题 /
-     *        `{sep:true}` 分隔线 / `{label, hint?, badge?, danger?, onClick}` 可点项
+     * @param {Array<object>} items 每项:`{sep:true}` 分隔线 / `{label, badge?, danger?, onClick}` 可点项
      * @param {number} gapY 纵向让开多少(空白菜单要让开那个 56px 高的虚线框)
      */
     function buildMenu(items, ev, gapY) {
@@ -2492,20 +2505,6 @@ function setup(host, ctx, store) {
         const node = document.createElement('div');
         node.className = 'drama-menu';
         for (const item of items) {
-            if (item.caption !== undefined) {
-                const cap = document.createElement('div');
-                cap.className = 'drama-menu-cap';
-                cap.textContent = item.caption;
-                node.appendChild(cap);
-                continue;
-            }
-            if (item.group !== undefined) {
-                const grp = document.createElement('div');
-                grp.className = 'drama-menu-group';
-                grp.textContent = item.group;
-                node.appendChild(grp);
-                continue;
-            }
             if (item.sep === true) {
                 const line = document.createElement('div');
                 line.className = 'drama-menu-sep';
@@ -2534,12 +2533,6 @@ function setup(host, ctx, store) {
                 badge.className = 'drama-menu-badge';
                 badge.textContent = item.badge;
                 b.appendChild(badge);
-            }
-            if (typeof item.hint === 'string' && item.hint !== '') {
-                const hint = document.createElement('span');
-                hint.className = 'drama-menu-hint';
-                hint.textContent = item.hint;
-                b.appendChild(hint);
             }
             if (item.danger === true) b.classList.add('danger');
             // ⚠️ 顺序:先执行动作、**再**关菜单。反过来的话,"加节点"那条路上的
@@ -2572,70 +2565,42 @@ function setup(host, ctx, store) {
         menuNode = node;
     }
 
-    /**
-     * 把类型表按**分类**归好:同一类只出现一次,分类之间按**首次出现**的顺序排。
-     *
-     * ⚠️ 不能只按"相邻两条的 category 变没变"来插分组头:`大模型` 的 category 是「文本」,
-     *    却排在「工具」后面 —— 那样菜单里会冒出**第二个**「文本」分组(实测踩到,
-     *    自检里"恰好 7 个分组"当场变红)。
-     */
-    function groupedTypes(types) {
-        const order = [];
-        const byCat = new Map();
-        for (const t of types) {
-            if (!['text', 'run'].includes(t.id)) continue;
-            if (t.internal === true) continue;
-            const cat = t.category ?? '其他';
-            if (!byCat.has(cat)) { byCat.set(cat, []); order.push(cat); }
-            byCat.get(cat).push(t);
-        }
-        return order.map((cat) => [cat, byCat.get(cat)]);
-    }
-
-    /** 空白处的"加节点"菜单:按分类分组平铺所有类型。 */
+    /** 空白处的"加节点"菜单:只列可用节点类型。 */
     function openAddMenu(ev) {
         const p = canvasPoint(ev);
         showGhost(p.x, p.y);
-        const items = [{ caption: `加节点 · ${Math.round(p.x)}, ${Math.round(p.y)}` }];
+        const items = [];
         if (nodeClipboard !== null) {
             const sameProject = nodeClipboard.project === state.project;
             const count = nodeClipboard.nodes.length;
             items.push({
                 label: count > 1 ? `粘贴节点组(${count})` : '粘贴节点',
-                hint: sameProject ? 'Ctrl+V' : '请切回来源项目',
                 disabled: !sameProject || !state.graph,
                 onClick: () => mergeGhost(() => pasteGraphNodes(p)),
             });
             items.push({ sep: true });
         }
-        for (const [cat, list] of groupedTypes(state.types)) {
-            items.push({ group: cat });
-            for (const t of list) {
-                const ins = (t.inputs ?? []).join('/');
-                const outs = (t.outputs ?? []).join('/');
-                items.push({
-                    label: t.label,
-                    // 色点用引擎给的 color(text / img / vid / aud),与卡片头那个点是同一套
-                    dot: t.color ?? 'text',
-                    hint: outs === '' ? '(不跑)' : `${ins === '' ? '→' : `${ins}→`}${outs}`,
-                    // 引擎里那几条没接线的:标出来。名单来自主进程的 palette().wired ——
-                    // 不在插件里另抄一份(抄的那份迟早和引擎漂移)。
-                    badge: t.wired === false ? '未接线' : '',
-                    type: t.id,
-                    onClick: () => {
-                        // 鼠标处就是卡片的**中心**(与虚线框逐字同一处),所以各减半个卡片。
-                        // 关菜单由 buildMenu 统一负责(而且是在 onClick **之后**才关)。
-                        const size = defaultNodeSize(t.id);
-                        if (ghostEl) {
-                            ghostEl.style.width = `${size.width}px`;
-                            ghostEl.style.height = `${size.height}px`;
-                            ghostEl.style.left = `${Math.round(p.x - size.width / 2)}px`;
-                            ghostEl.style.top = `${Math.round(p.y - size.height / 2)}px`;
-                        }
-                        mergeGhost(() => { createNode(t.id, p.x - size.width / 2, p.y - size.height / 2); });
-                    },
-                });
-            }
+        for (const t of state.types) {
+            if (!['text', 'run'].includes(t.id) || t.internal === true) continue;
+            items.push({
+                label: t.label,
+                // 色点用引擎给的 color(text / img / vid / aud),与卡片头那个点是同一套
+                dot: t.color ?? 'text',
+                // 保留未接线状态标记,它不是输入/输出说明。
+                badge: t.wired === false ? '未接线' : '',
+                onClick: () => {
+                    // 鼠标处就是卡片的**中心**(与虚线框逐字同一处),所以各减半个卡片。
+                    // 关菜单由 buildMenu 统一负责(而且是在 onClick **之后**才关)。
+                    const size = defaultNodeSize(t.id);
+                    if (ghostEl) {
+                        ghostEl.style.width = `${size.width}px`;
+                        ghostEl.style.height = `${size.height}px`;
+                        ghostEl.style.left = `${Math.round(p.x - size.width / 2)}px`;
+                        ghostEl.style.top = `${Math.round(p.y - size.height / 2)}px`;
+                    }
+                    mergeGhost(() => { createNode(t.id, p.x - size.width / 2, p.y - size.height / 2); });
+                },
+            });
         }
         buildMenu(items, ev, 40);
     }
@@ -2666,46 +2631,39 @@ function setup(host, ctx, store) {
             repaintSelection();
         }
         const many = state.selection.size;
-        const type = typeById(node.type);
         const items = [];
         if (many === 1 && ['wps-file', 'word-file'].includes(node.type)) {
             items.push({
                 label: '打开文件',
-                hint: node.type === 'word-file' ? 'Word 文档' : 'WPS Office',
                 onClick: () => { void openOfficeFileNode(node); },
             });
         }
         if (many === 1 && !['run', 'result', 'wps-file', 'word-file'].includes(node.type)) {
             items.push({
                 label: '编辑',
-                hint: type?.label ?? '',
                 onClick: () => { state.editing = nodeId; render(); },
             });
         }
         if (!['wps-file', 'word-file'].includes(node.type)) items.push({
             label: many > 1 ? `运行所选(${many})` : '运行到此',
-            hint: many > 1 ? '' : '跑它和它的上游',
             onClick: () => { void runGraph(many > 1 ? null : nodeId, false); },
         });
         if (many === 1 && !['wps-file', 'word-file'].includes(node.type)) {
             items.push({
                 label: '重跑',
-                hint: '忽略缓存',
                 onClick: () => { void runGraph(nodeId, true); },
             });
         }
         items.push({
             label: many > 1 ? `复制所选节点(${many})` : '复制节点',
-            hint: 'Ctrl+C',
             onClick: () => { copySelectedNodes(); },
         });
         if (many > 1) {
-            items.push({ label: '取消选中', hint: '', onClick: () => { state.selection.clear(); state.editing = null; repaintSelection(); } });
+            items.push({ label: '取消选中', onClick: () => { state.selection.clear(); state.editing = null; repaintSelection(); } });
         }
         items.push({ sep: true });
         items.push({
             label: many > 1 ? `删除所选(${many})` : '删除',
-            hint: '',
             danger: true,
             onClick: () => { deleteSelected(); },
         });

@@ -81,6 +81,8 @@ const ALLOWED_INVOKE = [
     'agent:setConfig',
     // 换模型之后重新问一次"能不能收图片"(桥那边由 kaiwu 自己的补丁提供问法)。
     'agent:capabilities',
+    'agent:skills:list',
+    'agent:skills:read',
     'agent:permission',
     // 按需翻译:只递 (thoughtId, 原文)。翻成什么语言、用哪个模型,都由主进程与桥定。
     'agent:translate',

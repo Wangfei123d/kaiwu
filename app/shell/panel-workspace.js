@@ -199,6 +199,7 @@ export function createPanelWorkspace({
     let mounted = false;
     let interacted = false;            // 存档还没读回来用户就动过手 → 不要覆盖他的意图
     let bodies = new Map();            // pane id → .pw-body
+    let lastRenderedActiveByPane = new Map(); // pane id → { key, index };用于识别面板切换方向
     let paneEls = new Map();           // pane id → .pw-pane
     let nodeEls = new Map();           // tree node → rendered branch
     let nodeGutters = new Map();       // split node → its rendered gutters, in split order
@@ -366,18 +367,32 @@ export function createPanelWorkspace({
         // ⚠️ 从前这里是按 pane id 找元素 —— 有了标签之后 id 不再等于视图:
         // 一个面板里可以放「笔记正文」+「链接」两个标签,内容由**活动标签的 view** 决定。
         const placed = new Set();
+        const renderedActiveByPane = new Map();
         for (const ref of tabRefs) {
             const tab = activeTabOf(ref.node);
+            const activeIndex = Number.isInteger(ref.node.active) ? ref.node.active : 0;
+            const activeKey = tab === null ? '' : tabKey(tab);
+            const previous = lastRenderedActiveByPane.get(ref.node.id);
             if (tab === null) {
                 // 空面板:占位一句,面板本身留下(位置尺寸是用户拖出来的,不该因为没内容就消失)
                 ref.body.replaceChildren(emptyPlaceholder());
+                renderedActiveByPane.set(ref.node.id, { key: activeKey, index: activeIndex });
                 continue;
             }
             const live = panes[tab.view]?.el;
-            if (!live) { ref.body.replaceChildren(unknownViewPlaceholder(tab)); continue; }
+            if (!live) {
+                ref.body.replaceChildren(unknownViewPlaceholder(tab));
+                renderedActiveByPane.set(ref.node.id, { key: activeKey, index: activeIndex });
+                continue;
+            }
             placed.add(tab.view);
             ref.body.replaceChildren(live);                  // 一个 body 里永远只有一个孩子
+            if (previous && previous.key !== activeKey) {
+                animatePanelEntry(ref.body, activeIndex >= previous.index ? 1 : -1);
+            }
+            renderedActiveByPane.set(ref.node.id, { key: activeKey, index: activeIndex });
         }
+        lastRenderedActiveByPane = renderedActiveByPane;
         // 没有任何标签在用它的视图:元素**离开文档**(而不是 display:none ——
         // 那条路这个仓库踩过:藏空壳会连搬进去的真面板一起藏掉)。
         for (const id of Object.keys(panes)) {
@@ -387,6 +402,18 @@ export function createPanelWorkspace({
         }
         paintStrips();
         refresh();
+    }
+
+    /** 面板切换时让新视图按标签方向滑入;减少动态效果模式保持静止。 */
+    function animatePanelEntry(body, direction) {
+        const content = body?.firstElementChild;
+        if (!content?.animate || win?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true) return;
+        try {
+            content.animate([
+                { opacity: 0, transform: `translateX(${direction * 30}px) scale(.985)`, filter: 'blur(2px)' },
+                { opacity: 1, transform: 'translateX(0) scale(1)', filter: 'blur(0)' },
+            ], { duration: 250, easing: 'cubic-bezier(.18,.72,.25,1)' });
+        } catch { /* Web Animations 不可用时照常立即显示面板 */ }
     }
 
     function renderNode(node) {
@@ -430,20 +457,7 @@ export function createPanelWorkspace({
         const strip = el(doc, 'div', 'pw-tabs');
         strip.dataset.paneTabs = node.id;
 
-        // ⚠️ 抓手 / 条上空白**只造一次**:paintStrip 每次都会
-        //    `strip.replaceChildren()`,这两个节点要复用 —— 否则监听会随重画越挂越多
-        //    (标签条上踩过同一个坑:一次点击开出两个菜单)。
-        //
-        // ⚠️ 抓手 ⠿ 与条上空白**不再启动任何拖动**(规格 §1.2,本轮把整条手势删掉了)。
-        //    为什么还留着它们、而不是从 DOM 里删掉:
-        //      · 条上空白是标签右侧的留白,避免标签贴住面板边缘;
-        //      · 抓手是这一行的视觉语言(用户已经认得的"这一格"标记),突然消失会被当成 bug。
-        //    所以它们只**显示**、不响应指针、不进 Tab 序、也不向读屏报名字:
-        //    一个"看着能拖、其实不能"的键盘可达控件比不显示更糟(读屏用户会反复按它)。
-        const grip = el(doc, 'span', 'pw-grip');
-        grip.textContent = '⠿';
-        grip.setAttribute('aria-hidden', 'true');
-        grip.title = '这一格的标记(拖动请拖标签;整片拖动已取消)';
+        // 标签条空白只负责留白;不显示面板拖动角标。
         const pad = el(doc, 'span', 'pw-grabpad');
         pad.setAttribute('aria-hidden', 'true');
         const sidebarToggle = el(doc, 'button', 'pw-sidebar-toggle');
@@ -452,7 +466,7 @@ export function createPanelWorkspace({
 
         const body = el(doc, 'div', 'pw-body');
         body.dataset.paneBody = node.id;
-        const ref = { node, pane, strip, body, bound: [], grip, pad, sidebarToggle, sidebarSide: null };
+        const ref = { node, pane, strip, body, bound: [], pad, sidebarToggle, sidebarSide: null };
         on(sidebarToggle, 'click', (event) => {
             event?.preventDefault?.();
             event?.stopPropagation?.();
@@ -584,9 +598,6 @@ export function createPanelWorkspace({
         unbindStrip(ref);
         strip.dataset.mode = mode;
         strip.replaceChildren();
-        // ⚠️ 抓手挂在最前面只是为了保住这一行的视觉语言(它**不响应指针**,见 renderLeaf)。
-        //    只造一次、每次重画再挂回(见 renderLeaf 的注释:否则监听越挂越多)。
-        strip.append(ref.grip);
         if (mode === 'dropdown') {
             // < 220px:整条换成「当前视图名 ∨」下拉(点开是全名列表)
             const tab = activeTabOf(node);
@@ -716,6 +727,7 @@ export function createPanelWorkspace({
     /** 清理所有临时类 / 插入线 / 预览(取消或投放之后都必须调用,规格 §6)。 */
     function clearTabDrop() {
         tabDrag = null;
+        doc?.documentElement?.classList?.remove?.('panel-pointer-dragging');
         for (const s of (desk.querySelectorAll?.('.pw-tabs') ?? [])) {
             s.classList?.remove?.('pw-tabs-drop');
             const c = s.querySelector?.('.pw-tab-caret');
@@ -891,6 +903,7 @@ export function createPanelWorkspace({
             if (!moved) {
                 if (Math.abs(cx - sx) + Math.abs(cy - sy) < TAB_DRAG_THRESHOLD_PX) return;   // 还只是"点了一下"
                 moved = true;
+                doc?.documentElement?.classList?.add?.('panel-pointer-dragging');
                 tabDrag = { fromId: slotId, index };
                 pill?.classList?.add?.('pw-tab-dragging');
             }
@@ -1467,6 +1480,7 @@ export function createPanelWorkspace({
         const startPos = horizontal ? (e.clientX ?? 0) : (e.clientY ?? 0);
         g.dataset.dragging = '1';
         desk?.classList?.add?.('pw-resizing');
+        doc?.documentElement?.classList?.add?.('panel-pointer-dragging');
 
         const move = (ev) => {
             ev.preventDefault?.();
@@ -1480,6 +1494,7 @@ export function createPanelWorkspace({
             win?.removeEventListener?.('pointercancel', up);
             delete g.dataset.dragging;
             desk?.classList?.remove?.('pw-resizing');
+            doc?.documentElement?.classList?.remove?.('panel-pointer-dragging');
             interacted = true;
             commit();
         };
@@ -1792,6 +1807,7 @@ export function createPanelWorkspace({
             }
             for (const handle of Object.values(sidebarHandles)) handle.remove?.();
             desk?.classList?.remove('pw-left-collapsed', 'pw-right-collapsed');
+            doc?.documentElement?.classList?.remove?.('panel-pointer-dragging');
         },
     };
 }

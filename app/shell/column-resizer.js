@@ -101,6 +101,7 @@ export function createColumnResizer({
         if (!dragging) return;
         dragging = false;
         delete handle.dataset.dragging;
+        doc?.documentElement?.classList?.remove?.('panel-pointer-dragging');
         win?.removeEventListener?.('pointermove', onPointerMove);
         win?.removeEventListener?.('pointerup', onPointerUp);
         win?.removeEventListener?.('pointercancel', onPointerUp);
@@ -113,6 +114,7 @@ export function createColumnResizer({
         startWidth = getWidth();
         startX = e.clientX ?? 0;
         handle.dataset.dragging = '1';
+        doc?.documentElement?.classList?.add?.('panel-pointer-dragging');
         // ⚠️ 移动/松手挂在 **window** 上,不是挂在分隔条自己身上:
         //   ① 拖快了指针会离开那 6px 的命中区;
         //   ② 自检用的是合成输入,指针捕获对它不一定生效 —— 挂 window 两种情况都稳。
@@ -146,6 +148,11 @@ export function createColumnResizer({
             handle.removeEventListener('pointerdown', onPointerDown);
             handle.removeEventListener('dblclick', onDoubleClick);
             handle.removeEventListener('keydown', onKeyDown);
+            if (dragging) {
+                dragging = false;
+                delete handle.dataset.dragging;
+                doc?.documentElement?.classList?.remove?.('panel-pointer-dragging');
+            }
             win?.removeEventListener?.('pointermove', onPointerMove);
             win?.removeEventListener?.('pointerup', onPointerUp);
             win?.removeEventListener?.('pointercancel', onPointerUp);

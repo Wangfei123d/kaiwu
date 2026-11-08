@@ -99,6 +99,7 @@ function appendInk(doc, parent, text, glow) {
 
 /** 给解析器的纯文本叶子加稳定容器，后续只追加新到的可见字。 */
 function textRuns(doc, node) {
+    if (node.getAttribute?.('data-reply-static') === 'true') return;
     for (const child of childrenOf(node)) {
         if (isText(child)) {
             const run = doc.createElement('span');
@@ -112,6 +113,7 @@ function textRuns(doc, node) {
 }
 
 function activateInk(doc, node, glow) {
+    if (node.getAttribute?.('data-reply-static') === 'true') return;
     if (node.className === 'agent-code-sweep') glow = false;
     if (typeof node.replyText === 'string') {
         while (node.firstChild) node.removeChild(node.firstChild);

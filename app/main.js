@@ -1,7 +1,6 @@
 // 必须是第一个 import:它负责把桥从临时全局收进模块作用域并抹掉那个名字。
 // ES 模块按深度优先求值,所以放在第一行能保证它先于其他模块执行。
 import { bridge } from './shell/bootstrap.js';
-import { startStarfield } from './shell/starfield.js';
 import { createRegistries } from './runtime/registries.js';
 import { loadPlugins } from './runtime/loader.js';
 import { createOnboarding } from './notes/onboarding.js';
@@ -34,15 +33,14 @@ function $(id) { return document.getElementById(id); }
 /**
  * 「减少动态效果(强制关)」的执行者(设置页那个开关,以及启动时读一次设置)。
  *
- * 为什么是两件事:根属性 `html[data-motion="off"]` 给 CSS 那条全局规则看(它关掉
- * 所有动画/过渡);而星空是 canvas + requestAnimationFrame,**不吃 CSS** ——
- * 所以再派一个 `kaiwu:motion` 事件,由 shell/starfield.js 自己停/起。
+ * 根属性 `html[data-motion="off"]` 给 CSS 全局规则读取,用于关闭界面动画和过渡。
  * ⚠️ 这里只**应用**,不写盘:写盘是设置页保存时的事。
  */
 function applyMotionOff(off) {
     const root = document.documentElement;
     if (off === true) root.setAttribute('data-motion', 'off');
     else root.removeAttribute('data-motion');
+    // 笔记画布用它停止当前导航惯性,避免切换减少动效时仍继续运动。
     document.dispatchEvent(new CustomEvent('kaiwu:motion', { detail: { off: off === true } }));
 }
 
@@ -483,12 +481,9 @@ async function setupPanelWorkspace() {
 async function boot() {
     stage('boot:进入');
     createApplicationMenu();
-    startStarfield($('starfield'));
-    stage('boot:星空已启动');
 
     // 启动时先把「减少动态效果(强制关)」读出来应用一次:设置页那个开关是**持久的**,
-    // 上次关掉之后这次启动就得是关的(否则会先动一下再停)。读设置要走桥,所以是异步的;
-    // 星空在这之前已经开始跑了,靠 `kaiwu:motion` 事件把它停下。读失败不致命(当没设过)。
+    // 上次关掉之后这次启动就得是关的。读设置要走桥,所以是异步的;读失败不致命(当没设过)。
     void bridge.invoke('kaiwu:settings:get', { pluginId: SETTINGS_NS, key: SETTINGS_KEYS.motion })
         .then((raw) => {
             const off = motionOffFromSetting(raw);

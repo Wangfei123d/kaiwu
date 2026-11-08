@@ -356,5 +356,14 @@ export function buildCtx({ descriptor, bridge, registries, log = console }) {
         };
     }
 
+    // Agent Skills 面板:读取已发现技能的元数据与正文。只递不透明 id,
+    // 目录和文件路径始终由主进程扫描并解析,插件不能指定任意磁盘路径。
+    if (permissions.includes('agentSkills')) {
+        ctx.agentSkills = {
+            list: () => invoke('agent:skills:list', {}),
+            read: (id) => invoke('agent:skills:read', { id: String(id ?? '') }),
+        };
+    }
+
     return ctx;
 }

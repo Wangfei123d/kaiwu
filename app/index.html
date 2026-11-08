@@ -24,8 +24,6 @@
         <link rel="stylesheet" href="toolbox://shell/styles/settings-page.css">
     </head>
     <body>
-        <canvas id="starfield"></canvas>
-
         <!-- 首启向导:没有 Vault 时占据整个界面。
              刻意不用弹窗 —— 这是一个必须做选择的流程,不是一个可选提示。 -->
         <div class="onboarding" id="onboarding" hidden>
@@ -110,18 +108,23 @@
                             </svg>
                         </button>
                     </div>
-                    <div class="notes-nav-scroll">
-                        <!-- 标签筛选提示条:选中某个标签后出现在**列表顶部**。
-                             以前这个信息只藏在标签 chip 的浅色底上 —— 标签区一滚动,
-                             用户就不知道列表为什么变短了。 -->
-                        <div class="tag-filter-bar" id="tagFilterBar" hidden>
-                            <span>筛选中:</span>
-                            <b class="tag-filter-name" id="tagFilterName"></b>
-                            <button class="tag-filter-clear" id="tagFilterClear" type="button"
-                                    aria-label="清除标签筛选" title="清除筛选">×</button>
+                    <div class="notes-scroll-shell">
+                        <div class="notes-nav-scroll">
+                            <!-- 标签筛选提示条:选中某个标签后出现在**列表顶部**。
+                                 以前这个信息只藏在标签 chip 的浅色底上 —— 标签区一滚动,
+                                 用户就不知道列表为什么变短了。 -->
+                            <div class="tag-filter-bar" id="tagFilterBar" hidden>
+                                <span>筛选中:</span>
+                                <b class="tag-filter-name" id="tagFilterName"></b>
+                                <button class="tag-filter-clear" id="tagFilterClear" type="button"
+                                        aria-label="清除标签筛选" title="清除筛选">×</button>
+                            </div>
+                            <ul class="note-list" id="noteList"></ul>
+                            <div class="tag-panel" id="tagPanel"></div>
                         </div>
-                        <ul class="note-list" id="noteList"></ul>
-                        <div class="tag-panel" id="tagPanel"></div>
+                        <div class="notes-scroll-track" aria-hidden="true">
+                            <div class="notes-scroll-thumb"></div>
+                        </div>
                     </div>
                 </aside>
 

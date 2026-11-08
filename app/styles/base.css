@@ -6,6 +6,17 @@
 /* ================= 基础设置 ================= */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* 隐藏应用各面板的原生滚动条，但保留滚轮、触控板和键盘滚动。 */
+* {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
 /* hidden 属性必须真的生效。
    浏览器规范里 [hidden] 只是 UA 样式表的 `display: none`,**优先级最低** ——
    任何作者写的 display(flex/grid/block)都会把它压过去。

@@ -8,6 +8,7 @@
 // 这个模块只负责"文件 ↔ 编辑器"的接线,以及列表、标签与链接栏。
 import { createEditor } from './editor.js';
 import { createDocxReader, showDocxReaderError } from './docx-reader.js';
+import { SESSION_DIR } from '../lib/session-record.js';
 
 // 「正在拖什么」的全应用总线:拖动是**自己画的**指针拖拽(不是浏览器拖放),
 // 所以别的面板收不到 drop 事件 —— 由这里把"这一拖"播出去(见 app/lib/drag-bus.js)。
@@ -61,6 +62,12 @@ function parentDir(relPath) {
     return cut === -1 ? '' : String(relPath).slice(0, cut);
 }
 
+/** AI 会话台账由专用面板管理,不作为普通笔记显示在笔记列表。 */
+function isAiSessionPath(relPath) {
+    const normalized = String(relPath ?? '').replace(/\\/g, '/').replace(/^\/+/, '');
+    return normalized === SESSION_DIR || normalized.startsWith(`${SESSION_DIR}/`);
+}
+
 export function createNotesView({
     els, bridge, log = console, onOpenNote = null, onCloseDocx = null, onOpenCanvas = null, onCreateCanvas = null,
     /**
@@ -91,6 +98,8 @@ export function createNotesView({
     let dirty = false;
     /** 收起的文件夹(记的是 Vault 内相对路径)。默认全展开 —— 用户建了文件夹就是要看见里面。 */
     const collapsedDirs = new Set();
+    /** 正在收起的文件夹;先播放子项收拢，再从扁平目录中移除。 */
+    let pendingFolderCollapse = null;
     /** "新建文件夹"的内联输入行开着没有(不开原生对话框:Electron 的 window.prompt 不可用)。 */
     let newFolderOpen = false;
     /** 标签面板的状态(方案 4):排序方式 / 是否收起 / 是否展开全部 / 标签自己的过滤词。 */
@@ -295,6 +304,118 @@ export function createNotesView({
 
     function scrollContainer() {
         return listEl?.closest?.('.notes-nav-scroll') ?? listEl?.parentElement ?? null;
+    }
+
+    // 笔记导航使用自绘的低亮度滚动滑块:系统滚动条隐藏,滚动能力仍由原生容器提供。
+    const noteScrollEl = scrollContainer();
+    const noteScrollTrackEl = noteScrollEl?.parentElement?.querySelector?.('.notes-scroll-track') ?? null;
+    const noteScrollThumbEl = noteScrollTrackEl?.querySelector?.('.notes-scroll-thumb') ?? null;
+    let noteScrollDrag = null;
+    let noteScrollHideTimer = null;
+
+    function scheduleNoteScrollThumbHide(delay = 520) {
+        if (!noteScrollTrackEl || noteScrollDrag) return;
+        if (noteScrollHideTimer !== null) clearTimeout(noteScrollHideTimer);
+        noteScrollHideTimer = setTimeout(() => {
+            noteScrollHideTimer = null;
+            noteScrollTrackEl.classList.remove('visible');
+        }, delay);
+    }
+
+    function revealNoteScrollThumb() {
+        if (!noteScrollTrackEl) return;
+        noteScrollTrackEl.classList.add('visible');
+        scheduleNoteScrollThumbHide();
+    }
+
+    function updateNoteScrollThumb() {
+        if (!noteScrollEl || !noteScrollTrackEl || !noteScrollThumbEl) return;
+        // 轨道设置为 hidden 时 clientHeight 会变成 0;先恢复布局测量,否则
+        // 初始化后会永远误判为「没有溢出」,动态内容变长时也无法自愈。
+        noteScrollTrackEl.hidden = false;
+        const trackHeight = noteScrollTrackEl.clientHeight;
+        const maxScroll = noteScrollEl.scrollHeight - noteScrollEl.clientHeight;
+        if (trackHeight <= 0 || maxScroll <= 0) {
+            noteScrollTrackEl.hidden = true;
+            noteScrollTrackEl.classList.remove('dragging');
+            noteScrollTrackEl.classList.remove('visible');
+            noteScrollDrag = null;
+            if (noteScrollHideTimer !== null) {
+                clearTimeout(noteScrollHideTimer);
+                noteScrollHideTimer = null;
+            }
+            return;
+        }
+        noteScrollTrackEl.hidden = false;
+        const thumbHeight = Math.max(30, Math.round(trackHeight * noteScrollEl.clientHeight / noteScrollEl.scrollHeight));
+        const travel = Math.max(0, trackHeight - thumbHeight);
+        noteScrollThumbEl.style.height = `${thumbHeight}px`;
+        noteScrollThumbEl.style.transform = `translateY(${travel * noteScrollEl.scrollTop / maxScroll}px)`;
+    }
+
+    if (noteScrollEl && noteScrollTrackEl && noteScrollThumbEl) {
+        const beginNoteScrollDrag = (event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            updateNoteScrollThumb();
+            if (noteScrollTrackEl.hidden) return;
+
+            const rect = noteScrollTrackEl.getBoundingClientRect();
+            const maxScroll = noteScrollEl.scrollHeight - noteScrollEl.clientHeight;
+            const thumbHeight = noteScrollThumbEl.offsetHeight;
+            const travel = Math.max(1, noteScrollTrackEl.clientHeight - thumbHeight);
+            const startedOnThumb = event.target?.closest?.('.notes-scroll-thumb');
+            if (!startedOnThumb) {
+                const fraction = Math.max(0, Math.min(1,
+                    (event.clientY - rect.top - thumbHeight / 2) / travel));
+                noteScrollEl.scrollTop = fraction * maxScroll;
+                updateNoteScrollThumb();
+            }
+
+            noteScrollDrag = { pointerY: event.clientY, scrollTop: noteScrollEl.scrollTop };
+            if (noteScrollHideTimer !== null) {
+                clearTimeout(noteScrollHideTimer);
+                noteScrollHideTimer = null;
+            }
+            noteScrollTrackEl.classList.add('visible');
+            noteScrollTrackEl.classList.add('dragging');
+            noteScrollTrackEl.setPointerCapture?.(event.pointerId);
+        };
+        const moveNoteScrollDrag = (event) => {
+            if (!noteScrollDrag) return;
+            const maxScroll = noteScrollEl.scrollHeight - noteScrollEl.clientHeight;
+            const travel = Math.max(1, noteScrollTrackEl.clientHeight - noteScrollThumbEl.offsetHeight);
+            const delta = event.clientY - noteScrollDrag.pointerY;
+            noteScrollEl.scrollTop = noteScrollDrag.scrollTop + delta * maxScroll / travel;
+            noteScrollTrackEl.classList.add('visible');
+            updateNoteScrollThumb();
+        };
+        const finishNoteScrollDrag = () => {
+            if (!noteScrollDrag) return;
+            noteScrollDrag = null;
+            noteScrollTrackEl.classList.remove('dragging');
+            scheduleNoteScrollThumbHide(360);
+        };
+
+        noteScrollEl.addEventListener('scroll', () => {
+            updateNoteScrollThumb();
+            // 原生滚轮/触控滚动时也短暂显示滑块;槽仍透明,停下后自动淡出。
+            if (!noteScrollDrag) revealNoteScrollThumb();
+        }, { passive: true });
+        // 轨道保持透明但可命中,因此滑块平时完全隐藏,从列表右缘按住拖动时才显现。
+        noteScrollTrackEl.addEventListener('pointerdown', beginNoteScrollDrag);
+        noteScrollTrackEl.addEventListener('pointermove', moveNoteScrollDrag);
+        noteScrollTrackEl.addEventListener('pointerup', finishNoteScrollDrag);
+        noteScrollTrackEl.addEventListener('pointercancel', finishNoteScrollDrag);
+        window.addEventListener('resize', updateNoteScrollThumb);
+        if (typeof ResizeObserver === 'function') {
+            const scrollResizeObserver = new ResizeObserver(updateNoteScrollThumb);
+            scrollResizeObserver.observe(noteScrollEl);
+            if (listEl) scrollResizeObserver.observe(listEl);
+            if (tagPanelEl) scrollResizeObserver.observe(tagPanelEl);
+        }
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(updateNoteScrollThumb);
+        else updateNoteScrollThumb();
     }
 
     function stopAutoScroll() {
@@ -524,6 +645,25 @@ export function createNotesView({
         return svg;
     }
 
+    function noteFolderIcon() {
+        if (typeof document.createElementNS !== 'function') {
+            const fallback = document.createElement('span');
+            fallback.className = 'note-folder-icon-fallback';
+            fallback.setAttribute('aria-hidden', 'true');
+            fallback.textContent = '▱';
+            return fallback;
+        }
+        const ns = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('viewBox', '0 0 16 16');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.classList.add('note-folder-icon');
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', 'M1.7 4.2a1 1 0 0 1 1-1h3l1.4 1.5h6.2a1 1 0 0 1 1 1v6.1a1 1 0 0 1-1 1H2.7a1 1 0 0 1-1-1z');
+        svg.appendChild(path);
+        return svg;
+    }
+
     function otherItem(other, depth, subText = null) {
         const li = document.createElement('li');
         const btn = document.createElement('button');
@@ -531,6 +671,7 @@ export function createNotesView({
         btn.className = 'note-other';
         btn.dataset.path = other.path;
         btn.dataset.kind = kindOf(other.name, other.path);
+        btn.dataset.depth = String(depth);
         btn.style.setProperty('--depth', String(depth));
         btn.title = `${other.path}\n${humanSize(other.size)}`;
         const isCanvas = btn.dataset.kind === 'canvas';
@@ -598,6 +739,7 @@ export function createNotesView({
         btn.className = 'note-text';
         btn.dataset.path = text.path;
         btn.dataset.kind = 'text';
+        btn.dataset.depth = String(depth);
         btn.style.setProperty('--depth', String(depth));
         btn.title = `${text.path}\n纯文本 · ${humanSize(text.size)}`;
         btn.setAttribute('aria-selected', String(text.path === currentPath));
@@ -635,6 +777,7 @@ export function createNotesView({
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.dataset.path = note.path;
+        btn.dataset.depth = String(depth);
         btn.style.setProperty('--depth', String(depth));
         btn.setAttribute('aria-selected', String(note.path === currentPath));
         // ⚠️ 「打不开」的 .md(含非法字节 / NUL)照常列出来 —— 它是**用户的文件**,
@@ -704,6 +847,107 @@ export function createNotesView({
         }
     }
 
+    function folderDescendantRows(folderPath) {
+        const prefix = `${folderPath}/`;
+        const seen = new Set();
+        const rows = [];
+        for (const button of listEl.querySelectorAll('button')) {
+            const path = button.dataset?.folder || button.dataset?.path;
+            if (typeof path !== 'string' || !path.startsWith(prefix)) continue;
+            const row = button.parentElement;
+            if (row && !seen.has(row)) {
+                seen.add(row);
+                rows.push(row);
+            }
+        }
+        return rows;
+    }
+
+    function clearFolderRowsMotion(rows) {
+        for (const row of rows) {
+            row.classList.remove('note-tree-folding');
+            row.classList.remove('note-tree-expanding');
+            row.classList.remove('is-folding');
+            row.classList.remove('is-visible');
+            row.style.removeProperty('--tree-motion-height');
+            row.style.removeProperty('--tree-motion-delay');
+        }
+    }
+
+    function cancelFolderCollapse() {
+        if (!pendingFolderCollapse) return;
+        clearTimeout(pendingFolderCollapse.timer);
+        clearFolderRowsMotion(pendingFolderCollapse.rows);
+        pendingFolderCollapse = null;
+    }
+
+    function animateFolderRows(rows, direction, onComplete = null) {
+        if (!rows.length || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+            onComplete?.();
+            return null;
+        }
+
+        const stepMs = 8;
+        const maxSteps = 5;
+        rows.forEach((row, index) => {
+            const measured = row.getBoundingClientRect?.().height || row.offsetHeight || 32;
+            const step = direction === 'fold' ? rows.length - index - 1 : index;
+            row.style.setProperty('--tree-motion-height', `${measured}px`);
+            row.style.setProperty('--tree-motion-delay', `${Math.min(step, maxSteps) * stepMs}ms`);
+            row.classList.add(direction === 'fold' ? 'note-tree-folding' : 'note-tree-expanding');
+        });
+
+        const revealTransition = () => {
+            for (const row of rows) row.classList.add(direction === 'fold' ? 'is-folding' : 'is-visible');
+        };
+        // 先同步一次布局，让初始高度/透明度生效，再启动过渡；避免双 rAF 带来的空等。
+        if (rows[0]) void rows[0].offsetHeight;
+        revealTransition();
+
+        const maxDelay = Math.min(Math.max(rows.length - 1, 0), maxSteps) * stepMs;
+        const timer = setTimeout(() => {
+            clearFolderRowsMotion(rows);
+            onComplete?.();
+        }, maxDelay + 190);
+        return timer;
+    }
+
+    function toggleDirectory(folderPath) {
+        // 快速再次点击时，打断当前收起并按最新点击状态重画；点到别的目录时
+        // 则先完成上一段过渡，避免旧的计时器在新状态上重复重画列表。
+        cancelFolderCollapse();
+
+        if (collapsedDirs.has(folderPath)) {
+            collapsedDirs.delete(folderPath);
+            renderList();
+            animateFolderRows(folderDescendantRows(folderPath), 'expand', updateNoteScrollThumb);
+            return;
+        }
+
+        const rows = folderDescendantRows(folderPath);
+        collapsedDirs.add(folderPath);
+        const folderButton = Array.from(listEl.querySelectorAll('button'))
+            .find(button => button.dataset?.folder === folderPath);
+        folderButton?.setAttribute('aria-expanded', 'false');
+        if (!rows.length) {
+            renderList();
+            return;
+        }
+
+        const motion = { folderPath, rows, timer: null };
+        pendingFolderCollapse = motion;
+        motion.timer = animateFolderRows(rows, 'fold', () => {
+            if (pendingFolderCollapse !== motion) return;
+            pendingFolderCollapse = null;
+            renderList();
+        });
+        // 减少动态效果或无子项时会同步结束，不留一个永远挂起的动画状态。
+        if (pendingFolderCollapse === motion && motion.timer === null) {
+            pendingFolderCollapse = null;
+            renderList();
+        }
+    }
+
     /** 递归渲染一层目录:先子目录、再笔记。 */
     function renderDir(node, depth) {
         for (const dir of node.dirs.values()) {
@@ -715,6 +959,7 @@ export function createNotesView({
             btn.type = 'button';
             btn.className = 'note-dir';
             btn.dataset.folder = dir.path;
+            btn.dataset.depth = String(depth);
             btn.style.setProperty('--depth', String(depth));
             btn.setAttribute('aria-expanded', String(!isCollapsed));
             btn.setAttribute('aria-label', `文件夹 ${dir.name}`);
@@ -730,12 +975,9 @@ export function createNotesView({
             name.className = 'note-dir-name';
             name.textContent = dir.name;                 // 用户起的目录名 → 一律 textContent
             btn.appendChild(caret);
+            btn.appendChild(noteFolderIcon());
             btn.appendChild(name);
-            btn.addEventListener('click', () => {
-                if (collapsedDirs.has(dir.path)) collapsedDirs.delete(dir.path);
-                else collapsedDirs.add(dir.path);
-                renderList();
-            });
+            btn.addEventListener('click', () => toggleDirectory(dir.path));
 
             // 在这个文件夹里新建一篇笔记。没有它,新建的空文件夹只能靠手写
             // [[目录/名字]] 链接才用得上 —— 那样"新建文件夹"就是个半成品。
@@ -831,7 +1073,7 @@ export function createNotesView({
 
     function renderListInner() {
         if (!listEl) return;
-        const all = index?.notes ?? [];
+        const all = (index?.notes ?? []).filter(note => !isAiSessionPath(note.path));
 
         let visible = all;
         if (keyword !== '') {
@@ -847,7 +1089,7 @@ export function createNotesView({
         // 纯文本(.txt):**关键词**筛选对它一样有效(按文件名匹配),
         // 但**标签**筛选把它藏起来 —— txt 没有标签这个东西(不解析 `#标签`),
         // 让它在"筛选中:#某标签"的结果里冒充命中,是更坏的结果(看着有、点开却没有)。
-        const allTexts = index?.texts ?? [];
+        const allTexts = (index?.texts ?? []).filter(text => !isAiSessionPath(text.path));
         let visibleTexts = allTexts;
         if (tagFilter !== null) {
             visibleTexts = [];
@@ -857,7 +1099,8 @@ export function createNotesView({
         }
 
         // 画布属于独立文件类型，不参与笔记标签筛选；在笔记目录根层与笔记并列显示。
-        const allCanvases = (index?.others ?? []).filter(item => kindOf(item.name, item.path) === 'canvas');
+        const allCanvases = (index?.others ?? []).filter(item =>
+            kindOf(item.name, item.path) === 'canvas' && !isAiSessionPath(item.path));
         let visibleCanvases = allCanvases;
         if (tagFilter !== null) {
             visibleCanvases = [];
@@ -879,9 +1122,11 @@ export function createNotesView({
 
         if (newFolderOpen) appendNewFolderRow();
 
-        const dirs = (index?.folders ?? []).filter(dir => dir !== '画布' && !dir.startsWith('画布/'));
+        const dirs = (index?.folders ?? []).filter(dir =>
+            dir !== '画布' && !dir.startsWith('画布/') && !isAiSessionPath(dir));
         const others = (index?.others ?? []).filter(item => kindOf(item.name, item.path) !== 'canvas'
-            && item.path !== '画布' && !item.path.startsWith('画布/'));
+            && item.path !== '画布' && !item.path.startsWith('画布/')
+            && !isAiSessionPath(item.path));
         if (all.length === 0 && dirs.length === 0 && allTexts.length === 0 && others.length === 0 && visibleCanvases.length === 0) {
             const li = document.createElement('li');
             li.className = 'hint';
@@ -902,10 +1147,12 @@ export function createNotesView({
      * 见 open() 里那条与 HANDOFF §A9)。所以不在 renameRow 里聚焦,在这里统一收尾。
      */
     function renderList() {
+        cancelFolderCollapse();
         // 先把"即将被这次重画换掉的那个输入框"记下来(见 repaintDoomedInput 的说明):
         // 它决定 renameRow 的 blur 是"用户点到别处"还是"我们自己把它拆了"。
         repaintDoomedInput = renamingPath === null ? null : findRenameInput();
         renderListInner();
+        updateNoteScrollThumb();
         if (renamingPath === null) return;
         const input = findRenameInput();
         input?.focus?.();
@@ -1403,6 +1650,7 @@ export function createNotesView({
         input.type = 'text';
         input.className = 'note-rename-input';
         input.dataset.path = note.path;
+        input.dataset.depth = String(depth);
         input.style.setProperty('--depth', String(depth));
         // 重画时优先用草稿:用户已经打的字不许被预填值盖回去(见 renameDraft 的说明)
         input.value = renameDraft ?? baseNameOf(note.path);

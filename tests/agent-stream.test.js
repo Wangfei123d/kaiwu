@@ -59,21 +59,17 @@ test('连续 agent_message_chunk 拼进同一条气泡,不是每条一个气泡'
     assert.equal(s.messages[0].done, false, '流式中的气泡还没收尾');
 });
 
-test('工具卡片夹在流式中间:卡片单列,气泡不因为一次工具调用就另起一个', () => {
-    // 这是**有意**的选择:契约只要求"连续 chunk 拼进同一条",没有要求工具调用
-    // 切断当前气泡。工具卡片在界面上本来就画成独立的一行(.agent-tool),
-    // 所以"先看看 [卡片] 看完了"看着是对的;反过来为它维护一个"气泡还开着吗"
-    // 的隐藏标记,只会给状态多一个容易出错的分支。
-    // 真正被钉住的是:**卡片不许重复建**,流式文本不许丢、不许错序。
+test('新工具调用切开前后的回复，同一工具的状态更新不切开连续正文', () => {
     const s = fold([
         chunk('先看看'),
         { kind: 'update', sessionId: 's1', update: { sessionUpdate: 'tool_call', toolCallId: 't1', title: 'read', kind: 'read', status: 'pending' } },
-        chunk('看完了'),
+        chunk('看完'),
         { kind: 'update', sessionId: 's1', update: { sessionUpdate: 'tool_call_update', toolCallId: 't1', status: 'completed' } },
+        chunk('了'),
     ]);
 
-    assert.equal(s.messages.length, 1);
-    assert.equal(s.messages[0].text, '先看看看完了', '流式文本不许因为工具调用断掉');
+    assert.deepEqual(s.messages.map(m => [m.text, m.done]), [['先看看', true], ['看完了', false]]);
+    assert.deepEqual(s.order, ['msg:m-1', 'tool:t1', 'msg:m-2']);
     assert.equal(s.tools.length, 1, '两次 tool_* 事件只能有一张卡片');
     assert.equal(s.tools[0].status, 'completed');
 });

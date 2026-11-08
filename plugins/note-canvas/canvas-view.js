@@ -85,10 +85,15 @@ export function mountCanvas(host,ctx) {
         const error=el('p','nc-form-error'),actions=el('div','nc-form-actions'),apply=el('button','',action);apply.type='submit';actions.append(button('取消',closeModal),apply);f.append(heading,input,error,actions);overlay.append(f);pane.append(overlay);modal=overlay;
         f.addEventListener('submit',async event=>{event.preventDefault();apply.disabled=true;try{await submit(input.value);if(modal===overlay)closeModal();}catch(err){error.textContent=err.message;}finally{apply.disabled=false;}});input.focus();return f;
     }
-    function newBoard(){if(!library.vault){showError(Error(library.reason||'请先配置笔记库'));return;}form('新建画布','',async name=>{
+    function newBoard(firstNodeAt){if(!library.vault){showError(Error(library.reason||'请先配置笔记库'));return;}const boardForm=form('新建画布','',async name=>{
         await flushActive();stopMotion();const vault=library.vault,stamp=++epoch,result=await ctx.canvas.create(name.trim(),vault);
         if(dead||stamp!==epoch||vault!==library.vault||result.vault!==vault)return;
-        session?.dispose();session=createSession({...result,write:ctx.canvas.write,changed:updateStatus});selected.clear();resources.clear();clearConnection();vaultMismatch=false;zoomLayout.sync(1);nav.set({x:40,y:40,scale:1});renderGraph();updateStatus();await refreshLibrary();
+        session?.dispose();session=createSession({...result,write:ctx.canvas.write,changed:updateStatus});selected.clear();resources.clear();clearConnection();vaultMismatch=false;zoomLayout.sync(1);nav.set({x:40,y:40,scale:1});renderGraph();updateStatus();
+        if(firstNodeAt && modal?.contains(boardForm)){
+            closeModal();
+            createEditableText(worldPoint(firstNodeAt.x,firstNodeAt.y));
+        }
+        await refreshLibrary();
         globalThis.dispatchEvent(new CustomEvent('kaiwu:canvas-opened',{detail:{path:result.path}}));
         globalThis.dispatchEvent(new Event('kaiwu:canvas-list-changed'));
     },{action:'创建',placeholder:'画布名称'});}
@@ -129,27 +134,41 @@ export function mountCanvas(host,ctx) {
     function position(element,node){Object.assign(element.style,{left:`${node.x}px`,top:`${node.y}px`,width:`${node.width}px`,height:`${node.height}px`});}
     function exitInlineEdit(){if(!inlineEditId)return;const card=cardById(inlineEditId);card?._ncLiveMarkdown?.setDisabled(true);card?.classList.remove('editing');inlineEditId=null;}
     function canClickEdit(node,card){if(!editable())return false;if(node.type==='text'||node.type==='group')return true;return node.type==='file'&&notePath(node.file)&&card.dataset.nodeEditable==='true';}
-    function focusLiveSurface(surface,event){surface.focus({preventScroll:true});let range=doc.caretRangeFromPoint?.(event.clientX,event.clientY);
+    function focusLiveSurface(surface,event){surface.focus({preventScroll:true});
+        if(!event){doc.getSelection()?.collapse(surface,0);return;}
+        let range=doc.caretRangeFromPoint?.(event.clientX,event.clientY);
         if(!range){const caret=doc.caretPositionFromPoint?.(event.clientX,event.clientY);if(caret){range=doc.createRange();range.setStart(caret.offsetNode,caret.offset);range.collapse(true);}}
         if(!range||!surface.contains(range.startContainer))return;const selection=doc.getSelection();if(!selection)return;selection.removeAllRanges();selection.addRange(range);}
     function enterInlineEdit(card,event){const surface=card.querySelector('.live-markdown-content'),mounted=card._ncLiveMarkdown;if(!surface||!mounted)return;
         exitInlineEdit();mounted.setDisabled(false);inlineEditId=card.dataset.nodeId;card.classList.add('editing');focusLiveSurface(surface,event);}
-    function createTextAtDoubleClick(event){
-        if(!editable())return;
-        const target=event.target?.closest?event.target:event.target?.parentElement;
-        if(target?.closest?.('.nc-node,.nc-edge'))return;
-        event.preventDefault();
-        clickCandidate=null;
-        const point=worldPoint(event.clientX,event.clientY);
+    function isCanvasBackground(target){
+        if(!target?.closest||target.closest('.nc-edge,.nc-status,.nc-port,.nc-resize'))return false;
+        const card=target.closest('.nc-node');
+        return !card || (card.dataset.type==='group' && target.parentElement===card && target.classList.contains('nc-node-body'));
+    }
+    function createEditableText(point){
+        clearConnection();
         const node=addNode('text',{text:''},point);
         if(!node)return;
         const card=cardById(node.id);
-        if(card)enterInlineEdit(card,event);
+        if(card)enterInlineEdit(card);
+    }
+    function createTextAtDoubleClick(event){
+        const target=event.target?.closest?event.target:event.target?.parentElement;
+        if(event.button!==0||space||draggedPointer||event.shiftKey||event.altKey||event.ctrlKey||event.metaKey
+            ||modal||loadingPath||!isCanvasBackground(target))return;
+        if(editable()){
+            event.preventDefault();
+            createEditableText(worldPoint(event.clientX,event.clientY));
+        }else if(!session&&library.vault&&library.boards.length===0){
+            event.preventDefault();
+            newBoard({x:event.clientX,y:event.clientY});
+        }
     }
     function nodeClick(event){const target=event.target?.closest?event.target:event.target?.parentElement,card=target?.closest?.('.nc-node'),id=card?.dataset.nodeId;
         if(inlineEditId){const active=cardById(inlineEditId)?.querySelector('.live-markdown-content');if(id===inlineEditId&&active?.contains(target)){clickCandidate=null;return;}exitInlineEdit();}
-        if(draggedPointer){draggedPointer=false;clickCandidate=null;return;}
-        if(event.shiftKey||!card||target.closest('button,a,input,textarea,select,.nc-port,.nc-resize,[contenteditable="true"]')){clickCandidate=null;return;}
+        if(draggedPointer){clickCandidate=null;return;}
+        if(event.shiftKey||!card||isCanvasBackground(target)||target.closest('button,a,input,textarea,select,.nc-port,.nc-resize,[contenteditable="true"]')){clickCandidate=null;return;}
         const node=session?.graph.nodes.find(item=>item.id===id);if(!node||!canClickEdit(node,card)){clickCandidate=null;return;}
         if(clickCandidate!==id){clickCandidate=id;return;}
         clickCandidate=null;

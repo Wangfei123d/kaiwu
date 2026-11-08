@@ -231,7 +231,7 @@ function normalizeMessageUsage(raw) {
 /**
  * 把最后一条思考收尾(等价于"这段思考想完了")。
  *
- * 谁调它:正文一到(说明想完了)、提示收尾、提示失败 —— 三种都是"思考阶段结束"。
+ * 正文、新的工具调用和提示结束都会收尾当前思考。
  * 界面据此把思考块从「思考中…」收起成「已思考」,并把展开状态复位。
  */
 function finishThoughts(state) {
@@ -244,13 +244,13 @@ function finishThoughts(state) {
 
 /** 把最后一条 assistant 气泡收尾(等价于"当前正在流式的那一条")。 */
 function finishAssistant(state) {
-    const messages = state.messages.slice();
-    for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === 'assistant') {
-            if (messages[i].done === true) return state;      // 已经收过尾,别重复造新对象
-            messages[i] = { ...messages[i], done: true };
-            return { ...state, messages };
-        }
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+        const message = state.messages[i];
+        if (message.role !== 'assistant') continue;
+        if (message.done === true) return state;
+        const messages = state.messages.slice();
+        messages[i] = { ...message, done: true };
+        return { ...state, messages };
     }
     return state;
 }
@@ -473,8 +473,7 @@ function reduceUpdate(state, update) {
         return { ...state, configOptions };
     }
 
-    // ⚠️ 连续 chunk 必须**拼进同一条**气泡。早期写法是"每个 chunk 追一条消息",
-    // 结果一条回复被拆成几十个气泡,而且 prompt-end 收尾时只标了最后一条。
+    // 同一段连续输出拼进同一个气泡；新的思考或工具调用会先收尾这一段。
     if (kind === 'agent_message_chunk') {
         const text = extractText(update.content);
         if (text === '') return state;
@@ -503,7 +502,8 @@ function reduceUpdate(state, update) {
         }
         const thought = { id: `t-${thoughts.length + 1}`, text, done: false };
         thoughts.push(thought);
-        return withOrder({ ...state, thoughts }, `think:${thought.id}`);
+        // 过程开始后再收到正文时，必须在这段思考后面新建回复。
+        return withOrder({ ...finishAssistant(state), thoughts }, `think:${thought.id}`);
     }
 
     // 工具卡片:tool_call 建卡、tool_call_update 按 id 改同一条(不许新建)
@@ -528,11 +528,8 @@ function reduceUpdate(state, update) {
         const tools = state.tools.slice();
         const at = tools.findIndex(t => t.toolCallId === toolCallId);
         if (at === -1) {
-            // ⚠️ 一次**新的**工具调用就是一个步骤边界:把还开着的思考收尾。
-            // 不收的话,工具跑完之后那一段思考会**并回**上一条(它们本来是"一条在长的
-            // 文本"),于是它在界面上被排到工具**前面** —— 而它其实是工具之后才发生的。
-            // 位置不实,正是这次要修的那类毛病;一次工具更新不重复收尾(已经收过了)。
-            const settled = finishThoughts(state);
+            // 新调用分隔前后的思考与回复；同一个调用的状态更新只更新卡片。
+            const settled = finishAssistant(finishThoughts(state));
             const tool = {
                 toolCallId,
                 title: fields.title || '工具调用',

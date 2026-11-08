@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>笔记列表滚动条 · 动效方案</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #10100f;
+      --panel: #171615;
+      --head: #141312;
+      --line: #2c2926;
+      --text: #e9e7e4;
+      --muted: #99948e;
+      --quiet: #6e6a65;
+      --blue: #8acfff;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--text); background: var(--bg); }
+    .page { width: min(1240px, 100%); margin: auto; padding: 30px 26px 42px; }
+    .page-head { margin-bottom: 22px; }
+    h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: .01em; }
+    .page-head p { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+    .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+    .option { min-width: 0; }
+    .option-title { display: flex; align-items: center; gap: 9px; margin: 0 0 9px; }
+    .letter { display: grid; place-items: center; width: 24px; height: 24px; flex: none; border: 1px solid #3b3834; border-radius: 7px; color: var(--blue); font: 600 12px/1 ui-monospace, Consolas, monospace; }
+    h2 { margin: 0; font-size: 14px; font-weight: 600; }
+    .timing { margin-left: auto; color: var(--quiet); font-size: 10px; white-space: nowrap; }
+    .mock-pane { height: 480px; min-width: 0; overflow: hidden; background: var(--panel); border: 1px solid #292725; border-radius: 11px; box-shadow: 0 12px 35px rgba(0,0,0,.19); }
+    .mock-head { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--head); border-bottom: 1px solid var(--line); }
+    .grip { color: #4c4945; font-size: 10px; letter-spacing: -2px; }
+    .tab { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--text); font-size: 12px; white-space: nowrap; border: 1px solid #4a4642; border-bottom-color: var(--panel); border-radius: 9px 9px 0 0; align-self: flex-end; }
+    .close { color: var(--quiet); font-size: 12px; }
+    .search-row { display: flex; gap: 8px; padding: 10px 11px 8px; }
+    .search { flex: 1; min-width: 0; height: 32px; padding: 0 10px; color: #85817b; background: #121110; border: 1px solid #2e2b28; border-radius: 7px; font-size: 11px; line-height: 30px; }
+    .icon-button { display: grid; place-items: center; width: 33px; height: 32px; flex: none; color: #d8d5d0; background: #1d1b19; border: 1px solid #373431; border-radius: 7px; font-size: 17px; line-height: 1; }
+    .list-frame { position: relative; height: calc(100% - 90px); min-height: 0; }
+    .list-scroll { height: 100%; overflow: auto; padding: 0 19px 8px 0; overscroll-behavior: contain; scrollbar-width: none; outline: none; }
+    .list-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    .list-scroll ul { list-style: none; margin: 0; padding: 0 7px 8px; }
+    .list-scroll li { min-height: 37px; display: flex; align-items: center; gap: 7px; padding: 7px 9px; color: #b8b4af; border-bottom: 1px solid rgba(255,255,255,.035); font-size: 12px; line-height: 1.35; }
+    .list-scroll li.folder { color: #d2cfca; font-weight: 550; }
+    .list-scroll li.indent { padding-left: 25px; color: #8f8b85; }
+    .list-scroll li.selected { color: #dcecf8; background: #1c2226; border-radius: 5px; }
+    .caret { color: #77726c; font-size: 9px; }
+    .kind { color: #85817b; font: 10px/1 ui-monospace, Consolas, monospace; }
+    .scroll-track { position: absolute; z-index: 3; top: 6px; right: 5px; bottom: 8px; width: 9px; background: transparent; opacity: 0; pointer-events: none; }
+    .scroll-thumb { position: absolute; top: 0; right: 1px; width: 7px; min-height: 30px; border-radius: 99px; pointer-events: auto; cursor: grab; }
+    .scroll-track:not(.visible) .scroll-thumb { pointer-events: none; }
+    .scroll-thumb:active { cursor: grabbing; }
+
+    /* D · A slow, diffused bloom around a satin thumb. */
+    .effect-d .scroll-track { transform: translateX(3px); filter: blur(1px); transition: opacity 480ms ease, transform 620ms cubic-bezier(.16,1,.3,1), filter 620ms ease; }
+    .effect-d .scroll-track.visible { opacity: 1; transform: translateX(0); filter: blur(0); }
+    .effect-d .scroll-thumb::before, .effect-d .scroll-thumb::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+    .effect-d .scroll-thumb::before { background: linear-gradient(90deg, rgba(161,166,168,.24), rgba(194,198,199,.42) 48%, rgba(145,153,156,.28)); opacity: 0; box-shadow: inset 0 0 2px rgba(255,255,255,.12); transition: opacity 520ms ease, filter 620ms ease; filter: blur(2px); }
+    .effect-d .scroll-thumb::after { inset: -4px -3px; background: rgba(133,166,185,.1); filter: blur(7px); opacity: 0; transform: scale(.8); transition: opacity 800ms ease, transform 900ms cubic-bezier(.16,1,.3,1); }
+    .effect-d .scroll-track.visible .scroll-thumb::before { opacity: .78; filter: blur(0); }
+    .effect-d .scroll-track.visible .scroll-thumb::after { opacity: .38; transform: scale(1); }
+
+    /* E · Draw a quiet guide rail down the panel, then reveal the position marker. */
+    .effect-e .scroll-track { transition: opacity 560ms ease; }
+    .effect-e .scroll-track::before { content: ""; position: absolute; top: 4px; bottom: 4px; left: 4px; width: 1px; border-radius: 9px; background: linear-gradient(180deg, transparent, rgba(157,210,239,.5) 12%, rgba(157,210,239,.24) 88%, transparent); opacity: 0; transform: scaleY(.02); transform-origin: top; transition: transform 680ms cubic-bezier(.16,1,.3,1), opacity 420ms ease; }
+    .effect-e .scroll-track.visible { opacity: 1; }
+    .effect-e .scroll-track.visible::before { opacity: .8; transform: scaleY(1); }
+    .effect-e .scroll-thumb::before { content: ""; position: absolute; inset: 0; border: 1px solid rgba(207,230,242,.42); border-radius: inherit; background: linear-gradient(90deg, rgba(162,194,211,.42), rgba(219,237,245,.74), rgba(154,191,210,.46)); opacity: 0; transform: scaleX(.48); transform-origin: center; transition: opacity 580ms ease, transform 640ms cubic-bezier(.16,1,.3,1); }
+    .effect-e .scroll-thumb::after { content: ""; position: absolute; left: 50%; bottom: -2px; width: 4px; height: 4px; border-radius: 50%; background: #cbeeff; box-shadow: 0 0 8px rgba(126,200,255,.6); opacity: 0; transform: translate(-50%, 2px) scale(.5); transition: opacity 420ms ease 100ms, transform 480ms cubic-bezier(.16,1,.3,1) 100ms; }
+    .effect-e .scroll-track.visible .scroll-thumb::before { opacity: .92; transform: scaleX(1); }
+    .effect-e .scroll-track.visible .scroll-thumb::after { opacity: .8; transform: translate(-50%,0) scale(1); }
+
+    /* F · The thumb condenses at its center, then elastically unfolds. */
+    .effect-f .scroll-track { transform: scale(.96); transform-origin: center; transition: opacity 560ms ease, transform 700ms cubic-bezier(.16,1,.3,1); }
+    .effect-f .scroll-track.visible { opacity: 1; transform: scale(1); }
+    .effect-f .scroll-thumb::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(180deg, rgba(187,221,240,.48), rgba(244,249,251,.86) 46%, rgba(146,199,226,.62)); box-shadow: 0 0 10px rgba(126,200,255,.16), inset 0 0 3px rgba(255,255,255,.35); opacity: .3; transform: scaleY(.06); transition: opacity 580ms ease, transform 680ms cubic-bezier(.22,.8,.25,1), border-radius 680ms ease; }
+    .effect-f .scroll-track.visible .scroll-thumb::before { opacity: .94; transform: scaleY(1); animation: f-unfold 700ms cubic-bezier(.2,1.25,.34,1) both; }
+    .effect-f .scroll-thumb::after { content: ""; position: absolute; top: 50%; left: 50%; width: 3px; height: 3px; border-radius: 50%; background: #e8f8ff; box-shadow: 0 0 8px 2px rgba(126,200,255,.52); opacity: 0; transform: translate(-50%,-50%) scale(.2); transition: opacity 320ms ease, transform 500ms cubic-bezier(.2,1.4,.3,1); }
+    .effect-f .scroll-track.visible .scroll-thumb::after { opacity: .86; transform: translate(-50%,-50%) scale(1); }
+    @keyframes f-unfold { 0% { transform: scaleY(.06); border-radius: 50%; } 60% { transform: scaleY(1.08); border-radius: 99px; } 82% { transform: scaleY(.97); } 100% { transform: scaleY(1); } }
+
+    .hint { display: flex; justify-content: space-between; gap: 10px; margin: 10px 2px 0; color: var(--quiet); font-size: 11px; }
+    .hint span:last-child { color: #8a857f; }
+    @media (max-width: 880px) { .page { padding: 24px 16px 34px; } .options { grid-template-columns: 1fr; gap: 20px; } .mock-pane { height: 390px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="page-head">
+      <h1>笔记列表滚动条 · 新动效方案</h1>
+      <p>三种不同的显隐方式。滚动列表体验效果，停下后开始较慢地淡出。</p>
+    </header>
+    <section class="options" aria-label="滚动条动效方案">
+      <article class="option effect-d" data-effect="d">
+        <div class="option-title"><span class="letter">D</span><h2>雾面呼吸</h2><span class="timing">慢速柔光 · 约 0.9 秒淡出</span></div>
+        <div class="mock-pane"><div class="mock-head"><span class="grip">⠿</span><div class="tab">笔记列表 <span class="close">×</span></div></div><div class="search-row"><div class="search">搜索笔记…</div><div class="icon-button">▱</div><div class="icon-button">＋</div></div><div class="list-frame"><div class="list-scroll" tabindex="0" aria-label="方案 D 笔记列表"><ul></ul></div><div class="scroll-track"><div class="scroll-thumb"></div></div></div></div>
+        <div class="hint"><span>光晕从暗处柔和浮现</span><span>停下 0.22 秒后收淡</span></div>
+      </article>
+      <article class="option effect-e" data-effect="e">
+        <div class="option-title"><span class="letter">E</span><h2>轨迹绘入</h2><span class="timing">线条逐段点亮 · 约 1 秒淡出</span></div>
+        <div class="mock-pane"><div class="mock-head"><span class="grip">⠿</span><div class="tab">笔记列表 <span class="close">×</span></div></div><div class="search-row"><div class="search">搜索笔记…</div><div class="icon-button">▱</div><div class="icon-button">＋</div></div><div class="list-frame"><div class="list-scroll" tabindex="0" aria-label="方案 E 笔记列表"><ul></ul></div><div class="scroll-track"><div class="scroll-thumb"></div></div></div></div>
+        <div class="hint"><span>细轨从上而下绘入，位置点随后落定</span><span>停下 0.18 秒后收淡</span></div>
+      </article>
+      <article class="option effect-f" data-effect="f">
+        <div class="option-title"><span class="letter">F</span><h2>弹性凝珠</h2><span class="timing">由点舒展 · 回弹收拢</span></div>
+        <div class="mock-pane"><div class="mock-head"><span class="grip">⠿</span><div class="tab">笔记列表 <span class="close">×</span></div></div><div class="search-row"><div class="search">搜索笔记…</div><div class="icon-button">▱</div><div class="icon-button">＋</div></div><div class="list-frame"><div class="list-scroll" tabindex="0" aria-label="方案 F 笔记列表"><ul></ul></div><div class="scroll-track"><div class="scroll-thumb"></div></div></div></div>
+        <div class="hint"><span>滑块从中央凝珠弹性展开</span><span>停下 0.24 秒后回缩并淡出</span></div>
+      </article>
+    </section>
+  </main>
+  <script>
+    const sample = [
+      ['folder', '▾', '短剧'], ['folder', '▾', '测试'], ['folder indent', '▾', 'files'],
+      ['file', 'MD', '人物设定'], ['file', 'MD', '故事大纲'], ['file', 'DOCX', '分镜脚本（测试）'],
+      ['folder', '▾', '灵感'], ['file', 'MD', '对话节奏与角色关系'], ['file', 'MD', '镜头语言参考'],
+      ['folder', '▾', '项目资料'], ['folder indent', '▾', 'inputs'], ['file', 'MD', '场景需求'],
+      ['folder indent', '▾', 'outputs'], ['file', 'DOCX', '初稿.docx'], ['file', 'TXT', '旁白稿.txt'],
+      ['folder', '▾', '日常'], ['file selected', 'MD', '今天的记录'], ['file', 'MD', '周末计划'],
+      ['folder', '▾', '读书笔记'], ['file', 'MD', '《人类简史》摘录'], ['file', 'MD', '写作方法'],
+      ['folder', '▾', '素材'], ['folder indent', '▾', '图片'], ['file', 'PNG', '封面草图.png'],
+      ['file', 'MD', '未分类笔记'], ['file', 'MD', '新的想法'], ['file', 'MD', '工作记录'],
+      ['folder', '▾', '归档'], ['file', 'MD', '旧项目总结'], ['file', 'DOCX', '会议纪要.docx']
+    ];
+
+    document.querySelectorAll('.option').forEach((option) => {
+      const list = option.querySelector('ul');
+      for (const [kind, icon, label] of sample) {
+        const li = document.createElement('li');
+        li.className = kind;
+        const badge = document.createElement('span');
+        badge.className = kind.includes('folder') ? 'caret' : 'kind';
+        badge.textContent = icon;
+        const text = document.createElement('span');
+        text.textContent = label;
+        li.append(badge, text);
+        list.appendChild(li);
+      }
+
+      const scroll = option.querySelector('.list-scroll');
+      const track = option.querySelector('.scroll-track');
+      const thumb = option.querySelector('.scroll-thumb');
+      let hideTimer = 0;
+      let drag = null;
+      const updateThumb = () => {
+        const trackHeight = track.clientHeight;
+        const maxScroll = scroll.scrollHeight - scroll.clientHeight;
+        if (trackHeight <= 0 || maxScroll <= 0) { track.hidden = true; return; }
+        track.hidden = false;
+        const thumbHeight = Math.max(32, Math.round(trackHeight * scroll.clientHeight / scroll.scrollHeight));
+        const travel = Math.max(0, trackHeight - thumbHeight);
+        thumb.style.height = `${thumbHeight}px`;
+        thumb.style.transform = `translateY(${travel * scroll.scrollTop / maxScroll}px)`;
+      };
+      const reveal = () => {
+        track.classList.add('visible');
+        clearTimeout(hideTimer);
+        const delay = option.dataset.effect === 'd' ? 220 : option.dataset.effect === 'e' ? 180 : 240;
+        hideTimer = setTimeout(() => track.classList.remove('visible'), delay);
+      };
+      scroll.addEventListener('scroll', () => { updateThumb(); reveal(); }, { passive: true });
+      window.addEventListener('resize', updateThumb);
+      thumb.addEventListener('pointerdown', (event) => {
+        event.preventDefault(); reveal(); thumb.setPointerCapture(event.pointerId);
+        drag = { pointerY: event.clientY, scrollTop: scroll.scrollTop };
+      });
+      thumb.addEventListener('pointermove', (event) => {
+        if (!drag) return;
+        const travel = Math.max(1, track.clientHeight - thumb.offsetHeight);
+        const maxScroll = scroll.scrollHeight - scroll.clientHeight;
+        const nextTop = Math.max(0, Math.min(travel, (drag.scrollTop / Math.max(1, maxScroll)) * travel + event.clientY - drag.pointerY));
+        scroll.scrollTop = (nextTop / travel) * maxScroll;
+      });
+      const endDrag = () => { drag = null; reveal(); };
+      thumb.addEventListener('pointerup', endDrag);
+      thumb.addEventListener('pointercancel', endDrag);
+      track.addEventListener('pointerdown', (event) => {
+        if (event.target === thumb) return;
+        const rect = track.getBoundingClientRect();
+        scroll.scrollTop = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)) * (scroll.scrollHeight - scroll.clientHeight);
+        reveal();
+      });
+      requestAnimationFrame(updateThumb);
+    });
+  </script>
+</body>
+</html>

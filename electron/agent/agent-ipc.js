@@ -26,6 +26,8 @@ export const AGENT_INVOKE_CHANNELS = Object.freeze([
     'agent:setConfig',
     // 换模型之后重新问一次"能不能收图片"(桥那边由 kaiwu 自己的补丁提供问法)。
     'agent:capabilities',
+    'agent:skills:list',
+    'agent:skills:read',
     'agent:permission',
     // 按需翻译(思考条上的「译」)。它**不是**一次提示:走桥的非标准方法,不碰当前那一轮。
     'agent:translate',
@@ -79,7 +81,7 @@ function startFailureResult(err) {
  * @param {{ipcMain:object, getWindow:()=>object|null, runtime:object, log?:object}} deps
  * @returns {{dispose:()=>void, emit:(event:object)=>void}}
  */
-export function registerAgentIpc({ ipcMain, getWindow, runtime, log = console }) {
+export function registerAgentIpc({ ipcMain, getWindow, runtime, skills = null, log = console }) {
     if (runtime === null || typeof runtime !== 'object') {
         throw new Error('registerAgentIpc 需要 runtime(createAgentRuntime 的产物)');
     }
@@ -138,6 +140,18 @@ export function registerAgentIpc({ ipcMain, getWindow, runtime, log = console })
 
     // 换模型之后重新问一次"能不能收图片"(桥那边由 kaiwu 自己的补丁提供问法)。
         'agent:capabilities': () => runtime.refreshCapabilities(),
+
+        // Skills 面板只递一个不透明 id；实际目录与文件路径由主进程目录服务解析。
+        'agent:skills:list': () => {
+            if (!skills || typeof skills.list !== 'function') return { ok: true, skills: [] };
+            return skills.list();
+        },
+        'agent:skills:read': (_event, payload = {}) => {
+            if (!skills || typeof skills.read !== 'function') throw new Error('Skill 目录不可用');
+            const id = payload?.id;
+            if (typeof id !== 'string' || id.trim() === '') throw new Error('id 必填');
+            return skills.read(id);
+        },
 
         // 改一条会话配置(模型 / 思考强度)。
         //

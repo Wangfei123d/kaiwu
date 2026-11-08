@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>开物 · 面板切换动效方案</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111112;
+      --surface: #171718;
+      --surface-raised: #1d1e20;
+      --line: #343537;
+      --line-soft: rgba(255,255,255,.07);
+      --text: #e6e7e9;
+      --muted: #97999d;
+      --faint: #66696e;
+      --blue: #83c9fa;
+      --blue-soft: rgba(114,192,245,.16);
+    }
+    * { box-sizing: border-box; }
+    html { min-width: 320px; background: var(--bg); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at 50% -18%, rgba(75,112,145,.13), transparent 48%),
+        var(--bg);
+      font: 14px/1.55 "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    button { color: inherit; font: inherit; }
+    .page { width: min(1320px, 100%); margin: 0 auto; padding: 30px 28px 48px; }
+    .topline { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; letter-spacing: .04em; }
+    .brand-mark { display: grid; width: 25px; height: 25px; place-items: center; border: 1px solid #3d4145; border-radius: 8px; color: var(--blue); font-size: 15px; }
+    h1 { margin: 18px 0 5px; font-size: clamp(24px, 3vw, 32px); font-weight: 620; letter-spacing: -.035em; }
+    .intro { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+    .intro p { margin: 0; color: var(--muted); font-size: 13px; }
+    .gesture-hint { display: inline-flex; align-items: center; gap: 7px; color: #7d8186; font-size: 11px; white-space: nowrap; }
+    .gesture-hint::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 10px rgba(131,201,250,.5); }
+    .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+    .option {
+      min-width: 0; padding: 13px; border: 1px solid #303133; border-radius: 15px;
+      background: linear-gradient(160deg, rgba(255,255,255,.025), transparent 45%), #151516;
+      box-shadow: 0 12px 35px rgba(0,0,0,.18);
+    }
+    .option-head { display: flex; align-items: center; min-height: 46px; gap: 10px; padding: 0 2px 11px; }
+    .option-letter { display: grid; width: 27px; height: 27px; flex: none; place-items: center; border: 1px solid rgba(131,201,250,.36); border-radius: 8px; color: var(--blue); font-size: 12px; font-weight: 650; }
+    .option-title { min-width: 0; flex: 1; }
+    .option-title h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+    .option-title span { display: block; margin-top: 1px; color: var(--faint); font: 10px/1.4 ui-monospace, Consolas, monospace; }
+    .replay {
+      display: grid; width: 29px; height: 29px; flex: none; place-items: center; padding: 0;
+      border: 1px solid #38393b; border-radius: 8px; background: #1a1b1d; color: #a8aaad; cursor: pointer;
+      transition: color .16s ease, border-color .16s ease, transform .16s ease;
+    }
+    .replay:hover { color: var(--blue); border-color: #526a7c; transform: rotate(-28deg); }
+    .replay svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .window { overflow: hidden; border: 1px solid #3a3b3d; border-radius: 11px; background: #191a1b; }
+    .tabs {
+      display: flex; align-items: flex-end; gap: 3px; min-height: 40px; padding: 5px 8px 0;
+      border-bottom: 1px solid var(--line-soft); background: #141415;
+    }
+    .tab {
+      position: relative; min-width: 0; flex: 1; overflow: hidden; padding: 7px 4px 8px;
+      border: 0; border-radius: 7px 7px 0 0; background: transparent; color: #777a7e;
+      cursor: pointer; font-size: 10.5px; white-space: nowrap; text-overflow: ellipsis;
+      transition: color .16s ease, background .16s ease;
+    }
+    .tab:hover { color: #c3c5c8; background: rgba(255,255,255,.035); }
+    .tab[aria-selected="true"] { color: #e5e6e8; background: #1d1e20; }
+    .tab[aria-selected="true"]::before {
+      position: absolute; inset: 0; border: 1px solid rgba(180,183,186,.35); border-bottom-color: transparent;
+      border-radius: 8px 8px 0 0; content: ""; pointer-events: none;
+    }
+    .stage {
+      position: relative; min-height: 260px; overflow: hidden; padding: 17px 15px 15px;
+      background: radial-gradient(ellipse at 45% 0%, rgba(131,201,250,.035), transparent 55%), #191a1b;
+      isolation: isolate;
+    }
+    .stage::after {
+      position: absolute; z-index: 4; top: 0; bottom: 0; left: -60%; width: 42%;
+      background: linear-gradient(100deg, transparent, rgba(139,207,252,.06), rgba(186,226,255,.2), rgba(139,207,252,.06), transparent);
+      content: ""; opacity: 0; pointer-events: none; transform: skewX(-12deg);
+    }
+    .stage.sweeping::after { animation: beamSweep .62s cubic-bezier(.2,.7,.2,1) both; }
+    @keyframes beamSweep { 0% { left: -60%; opacity: 0; } 20% { opacity: .9; } 100% { left: 125%; opacity: 0; } }
+    .scene { position: relative; z-index: 1; min-height: 226px; }
+    .scene-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+    .scene-title { overflow: hidden; color: #e0e1e2; font-size: 13px; font-weight: 580; text-overflow: ellipsis; white-space: nowrap; }
+    .scene-meta { flex: none; color: #707378; font: 9px/1.4 ui-monospace, Consolas, monospace; }
+    .scene-content { min-height: 185px; }
+    .note-row { display: flex; align-items: center; gap: 9px; min-height: 36px; border-bottom: 1px solid rgba(255,255,255,.045); color: #c5c7c9; font-size: 11px; }
+    .note-icon { width: 19px; height: 19px; flex: none; border: 1px solid #414347; border-radius: 5px; color: #9aabb8; text-align: center; font: 10px/18px Georgia, serif; }
+    .note-date { margin-left: auto; color: #65696e; font: 9px ui-monospace, Consolas, monospace; }
+    .chat-user { width: fit-content; max-width: 85%; margin: 2px 0 11px auto; padding: 8px 11px; border: 1px solid #333639; border-radius: 11px 11px 3px 11px; background: #232629; color: #d3d5d7; font-size: 10.5px; }
+    .chat-answer { display: flex; align-items: flex-start; gap: 8px; max-width: 96%; color: #c8c9ca; font-size: 10.5px; line-height: 1.7; }
+    .spark { display: grid; width: 19px; height: 19px; flex: none; place-items: center; border: 1px solid #3c525f; border-radius: 7px; color: var(--blue); font-size: 11px; }
+    .chat-line { height: 5px; margin-top: 7px; border-radius: 5px; background: #37393c; }
+    .chat-line:nth-child(2) { width: 94%; }.chat-line:nth-child(3) { width: 76%; }.chat-line:nth-child(4) { width: 86%; }
+    .graph { position: relative; height: 153px; margin-top: 2px; border: 1px solid rgba(255,255,255,.045); border-radius: 8px; background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px); background-size: 22px 22px; }
+    .graph-line { position: absolute; height: 1px; background: rgba(131,201,250,.35); transform-origin: left center; }
+    .graph-line.one { left: 28%; top: 35%; width: 28%; transform: rotate(18deg); }.graph-line.two { left: 54%; top: 44%; width: 25%; transform: rotate(-27deg); }
+    .graph-node { position: absolute; display: grid; width: 64px; height: 32px; place-items: center; border: 1px solid #47494b; border-radius: 7px; background: #202123; color: #c6c8ca; font-size: 9px; box-shadow: 0 4px 12px rgba(0,0,0,.22); }
+    .graph-node::before { width: 5px; height: 5px; margin-right: 4px; border-radius: 50%; background: var(--blue); content: ""; }
+    .graph-node { display: flex; justify-content: center; }
+    .graph-node.n1 { left: 9%; top: 20%; }.graph-node.n2 { left: 40%; top: 40%; }.graph-node.n3 { right: 7%; top: 13%; }
+    .agenda { display: grid; gap: 7px; }
+    .agenda-row { display: grid; grid-template-columns: 38px 3px 1fr; align-items: center; min-height: 37px; gap: 9px; color: #bec0c2; font-size: 10px; }
+    .agenda-time { color: #74787c; font: 9px ui-monospace, Consolas, monospace; }
+    .agenda-rule { width: 2px; height: 22px; border-radius: 2px; background: #74b9e9; }
+    .agenda-row:nth-child(2) .agenda-rule { background: #a28bd4; }.agenda-row:nth-child(3) .agenda-rule { background: #84b899; }
+    .agenda-sub { display: block; margin-top: 2px; color: #777a7e; font-size: 9px; }
+    .player { display: flex; align-items: center; gap: 11px; padding: 9px; border: 1px solid #37393b; border-radius: 9px; background: #1e1f21; }
+    .cover { display: grid; width: 42px; height: 42px; flex: none; place-items: center; border-radius: 7px; background: linear-gradient(145deg,#415264,#20272d 58%,#6d8191); color: #c3d3e0; font-size: 14px; }
+    .track { min-width: 0; flex: 1; }.track strong { display: block; overflow: hidden; font-size: 10px; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }.track span { color: #777a7e; font-size: 9px; }
+    .play { display: grid; width: 26px; height: 26px; flex: none; place-items: center; border-radius: 50%; background: var(--blue); color: #17212a; font-size: 10px; }
+    .meter { height: 3px; margin-top: 12px; overflow: hidden; border-radius: 3px; background: #36383a; }.meter i { display: block; width: 35%; height: 100%; border-radius: inherit; background: #8abfe3; }
+    .option-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 37px; padding: 10px 2px 0; color: #74777b; font-size: 10px; }
+    .option-foot span:last-child { color: #5d6064; font: 9px ui-monospace, Consolas, monospace; }
+    .bottom-note { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 20px; color: #62666b; font-size: 10px; }
+    .bottom-note::before, .bottom-note::after { width: min(12vw, 110px); height: 1px; background: linear-gradient(90deg, transparent, #34383b); content: ""; }
+    .bottom-note::after { transform: rotate(180deg); }
+    @media (max-width: 960px) { .options { grid-template-columns: 1fr; max-width: 620px; margin: 0 auto; }.option { padding: 15px; }.scene { min-height: 218px; }.scene-content { min-height: 178px; } }
+    @media (max-width: 520px) { .page { padding: 22px 14px 34px; }.intro { align-items: flex-start; flex-direction: column; gap: 8px; }.option { padding: 11px; }.tab { font-size: 10px; }.stage { padding-inline: 11px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="topline"><span class="brand-mark" aria-hidden="true">K</span><span>开物</span><span aria-hidden="true">/</span><span>交互动效</span></div>
+    <h1>面板切换</h1>
+    <div class="intro">
+      <p>三种切换节奏。点击标签，在每个方案里体验。</p>
+      <span class="gesture-hint">每种方案可独立体验</span>
+    </div>
+
+    <div class="options">
+      <section class="option" data-effect="soft" aria-label="方案 A 轻盈浮入">
+        <header class="option-head">
+          <span class="option-letter">A</span>
+          <div class="option-title"><h2>轻盈浮入</h2><span>FADE · LIFT · 220ms</span></div>
+          <button class="replay" type="button" aria-label="重播方案 A 动效" title="重播">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 8a6.5 6.5 0 1 0 .2 3M16 4v4h-4"/></svg>
+          </button>
+        </header>
+        <div class="window">
+          <nav class="tabs" aria-label="方案 A 面板">
+            <button class="tab" type="button" data-index="0" aria-selected="false">AI 对话</button>
+            <button class="tab" type="button" data-index="1" aria-selected="true">笔记列表</button>
+            <button class="tab" type="button" data-index="2" aria-selected="false">短剧画布</button>
+            <button class="tab" type="button" data-index="3" aria-selected="false">日程</button>
+          </nav>
+          <div class="stage"><div class="scene" data-current="1"></div></div>
+        </div>
+        <footer class="option-foot"><span>淡出后轻轻上浮，内容自然接续</span><span>01 / 03</span></footer>
+      </section>
+
+      <section class="option" data-effect="slide" aria-label="方案 B 横向穿梭">
+        <header class="option-head">
+          <span class="option-letter">B</span>
+          <div class="option-title"><h2>横向穿梭</h2><span>DIRECTIONAL · PARALLAX</span></div>
+          <button class="replay" type="button" aria-label="重播方案 B 动效" title="重播">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 8a6.5 6.5 0 1 0 .2 3M16 4v4h-4"/></svg>
+          </button>
+        </header>
+        <div class="window">
+          <nav class="tabs" aria-label="方案 B 面板">
+            <button class="tab" type="button" data-index="0" aria-selected="false">AI 对话</button>
+            <button class="tab" type="button" data-index="1" aria-selected="true">笔记列表</button>
+            <button class="tab" type="button" data-index="2" aria-selected="false">短剧画布</button>
+            <button class="tab" type="button" data-index="3" aria-selected="false">日程</button>
+          </nav>
+          <div class="stage"><div class="scene" data-current="1"></div></div>
+        </div>
+        <footer class="option-foot"><span>随标签方向滑入，带轻微景深</span><span>02 / 03</span></footer>
+      </section>
+
+      <section class="option" data-effect="beam" aria-label="方案 C 光幕聚焦">
+        <header class="option-head">
+          <span class="option-letter">C</span>
+          <div class="option-title"><h2>光幕聚焦</h2><span>LIGHT WIPE · FOCUS</span></div>
+          <button class="replay" type="button" aria-label="重播方案 C 动效" title="重播">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 8a6.5 6.5 0 1 0 .2 3M16 4v4h-4"/></svg>
+          </button>
+        </header>
+        <div class="window">
+          <nav class="tabs" aria-label="方案 C 面板">
+            <button class="tab" type="button" data-index="0" aria-selected="false">AI 对话</button>
+            <button class="tab" type="button" data-index="1" aria-selected="true">笔记列表</button>
+            <button class="tab" type="button" data-index="2" aria-selected="false">短剧画布</button>
+            <button class="tab" type="button" data-index="3" aria-selected="false">日程</button>
+          </nav>
+          <div class="stage"><div class="scene" data-current="1"></div></div>
+        </div>
+        <footer class="option-foot"><span>柔和光痕扫过，面板从焦点中显现</span><span>03 / 03</span></footer>
+      </section>
+    </div>
+    <div class="bottom-note">点击不同面板来回切换</div>
+  </main>
+
+  <script>
+    const panels = [
+      {
+        title: 'AI 对话', meta: '会话 · 进行中', content: `
+          <div class="chat-user">帮我整理这份短剧大纲</div>
+          <div class="chat-answer"><span class="spark">✦</span><div><div>我先按人物、场景和节奏梳理内容。</div><div class="chat-line"></div><div class="chat-line"></div><div class="chat-line"></div></div></div>`
+      },
+      {
+        title: '笔记列表', meta: '工作区 · 12 项', content: `
+          <div class="note-row"><span class="note-icon">文</span><span>短剧分镜构思</span><span class="note-date">10:42</span></div>
+          <div class="note-row"><span class="note-icon">文</span><span>人物关系与背景</span><span class="note-date">昨天</span></div>
+          <div class="note-row"><span class="note-icon">文</span><span>灵感收集</span><span class="note-date">周一</span></div>
+          <div class="note-row"><span class="note-icon">文</span><span>拍摄清单</span><span class="note-date">10/24</span></div>`
+      },
+      {
+        title: '短剧画布', meta: '节点 · 已保存', content: `
+          <div class="graph"><i class="graph-line one"></i><i class="graph-line two"></i><span class="graph-node n1">人物设定</span><span class="graph-node n2">分镜脚本</span><span class="graph-node n3">运行</span></div>`
+      },
+      {
+        title: '日程', meta: '今天 · 3 项', content: `
+          <div class="agenda"><div class="agenda-row"><span class="agenda-time">09:30</span><i class="agenda-rule"></i><span>整理拍摄计划<span class="agenda-sub">项目筹备</span></span></div><div class="agenda-row"><span class="agenda-time">13:00</span><i class="agenda-rule"></i><span>检查分镜<span class="agenda-sub">短剧项目</span></span></div><div class="agenda-row"><span class="agenda-time">16:30</span><i class="agenda-rule"></i><span>同步进度<span class="agenda-sub">团队沟通</span></span></div></div>`
+      }
+    ];
+
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+    function paintScene(scene, panel) {
+      scene.innerHTML = `<div class="scene-top"><span class="scene-title">${panel.title}</span><span class="scene-meta">${panel.meta}</span></div><div class="scene-content">${panel.content}</div>`;
+    }
+    for (const card of document.querySelectorAll('.option')) {
+      const scene = card.querySelector('.scene');
+      const stage = card.querySelector('.stage');
+      const tabs = [...card.querySelectorAll('.tab')];
+      let current = Number(scene.dataset.current);
+      let sequence = 0;
+      let activeAnimation = null;
+      let sweepTimer = null;
+      paintScene(scene, panels[current]);
+
+      async function switchTo(next, replay = false) {
+        if (next === current && !replay) return;
+        const token = ++sequence;
+        activeAnimation?.cancel();
+        activeAnimation = null;
+        tabs.forEach((tab, index) => tab.setAttribute('aria-selected', String(index === next)));
+        const effect = card.dataset.effect;
+        const same = next === current;
+        const direction = next > current ? 1 : -1;
+        const exit = effect === 'slide'
+          ? [{ opacity: 1, transform: 'translateX(0) scale(1)', filter: 'blur(0)' }, { opacity: .12, transform: `translateX(${-direction * 22}px) scale(.985)`, filter: 'blur(2px)' }]
+          : effect === 'beam'
+            ? [{ opacity: 1, transform: 'scale(1)' }, { opacity: .42, transform: 'scale(.992)' }]
+            : [{ opacity: 1, transform: 'translateY(0) scale(1)' }, { opacity: 0, transform: 'translateY(-5px) scale(.995)' }];
+        const outMs = same ? 0 : (effect === 'slide' ? 105 : 85);
+        if (outMs) {
+          activeAnimation = scene.animate(exit, { duration: outMs, easing: effect === 'slide' ? 'cubic-bezier(.4,0,.8,.35)' : 'ease-in', fill: 'forwards' });
+          try { await activeAnimation.finished; } catch { return; }
+          if (token !== sequence) return;
+        }
+        current = next;
+        scene.dataset.current = String(current);
+        paintScene(scene, panels[current]);
+        const enter = effect === 'slide'
+          ? [{ opacity: 0, transform: `translateX(${direction * 30}px) scale(.985)`, filter: 'blur(2px)' }, { opacity: 1, transform: 'translateX(0) scale(1)', filter: 'blur(0)' }]
+          : effect === 'beam'
+            ? [{ opacity: 0, clipPath: 'inset(0 100% 0 0)', filter: 'brightness(.68)' }, { opacity: 1, clipPath: 'inset(0 0 0 0)', filter: 'brightness(1)' }]
+            : [{ opacity: 0, transform: 'translateY(9px) scale(.99)' }, { opacity: 1, transform: 'translateY(0) scale(1)' }];
+        const inMs = effect === 'beam' ? 480 : effect === 'slide' ? 250 : 220;
+        activeAnimation = scene.animate(enter, { duration: inMs, easing: effect === 'beam' ? 'cubic-bezier(.18,.78,.2,1)' : 'cubic-bezier(.18,.72,.25,1)', fill: 'both' });
+        if (effect === 'beam') {
+          clearTimeout(sweepTimer);
+          stage.classList.remove('sweeping');
+          void stage.offsetWidth;
+          stage.classList.add('sweeping');
+          sweepTimer = setTimeout(() => stage.classList.remove('sweeping'), 680);
+        }
+        try { await activeAnimation.finished; } catch { /* 被下一次切换中断 */ }
+        if (token === sequence) activeAnimation = null;
+      }
+
+      tabs.forEach(tab => tab.addEventListener('click', () => switchTo(Number(tab.dataset.index))));
+      card.querySelector('.replay').addEventListener('click', () => switchTo(current, true));
+    }
+  </script>
+</body>
+</html>

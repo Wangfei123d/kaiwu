@@ -741,7 +741,7 @@ function pathToPane(root, id) {
 export function formatTree(tree, titles = {}) {
     const label = (id) => (titles && typeof titles[id] === 'string' && titles[id]) ? titles[id] : id;
     // ⚠️ 这份文本**刻意不打印 tabs/active**:它是用户与自检共用的那份"证据"
-    // (工作台底部那条读数、设置页的布局树、以及一串逐字断言都读它),
+    // (设置页的布局树与一组结构断言都读它),
     // 多一个字段就会让所有既有读数在一夜之间变样,而"标签页"这件事本身在下一个单元
     // 有它自己的界面(标签条)。这里只保证:新增字段**不影响**这棵树的形状读数。
     const text = (n) => {

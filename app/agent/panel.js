@@ -37,6 +37,7 @@ import {
 // Markdown 走**建节点**那一版渲染器:面板的规矩是"绝不 innerHTML 拼字符串",而这里的
 // 内容来自模型。同一条解析也喂着笔记预览(那边出 HTML 字符串),规则只有一份。
 import { renderMarkdownNodes } from '../lib/markdown.js';
+import { skillCreationInstruction } from '../lib/agent-skill-prompt.js';
 import { createReplyPlayback } from './reply-playback.js';
 // 「接着聊」:对端**不重放旧消息**,所以历史由开物自己的台账铺回来 ——
 // 记录 → 步骤(用户消息 / 归约事件)那一层是纯函数,单测钉着(会话记录格式也在那里)。
@@ -296,6 +297,7 @@ export function planTimeline(state) {
                 i += 1;
                 continue;
             }
+            const start = i;
             const tools = [];
             const messages = [];
             while (i < segment.length && foldable.has(i)) {
@@ -303,7 +305,7 @@ export function planTimeline(state) {
                 else messages.push(segment[i].message);
                 i += 1;
             }
-            units.push({ kind: 'group', tools, messages, live: tools.some(isToolRunning) });
+            units.push({ kind: 'group', items: segment.slice(start, i), tools, messages, live: tools.some(isToolRunning) });
         }
 
         // ⚠️ 两条"答案必须看得见"的兜底(实测量出来的):
@@ -1825,7 +1827,8 @@ export function createAgentPanel({
                     scrollToBottom();
                     scheduleRailFrame();
                 }, renderMarkdown: (targetDoc, text, options) => renderMarkdownNodes(targetDoc, text, {
-                    ...options, omitImageUrls: imageGenerationPlan.omittedByMessage.get(message.id),
+                    ...options, codeBlockTools: true,
+                    omitImageUrls: imageGenerationPlan.omittedByMessage.get(message.id),
                 }), getRenderKey: () => JSON.stringify([...(imageGenerationPlan.omittedByMessage.get(message.id) ?? [])]) });
                 replyViews.set(message.id, entry);
             }
@@ -1896,9 +1899,11 @@ export function createAgentPanel({
                 return ['tool', unit.tool.toolCallId, unit.tool.status, unit.tool.title, unit.tool.kind];
             }
             if (unit.kind === 'group') {
-                return ['group', unit.live,
-                    unit.tools.map(t => [t.toolCallId, t.status, t.title, t.kind]),
-                    unit.messages.map(m => m.id)];
+                return ['group', unit.live, unit.items.map(({ kind, tool, message }) => (
+                    kind === 'tool'
+                        ? ['tool', tool.toolCallId, tool.status, tool.title, tool.kind]
+                        : ['msg', message.id]
+                ))];
             }
             // ⚠️ 新增的单元类型必须在这里显式认领:下面那条兜底分支读的是 `unit.message.id`,
             //    漏了就会当场抛(整条消息列表画不出来)。
@@ -2335,9 +2340,10 @@ export function createAgentPanel({
         }
         const head = el(doc, 'summary', 'agent-group-head');
         head.appendChild(el(doc, 'span', 'agent-group-caret', '▶'));
-        let label = `${unit.tools.length} 次工具调用`;
-        if (unit.messages.length > 0) label += ` · ${unit.messages.length} 条消息`;
-        head.appendChild(el(doc, 'span', 'agent-group-label', label));
+        const label = [];
+        if (unit.tools.length > 0) label.push(`${unit.tools.length} 次工具调用`);
+        if (unit.messages.length > 0) label.push(`${unit.messages.length} 条消息`);
+        head.appendChild(el(doc, 'span', 'agent-group-label', label.join(' · ')));
         if (unit.defaultOpen === true) {
             // 让"答案被折在里面"这件事在收起来的时候也看得见(用户手动收起之后)
             head.appendChild(el(doc, 'span', 'agent-group-answer', '含回复'));
@@ -2346,8 +2352,9 @@ export function createAgentPanel({
         const names = toolNamesOf(unit.tools);
         if (names !== '') head.appendChild(el(doc, 'span', 'agent-group-tools', names));
         box.appendChild(head);
-        for (const tool of unit.tools) box.appendChild(renderTool(tool));
-        for (const msg of unit.messages) box.appendChild(renderMessage(msg));
+        for (const item of unit.items) {
+            box.appendChild(item.kind === 'tool' ? renderTool(item.tool) : renderMessage(item.message));
+        }
         if (typeof box.addEventListener === 'function') {
             box.addEventListener('toggle', () => {
                 if (box.open === true) { groupOpenIds.add(key); groupClosedIds.delete(key); }
@@ -2548,7 +2555,8 @@ export function createAgentPanel({
             } else {
                 // 历史回复直接显示；实时回复由播放器只解析已显示的前缀。
                 for (const node of renderMarkdownNodes(doc, msg.text, {
-                    tables: true, omitImageUrls: imageGenerationPlan.omittedByMessage.get(msg.id),
+                    tables: true, codeBlockTools: true,
+                    omitImageUrls: imageGenerationPlan.omittedByMessage.get(msg.id),
                 })) textEl.appendChild(node);
             }
         } else {
@@ -3262,6 +3270,8 @@ export function createAgentPanel({
                 question,
                 imageCount: images.length,
             });
+            const skillInstruction = skillCreationInstruction(question);
+            if (skillInstruction !== '') text = `${text}\n\n${skillInstruction}`;
         } catch (err) {
             log.warn?.('[agent] 提示词拼装失败', err);
             return;

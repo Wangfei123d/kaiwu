@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>开物 · Agent 代码高亮方案</title>
+<style>
+:root{color-scheme:dark;--bg:#0e0e0e;--panel:#151514;--surface:#191a18;--surface2:#20211f;--line:#343431;--soft:#262725;--text:#e8e6e3;--muted:#cfccc7;--dim:#9b9791;--faint:#6f6b66;--blue:#7ec8ff;--green:#8bcf9d;--purple:#c5a7f2;--yellow:#e5c681;--orange:#e5a47e;--cyan:#8bcbd4;--mono:ui-monospace,"Cascadia Mono",Consolas,monospace;font:13px/1.6 "Microsoft YaHei UI","Segoe UI",sans-serif;background:var(--bg);color:var(--text)}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse 60% 48% at 50% -18%,#27425230,transparent 75%),var(--bg)}button{font:inherit;color:inherit;cursor:pointer}.page{width:min(1460px,calc(100% - 36px));margin:auto;padding:28px 0 34px}.heading{display:flex;align-items:center;gap:13px;margin-bottom:18px}.mark{display:grid;place-items:center;width:38px;height:38px;border:1px solid #7ec8ff35;border-radius:11px;background:#7ec8ff0b;color:var(--blue)}.mark svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}.eyebrow{color:var(--blue);font:10px/1.2 var(--mono);letter-spacing:.12em}.title{margin:3px 0 0;font-size:20px;line-height:1.25;font-weight:650;letter-spacing:-.025em}.toolbar{margin-left:auto;display:flex;align-items:center;gap:5px;padding:4px;border:1px solid var(--line);border-radius:9px;background:#151614}.toolbar-label{padding:0 7px;color:var(--faint);font-size:9px}.lang{min-width:35px;padding:5px 8px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--dim);font:10px var(--mono);transition:background .16s,border-color .16s,color .16s}.lang:hover{color:var(--text)}.lang.active{border-color:#435b66;background:#1c292d;color:#aeddf5}.request{margin:0 0 14px;padding:11px 13px;border:1px solid #282a27;border-radius:9px;background:linear-gradient(100deg,#171918,#151615);color:#c9ccc8;font-size:11px}.request strong{margin-right:8px;color:var(--blue);font-weight:600}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;align-items:start}.option{min-width:0;overflow:hidden;border:1px solid #30312e;border-radius:11px;background:linear-gradient(160deg,#171816,#141513 72%);box-shadow:0 12px 34px #0002;animation:card-in .38s cubic-bezier(.2,.8,.2,1) both}.option:nth-child(2){animation-delay:55ms}.option:nth-child(3){animation-delay:110ms}@keyframes card-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}.option-head{display:flex;align-items:center;gap:8px;padding:12px 13px 10px;border-bottom:1px solid #272925}.index{display:grid;place-items:center;width:22px;height:22px;border:1px solid #3a4340;border-radius:7px;color:#9da59f;font:9px var(--mono)}.option h2{margin:0;font-size:12px;font-weight:630}.tag{margin-left:auto;padding:2px 6px;border:1px solid #363c38;border-radius:99px;color:#8e9990;font-size:8px}.option-body{padding:11px 12px 12px}.chat-intro{margin:0 0 9px;color:#c7cbc6;font-size:10px;line-height:1.65}.chat-intro strong{color:#e6e8e4;font-weight:600}.code-card{position:relative;min-width:0;overflow:hidden;border-radius:8px;transition:border-color .2s,background .2s,box-shadow .2s}.code-tools{display:flex;align-items:center;gap:7px;height:29px;padding:0 8px;font:9px/1 var(--mono)}.language{color:#959d96}.language:before{content:"";display:inline-block;width:5px;height:5px;margin-right:6px;vertical-align:1px;border-radius:50%;background:#7ec8ff;box-shadow:0 0 6px #7ec8ff66}.code-copy{position:relative;display:grid;place-items:center;width:23px;height:23px;margin-left:auto;padding:0;border:0;border-radius:5px;background:transparent;color:#848b85;transition:color .16s,background .16s,transform .2s}.code-copy:hover,.code-copy:focus-visible{background:#ffffff0b;color:#d8e4dc;outline:none}.code-copy:focus-visible{box-shadow:0 0 0 2px #7ec8ff70}.code-copy svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}.code-copy.done{color:var(--green);transform:scale(1.04)}.code-copy:after{content:attr(data-tip);position:absolute;right:0;bottom:calc(100% + 5px);padding:4px 6px;border:1px solid #3b403c;border-radius:5px;background:#202220;color:#cbd0cb;font:9px/1.2 "Segoe UI",sans-serif;white-space:nowrap;opacity:0;transform:translateY(2px);pointer-events:none;transition:opacity .14s,transform .14s}.code-copy:hover:after,.code-copy:focus-visible:after,.code-copy.done:after{opacity:1;transform:none}.code-pre{max-width:100%;margin:0;overflow:auto;scrollbar-width:none}.code-pre::-webkit-scrollbar{display:none}.code-pre code{display:block;min-width:max-content;font:10.25px/1.78 var(--mono);tab-size:2;white-space:pre}.code-line{display:block;min-height:1.78em}.line-num{display:none}.line-content{display:block;min-width:max-content;padding:0 9px}.tok-key{color:var(--purple)}.tok-fn{color:var(--yellow)}.tok-string{color:var(--green)}.tok-number{color:var(--orange)}.tok-type{color:var(--cyan)}.tok-comment{color:#777f78;font-style:italic}.tok-prop{color:#9fc9e7}.tok-operator{color:#c1c5c1}.tok-punc{color:#aab0aa}.tok-bool{color:#d3a6e8}
+/* A · 无框语法色：沿用 AI 正文的轻量感，只用浅底和清楚的语法色。 */
+.style-a .code-card{background:#1a1b19}.style-a .code-tools{border-bottom:1px solid #262825}.style-a .code-pre{padding:6px 0 7px}.style-a .code-pre code{padding:0}.style-a .line-content{padding-left:9px}
+/* B · 编辑器行号：独立工具条、行号沟槽、代码区；长代码块更易定位。 */
+.style-b .code-card{border:1px solid #353a36;background:#111311}.style-b .code-tools{height:33px;border-bottom:1px solid #2b302c;background:#1b1d1b}.style-b .code-tools:after{content:"";position:absolute;left:0;top:32px;width:100%;height:1px;background:linear-gradient(90deg,#7ec8ff35,transparent 55%)}.style-b .code-pre{padding:7px 0 8px}.style-b .code-pre code{counter-reset:line}.style-b .code-line{display:grid;grid-template-columns:30px max-content;min-width:max-content}.style-b .line-num{display:block;padding-right:8px;color:#606760;text-align:right;user-select:none}.style-b .line-content{padding:0 10px 0 8px;border-left:1px solid #2c302c}.style-b .code-line:hover .line-content{background:#ffffff04}
+/* C · 微光焦点：极细蓝色引导边与柔和当前行，语法颜色更清晰但不发荧光。 */
+.style-c .code-card{border:1px solid #2b3435;background:linear-gradient(135deg,#151a1b,#141616 70%);box-shadow:inset 1px 0 #7ec8ff68}.style-c .code-tools{height:30px;color:#aeb9b3}.style-c .language:before{background:#8bcf9d;box-shadow:0 0 7px #8bcf9d5c}.style-c .code-pre{padding:3px 0 9px}.style-c .code-line:nth-child(5){position:relative;background:linear-gradient(90deg,#7ec8ff0e,transparent 78%)}.style-c .line-content{padding-left:11px}.style-c .code-copy:hover{background:#7ec8ff12;color:#aee2ff}
+.reply-after{margin:9px 0 0;color:#bec2bd;font-size:10px;line-height:1.6}.caption{padding:10px 13px;border-top:1px solid #272925;color:#858c85;font-size:9px;line-height:1.5}.caption strong{color:#bcc5bc;font-weight:560}.note{margin-top:11px;color:#68716a;font-size:9px;text-align:center}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:1050px){.grid{grid-template-columns:1fr}.option-body{padding:12px 14px}.code-pre code{font-size:11px}.page{max-width:760px}}
+@media(max-width:540px){.page{width:calc(100% - 20px);padding-top:16px}.heading{align-items:flex-start;flex-wrap:wrap}.toolbar{width:100%;margin:0}.toolbar-label{margin-right:auto}.title{font-size:17px}.grid{gap:9px}.request{font-size:10px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="heading">
+    <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8l-6-6H9"/><path d="M15 2v6h6M8 13h8M8 17h5"/></svg></span>
+    <div><div class="eyebrow">AGENT · CODE BLOCK</div><h1 class="title">让代码结构一眼可读</h1></div>
+    <div class="toolbar" role="group" aria-label="代码语言示例">
+      <span class="toolbar-label">语言预览</span><button class="lang active" data-lang="js" type="button" aria-pressed="true">JS</button><button class="lang" data-lang="py" type="button" aria-pressed="false">PY</button><button class="lang" data-lang="json" type="button" aria-pressed="false">JSON</button>
+    </div>
+  </header>
+  <p class="request"><strong>用户</strong>把 Markdown 笔记解析成结构化数据，保留标题、更新时间和标签。</p>
+  <section class="grid" aria-label="三种 Agent 代码高亮方案">
+    <article class="option style-a" data-option="a">
+      <header class="option-head"><span class="index">A</span><h2>轻量语法色</h2><span class="tag">无行号</span></header>
+      <div class="option-body"><p class="chat-intro"><strong>Agent</strong> 可以把解析结果整理成一个对象：</p><div class="code-card"><div class="code-tools"><span class="language">JavaScript</span><button class="code-copy" type="button" data-tip="复制代码" aria-label="复制代码"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></button></div><pre class="code-pre"><code></code></pre></div><p class="reply-after">它会保留正文里的标题和标签，空值则使用默认标题。</p></div>
+      <footer class="caption"><strong>当前回复样式的轻量延伸。</strong> 只用柔和语法色区分代码，正文阅读节奏不变。</footer>
+    </article>
+    <article class="option style-b" data-option="b">
+      <header class="option-head"><span class="index">B</span><h2>编辑器行号</h2><span class="tag">含行号</span></header>
+      <div class="option-body"><p class="chat-intro"><strong>Agent</strong> 可以把解析结果整理成一个对象：</p><div class="code-card"><div class="code-tools"><span class="language">JavaScript</span><button class="code-copy" type="button" data-tip="复制代码" aria-label="复制代码"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></button></div><pre class="code-pre has-lines"><code></code></pre></div><p class="reply-after">行号帮助定位较长代码；悬停行只轻轻显出底色。</p></div>
+      <footer class="caption"><strong>更像小型编辑器。</strong> 语言栏与行号沟槽清楚分层，适合较长的代码片段。</footer>
+    </article>
+    <article class="option style-c" data-option="c">
+      <header class="option-head"><span class="index">C</span><h2>微光焦点</h2><span class="tag">低对比边缘</span></header>
+      <div class="option-body"><p class="chat-intro"><strong>Agent</strong> 可以把解析结果整理成一个对象：</p><div class="code-card"><div class="code-tools"><span class="language">JavaScript</span><button class="code-copy" type="button" data-tip="复制代码" aria-label="复制代码"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></button></div><pre class="code-pre"><code></code></pre></div><p class="reply-after">字段与类型保持清晰，当前行有一层几乎看不见的冷色底。</p></div>
+      <footer class="caption"><strong>更有层次但不刺眼。</strong> 细蓝边与轻微焦点行强化代码区域，不使用荧光色。</footer>
+    </article>
+  </section>
+  <p class="note">切换 JS / PY / JSON 查看自动语言识别效果；点击复制图标体验成功反馈。</p>
+  <div class="sr-only" role="status" aria-live="polite" data-live></div>
+</main>
+<script>
+(() => {
+  const examples = {
+    js: {
+      name: 'JavaScript', raw: [
+        'async function parseNote(source) {',
+        '  const lines = source.split("\\n");',
+        '  const title = lines.find(line => line.startsWith("# "))?.slice(2) ?? "未命名";',
+        '  const tags = lines.join(" ").match(/#[\\w-]+/g) ?? [];',
+        '  return {',
+        '    title: title.trim(),',
+        '    updatedAt: new Date().toISOString(),',
+        '    tags: tags.map(tag => tag.slice(1)),',
+        '  };',
+        '}',
+      ], html: [
+        '<span class="tok-key">async function</span> <span class="tok-fn">parseNote</span><span class="tok-punc">(</span>source<span class="tok-punc">)</span> <span class="tok-punc">{</span>',
+        '  <span class="tok-key">const</span> lines <span class="tok-operator">=</span> source<span class="tok-punc">.</span><span class="tok-fn">split</span><span class="tok-punc">(</span><span class="tok-string">"\\n"</span><span class="tok-punc">)</span><span class="tok-punc">;</span>',
+        '  <span class="tok-key">const</span> title <span class="tok-operator">=</span> lines<span class="tok-punc">.</span><span class="tok-fn">find</span><span class="tok-punc">(</span>line <span class="tok-operator">=&gt;</span> line<span class="tok-punc">.</span><span class="tok-fn">startsWith</span><span class="tok-punc">(</span><span class="tok-string">"# "</span><span class="tok-punc">))</span><span class="tok-punc">?.</span><span class="tok-fn">slice</span><span class="tok-punc">(</span><span class="tok-number">2</span><span class="tok-punc">)</span> <span class="tok-operator">??</span> <span class="tok-string">"未命名"</span><span class="tok-punc">;</span>',
+        '  <span class="tok-key">const</span> tags <span class="tok-operator">=</span> lines<span class="tok-punc">.</span><span class="tok-fn">join</span><span class="tok-punc">(</span><span class="tok-string">" "</span><span class="tok-punc">).</span><span class="tok-fn">match</span><span class="tok-punc">(</span><span class="tok-string">/#[\\w-]+/g</span><span class="tok-punc">)</span> <span class="tok-operator">??</span> <span class="tok-punc">[];</span>',
+        '  <span class="tok-key">return</span> <span class="tok-punc">{</span>',
+        '    <span class="tok-prop">title</span><span class="tok-punc">:</span> title<span class="tok-punc">.</span><span class="tok-fn">trim</span><span class="tok-punc">(),</span>',
+        '    <span class="tok-prop">updatedAt</span><span class="tok-punc">:</span> <span class="tok-key">new</span> <span class="tok-type">Date</span><span class="tok-punc">().</span><span class="tok-fn">toISOString</span><span class="tok-punc">(),</span>',
+        '    <span class="tok-prop">tags</span><span class="tok-punc">:</span> tags<span class="tok-punc">.</span><span class="tok-fn">map</span><span class="tok-punc">(</span>tag <span class="tok-operator">=&gt;</span> tag<span class="tok-punc">.</span><span class="tok-fn">slice</span><span class="tok-punc">(</span><span class="tok-number">1</span><span class="tok-punc">)),</span>',
+        '  <span class="tok-punc">};</span>',
+        '<span class="tok-punc">}</span>',
+      ],
+    },
+    py: {
+      name: 'Python', raw: [
+        'from datetime import datetime',
+        '',
+        'def parse_note(source: str) -> dict:',
+        '    lines = source.splitlines()',
+        '    title = next((line[2:] for line in lines if line.startswith("# ")), "未命名")',
+        '    tags = [word[1:] for word in source.split() if word.startswith("#")]',
+        '    return {',
+        '        "title": title.strip(),',
+        '        "updated_at": datetime.now().isoformat(timespec="minutes"),',
+        '        "tags": tags,',
+        '    }',
+      ], html: [
+        '<span class="tok-key">from</span> datetime <span class="tok-key">import</span> <span class="tok-type">datetime</span>',
+        '&nbsp;',
+        '<span class="tok-key">def</span> <span class="tok-fn">parse_note</span><span class="tok-punc">(</span>source<span class="tok-punc">:</span> <span class="tok-type">str</span><span class="tok-punc">)</span> <span class="tok-operator">-&gt;</span> <span class="tok-type">dict</span><span class="tok-punc">:</span>',
+        '    lines <span class="tok-operator">=</span> source<span class="tok-punc">.</span><span class="tok-fn">splitlines</span><span class="tok-punc">()</span>',
+        '    title <span class="tok-operator">=</span> <span class="tok-fn">next</span><span class="tok-punc">((</span>line<span class="tok-punc">[</span><span class="tok-number">2</span><span class="tok-punc">:] for</span> line <span class="tok-key">in</span> lines <span class="tok-key">if</span> line<span class="tok-punc">.</span><span class="tok-fn">startswith</span><span class="tok-punc">(</span><span class="tok-string">"# "</span><span class="tok-punc">)),</span> <span class="tok-string">"未命名"</span><span class="tok-punc">)</span>',
+        '    tags <span class="tok-operator">=</span> <span class="tok-punc">[</span>word<span class="tok-punc">[</span><span class="tok-number">1</span><span class="tok-punc">:] for</span> word <span class="tok-key">in</span> source<span class="tok-punc">.</span><span class="tok-fn">split</span><span class="tok-punc">()</span> <span class="tok-key">if</span> word<span class="tok-punc">.</span><span class="tok-fn">startswith</span><span class="tok-punc">(</span><span class="tok-string">"#"</span><span class="tok-punc">)]</span>',
+        '    <span class="tok-key">return</span> <span class="tok-punc">{</span>',
+        '        <span class="tok-string">"title"</span><span class="tok-punc">:</span> title<span class="tok-punc">.</span><span class="tok-fn">strip</span><span class="tok-punc">(),</span>',
+        '        <span class="tok-string">"updated_at"</span><span class="tok-punc">:</span> datetime<span class="tok-punc">.</span><span class="tok-fn">now</span><span class="tok-punc">().</span><span class="tok-fn">isoformat</span><span class="tok-punc">(</span>timespec<span class="tok-operator">=</span><span class="tok-string">"minutes"</span><span class="tok-punc">),</span>',
+        '        <span class="tok-string">"tags"</span><span class="tok-punc">:</span> tags<span class="tok-punc">,</span>',
+        '    <span class="tok-punc">}</span>',
+      ],
+    },
+    json: {
+      name: 'JSON', raw: [
+        '{',
+        '  "title": "工作笔记",',
+        '  "updatedAt": "2026-11-08T18:30:00",',
+        '  "tags": ["Agent", "产品"],',
+        '  "blocks": [',
+        '    { "type": "heading", "depth": 2 },',
+        '    { "type": "paragraph", "text": "保留标题与标签" }',
+        '  ],',
+        '  "archived": false',
+        '}',
+      ], html: [
+        '<span class="tok-punc">{</span>',
+        '  <span class="tok-prop">"title"</span><span class="tok-punc">:</span> <span class="tok-string">"工作笔记"</span><span class="tok-punc">,</span>',
+        '  <span class="tok-prop">"updatedAt"</span><span class="tok-punc">:</span> <span class="tok-string">"2026-11-08T18:30:00"</span><span class="tok-punc">,</span>',
+        '  <span class="tok-prop">"tags"</span><span class="tok-punc">:</span> <span class="tok-punc">[</span><span class="tok-string">"Agent"</span><span class="tok-punc">,</span> <span class="tok-string">"产品"</span><span class="tok-punc">],</span>',
+        '  <span class="tok-prop">"blocks"</span><span class="tok-punc">:</span> <span class="tok-punc">[</span>',
+        '    <span class="tok-punc">{</span> <span class="tok-prop">"type"</span><span class="tok-punc">:</span> <span class="tok-string">"heading"</span><span class="tok-punc">,</span> <span class="tok-prop">"depth"</span><span class="tok-punc">:</span> <span class="tok-number">2</span> <span class="tok-punc">},</span>',
+        '    <span class="tok-punc">{</span> <span class="tok-prop">"type"</span><span class="tok-punc">:</span> <span class="tok-string">"paragraph"</span><span class="tok-punc">,</span> <span class="tok-prop">"text"</span><span class="tok-punc">:</span> <span class="tok-string">"保留标题与标签"</span> <span class="tok-punc">}</span>',
+        '  <span class="tok-punc">],</span>',
+        '  <span class="tok-prop">"archived"</span><span class="tok-punc">:</span> <span class="tok-bool">false</span>',
+        '<span class="tok-punc">}</span>',
+      ],
+    },
+  };
+  const options = [...document.querySelectorAll('.option')];
+  const status = document.querySelector('[data-live]');
+  let copyTimers = new WeakMap();
+  function render(language) {
+    const sample = examples[language];
+    options.forEach(option => {
+      const code = option.querySelector('code');
+      option.querySelectorAll('.language').forEach(label => { label.textContent = sample.name; });
+      code.replaceChildren(...sample.html.map((line, index) => {
+        const row = document.createElement('span'); row.className = 'code-line';
+        const number = document.createElement('span'); number.className = 'line-num'; number.textContent = String(index + 1).padStart(2, '0');
+        const content = document.createElement('span'); content.className = 'line-content'; content.innerHTML = line || '&nbsp;';
+        row.append(number, content); return row;
+      }));
+      option.querySelector('.code-copy').dataset.raw = sample.raw.join('\n');
+      const copy = option.querySelector('.code-copy'); copy.classList.remove('done'); copy.dataset.tip = '复制代码'; copy.setAttribute('aria-label', `复制 ${sample.name} 代码`);
+    });
+  }
+  document.querySelectorAll('[data-lang]').forEach(button => button.addEventListener('click', () => {
+    document.querySelectorAll('[data-lang]').forEach(item => { const active = item === button; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); });
+    render(button.dataset.lang);
+  }));
+  async function copyText(value) {
+    try { await navigator.clipboard.writeText(value); }
+    catch {
+      const input = document.createElement('textarea'); input.value = value; input.style.position = 'fixed'; input.style.opacity = '0'; document.body.append(input); input.select();
+      const ok = document.execCommand('copy'); input.remove(); if (!ok) throw new Error('clipboard unavailable');
+    }
+  }
+  document.querySelectorAll('.code-copy').forEach(button => button.addEventListener('click', async () => {
+    clearTimeout(copyTimers.get(button));
+    try {
+      await copyText(button.dataset.raw);
+      button.classList.add('done'); button.dataset.tip = '已复制'; button.setAttribute('aria-label', '已复制代码'); status.textContent = '代码已复制';
+      copyTimers.set(button, setTimeout(() => { button.classList.remove('done'); button.dataset.tip = '复制代码'; button.setAttribute('aria-label', '复制代码'); }, 1300));
+    } catch { button.dataset.tip = '复制失败'; button.setAttribute('aria-label', '复制失败，请手动选择代码'); status.textContent = '无法访问剪贴板'; }
+  }));
+  render('js');
+})();
+</script>
+</body>
+</html>

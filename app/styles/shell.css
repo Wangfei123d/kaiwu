@@ -152,18 +152,55 @@ html[data-custom-chrome="true"] .topbar { padding-right: 144px; }
 /* ---- 左:笔记列表 ---- */
 .notes-nav {
     display: flex; flex-direction: column; min-height: 0;
-    /* ⚠️ 底色走 `--pw-fill`(工作台按面板 id 声明,见 panel-workspace.css):
-       分隔条要把两侧的底色接起来,两边**必须取同一个值**,否则边界上会多出一处台阶。
-       工作台没挂上(兜底 grid)时退回原来的字面值,外观一点不变。 */
-    background: var(--pw-fill, rgba(18, 16, 15, .72));
+    /* 工作区声明 --pw-fill；旧版固定布局回退到统一的面板底色。 */
+    background: var(--pw-fill, var(--panel-bg));
 }
 /* ⚠️ 这条右边线只在**没挂上工作台**的兜底布局里有意义(那时没有任何东西分隔两栏)。
    工作台挂上之后,边界那条线由分隔条的 `::after` 画 —— 这里再画一条就是
    同一处两条线(用户报的"多余的分割线"里就有它;像素扫描能数出来)。 */
-.pane-notes:not(.pw-host) .notes-nav { border-right: 1px solid rgba(126, 200, 255, .10); }
+.pane-notes:not(.pw-host) .notes-nav { border-right: 1px solid var(--panel-divider); }
 .notes-nav-head { display: flex; gap: 6px; padding: 8px; }
 .notes-nav-head input { flex: 1; min-width: 0; padding: 6px 10px; font-size: 13px; }
-.notes-nav-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+.notes-scroll-shell { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.notes-nav-scroll {
+    height: 100%; min-height: 0; overflow-y: auto;
+    scrollbar-width: none !important; -ms-overflow-style: none !important;
+}
+.notes-nav-scroll::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+
+/* 滚动条槽始终透明;仅拖动时显示内部短滑块。 */
+.notes-scroll-track {
+    position: absolute; z-index: 5; top: 6px; right: 2px; bottom: 8px; width: 12px;
+    background: transparent; opacity: 0; pointer-events: auto; cursor: ns-resize;
+    touch-action: none; transition: opacity 100ms ease-out;
+}
+.notes-scroll-track[hidden] { display: none; }
+.notes-scroll-track.visible,
+.notes-scroll-track.dragging {
+    opacity: 1;
+}
+.notes-scroll-thumb {
+    position: absolute; top: 0; right: 3px; width: 7px; min-height: 30px;
+    border-radius: 99px; cursor: grab; pointer-events: auto;
+}
+.notes-scroll-track.dragging .notes-scroll-thumb { cursor: grabbing; }
+.notes-scroll-thumb::before,
+.notes-scroll-thumb::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+}
+.notes-scroll-thumb::before {
+    background: linear-gradient(90deg, rgba(128, 134, 136, .22), rgba(160, 165, 167, .42) 48%, rgba(124, 132, 135, .25));
+    opacity: 0; box-shadow: inset 0 0 2px rgba(255, 255, 255, .06);
+    transition: opacity 100ms ease-out;
+}
+.notes-scroll-thumb::after {
+    display: none;
+}
+.notes-scroll-track.visible .notes-scroll-thumb::before,
+.notes-scroll-track.dragging .notes-scroll-thumb::before { opacity: .72; }
+@media (prefers-reduced-motion: reduce) {
+    .notes-scroll-track, .notes-scroll-thumb::before { transition: none; }
+}
 
 .note-list { list-style: none; margin: 0; padding: 0 6px; }
 .note-list button {
@@ -194,6 +231,70 @@ html[data-custom-chrome="true"] .topbar { padding-right: 144px; }
     padding-left: calc(9px + var(--depth, 0) * 14px);
 }
 .note-list button[data-path] { padding-left: calc(9px + var(--depth, 0) * 14px); }
+
+/* 每一级目录用竖线串起同一支的行，横线落到该行的展开箭头上。 */
+.note-list button[data-depth] { position: relative; isolation: isolate; }
+.note-list button[data-depth]::before {
+    content: ""; position: absolute; z-index: -1;
+    top: 0; bottom: 0; left: 9px; width: calc(var(--depth, 0) * 14px);
+    pointer-events: none;
+    background-image:
+        repeating-linear-gradient(90deg, transparent 0 6px, rgba(166, 169, 160, .19) 6px 7px, transparent 7px 14px),
+        linear-gradient(180deg, transparent, rgba(107, 217, 255, .82) 48%, rgba(198, 245, 255, .92) 54%, transparent);
+    background-size: 100% 100%, 2px 14px;
+    background-position: left top, calc(100% - 8px) -14px;
+    background-repeat: repeat, no-repeat;
+    animation: note-tree-scan 4.8s cubic-bezier(.45, 0, .55, 1) infinite;
+    animation-delay: calc(var(--depth, 0) * 140ms);
+}
+.note-list button[data-depth="0"]::before { display: none; }
+.note-list button[data-depth]:not([data-depth="0"])::after {
+    content: ""; position: absolute; z-index: -1;
+    top: 50%; left: calc(9px + var(--depth, 0) * 14px - 8px);
+    width: 8px; height: 1px; background: rgba(166, 169, 160, .19);
+    transition: background-color .2s ease, box-shadow .2s ease;
+    pointer-events: none;
+}
+@keyframes note-tree-scan {
+    0%, 12%, 100% { background-position: left top, calc(100% - 8px) -14px; }
+    46%, 50% { background-position: left top, calc(100% - 8px) calc(100% + 14px); }
+}
+.note-list > li.note-tree-folding,
+.note-list > li.note-tree-expanding {
+    min-height: 0; overflow: hidden; transform-origin: top center;
+    transition-property: height, opacity, transform;
+    transition-duration: 160ms, 130ms, 160ms;
+    transition-timing-function: cubic-bezier(.2, .8, .2, 1), ease, cubic-bezier(.2, .8, .2, 1);
+    transition-delay: var(--tree-motion-delay, 0ms);
+}
+.note-list > li.note-tree-folding { height: var(--tree-motion-height); opacity: 1; transform: translateY(0); }
+.note-list > li.note-tree-folding.is-folding { height: 0; opacity: 0; transform: translateY(-3px); pointer-events: none; }
+.note-list > li.note-tree-expanding { height: 0; opacity: 0; transform: translateY(-5px); }
+.note-list > li.note-tree-expanding.is-visible { height: var(--tree-motion-height); opacity: 1; transform: translateY(0); }
+.note-list button[data-depth]:hover::before,
+.note-list button[data-depth][aria-selected="true"]::before { filter: drop-shadow(0 0 2px rgba(107, 217, 255, .3)); }
+.note-list button[data-depth]:hover::after,
+.note-list button[data-depth][aria-selected="true"]::after {
+    background: rgba(107, 217, 255, .78);
+    box-shadow: 0 0 6px rgba(107, 217, 255, .55);
+}
+.note-list .note-folder-icon {
+    flex: none; width: 14px; height: 14px;
+    fill: none; stroke: #aeb7ac; stroke-width: 1.2;
+    stroke-linecap: round; stroke-linejoin: round;
+    transition: stroke .2s ease, filter .24s ease, transform .24s ease;
+}
+.note-list .note-folder-icon-fallback {
+    flex: none; width: 14px; color: #aeb7ac; font: 13px/1 ui-monospace, Consolas, monospace;
+}
+.note-list .note-dir[aria-expanded="true"] .note-folder-icon { stroke: #a9def3; }
+.note-list .note-dir:hover .note-folder-icon,
+.note-list .note-dir[aria-expanded="true"]:hover .note-folder-icon {
+    stroke: #75d9ff;
+    filter: drop-shadow(0 0 4px rgba(107, 217, 255, .55));
+    transform: scale(1.06);
+}
+.note-list .note-dir:hover .note-caret { color: #75d9ff; }
 
 /* ---- 非笔记文件行(png / docx / json / txt) ----
    它们与笔记同处一层、缩进同一套换算(所以也带 data-path,上面那条规则直接管到),
@@ -296,6 +397,11 @@ html[data-custom-chrome="true"] .topbar { padding-right: 144px; }
 .note-list .note-dir[aria-expanded="false"] .note-caret { transform: rotate(-90deg); }
 @media (prefers-reduced-motion: reduce) {
     .note-caret { transition: none; }
+    .note-list button[data-depth]::before { animation: none; }
+    .note-list button[data-depth]::after,
+    .note-list .note-folder-icon { transition: none; }
+    .note-list > li.note-tree-folding,
+    .note-list > li.note-tree-expanding { transition: none; }
 }
 /* 「在此文件夹新建笔记」平时不抢视觉;键盘 Tab 到它时也要看得见 */
 .note-list .note-dir-add {
@@ -614,8 +720,8 @@ html[data-custom-chrome="true"] .topbar { padding-right: 144px; }
 .note-links {
     display: flex; flex-direction: column;
     min-height: 0;
-    /* 与 .notes-nav 同一个理由:底色由面板声明(--pw-fill),分隔条才接得上 */
-    background: var(--pw-fill, rgba(18, 16, 15, .72));
+    /* 与工作区面板保持同一底色。 */
+    background: var(--pw-fill, var(--panel-bg));
     /* 面板有多高就用多高,装不下时它自己滚。
        ⚠️ 原来这里是 `.note-side-links { max-height: 46% }` —— 那是为了给**同格的**
        AI 面板留地方;拆成两格之后这个上限只会白白留出一块空白。
@@ -623,7 +729,7 @@ html[data-custom-chrome="true"] .topbar { padding-right: 144px; }
     overflow-y: auto;
 }
 .note-links > .side-block { flex: none; }
-.side-block { padding: 12px 14px; border-bottom: 1px solid rgba(126, 200, 255, .06); }
+.side-block { padding: 12px 14px; border-bottom: 1px solid var(--panel-divider); }
 .side-block h4 {
     margin: 0 0 8px; font-size: 12px; font-weight: 600;
     color: var(--dim); letter-spacing: .5px;
@@ -648,8 +754,8 @@ html[data-custom-chrome="true"] .topbar { padding-right: 144px; }
 .agent-panel {
     flex: 1; min-height: 0;
     display: flex; flex-direction: column;
-    /* 同 .notes-nav:底色由面板声明(--pw-fill),分隔条才接得上 */
-    background: var(--pw-fill, rgba(14, 14, 14, .35));
+    /* 与工作区面板保持同一底色。 */
+    background: var(--pw-fill, var(--panel-bg));
     /* 轮次轨的悬停摘要挂在这一层(它必须在滚动区**外面**,否则会被 overflow 裁掉),
        所以这里要成为它的定位祖先。 */
     position: relative;
@@ -890,6 +996,78 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
     padding: 0; background: none; color: var(--muted);
     white-space: pre; font-size: 11.5px;
 }
+/* A 方案：无行号，使用浅底与低饱和语法色；语言名和复制图标收在同一代码块内。 */
+.agent-msg-text.md .agent-code-block {
+    min-width: 0; margin: 0 0 8px; overflow: hidden;
+    border-radius: var(--radius-sm); background: rgba(255, 255, 255, .045);
+}
+.agent-msg-text.md .agent-code-tools {
+    display: flex; align-items: center; gap: 7px;
+    min-height: 27px; padding: 2px 7px 2px 9px;
+    border-bottom: 1px solid rgba(255, 255, 255, .055);
+}
+.agent-msg-text.md .agent-code-language {
+    overflow: hidden; color: var(--faint); font: 10px/1.4 var(--mono);
+    text-overflow: ellipsis; white-space: nowrap;
+}
+.agent-msg-text.md .agent-code-copy {
+    position: relative; display: grid; place-items: center; flex: none;
+    width: 23px; height: 23px; margin-left: auto; padding: 4px;
+    border: 0; border-radius: 5px; background: transparent; color: var(--faint);
+    cursor: pointer; transition: background .16s ease, color .16s ease, transform .16s ease;
+}
+.agent-msg-text.md .agent-code-copy:hover,
+.agent-msg-text.md .agent-code-copy:focus-visible {
+    outline: none; background: rgba(255, 255, 255, .07); color: var(--muted);
+}
+.agent-msg-text.md .agent-code-copy:focus-visible { box-shadow: 0 0 0 2px rgba(126, 200, 255, .48); }
+.agent-msg-text.md .agent-code-copy::after {
+    content: attr(data-tooltip); position: absolute; z-index: 4; right: 0; bottom: calc(100% + 5px);
+    padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px;
+    background: var(--surface); color: var(--muted); font-size: 10px; line-height: 1.3; font-family: inherit;
+    white-space: nowrap; pointer-events: none; opacity: 0; transform: translateY(2px);
+    transition: opacity .14s ease, transform .14s ease;
+}
+.agent-msg-text.md .agent-code-copy:hover::after,
+.agent-msg-text.md .agent-code-copy:focus-visible::after,
+.agent-msg-text.md .agent-code-copy[data-state]::after { opacity: 1; transform: none; }
+.agent-msg-text.md .agent-code-copy svg {
+    display: block; width: 15px; height: 15px; overflow: visible;
+    fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round;
+}
+.agent-msg-text.md .agent-code-copy .check-shape { display: none; }
+.agent-msg-text.md .agent-code-copy[data-state="copied"] { color: var(--ok); transform: scale(1.04); }
+.agent-msg-text.md .agent-code-copy[data-state="copied"] .copy-shape { display: none; }
+.agent-msg-text.md .agent-code-copy[data-state="copied"] .check-shape { display: block; }
+.agent-msg-text.md .agent-code-copy[data-state="error"] { color: var(--error); }
+.agent-msg-text.md .agent-code-block pre {
+    margin: 0; padding: 6px 9px 7px; border: 0; border-radius: 0;
+    background: transparent;
+}
+.agent-msg-text.md .agent-code-block pre code { color: var(--muted); }
+.agent-msg-text.md .agent-code-token-keyword { color: #c5a7f2; }
+.agent-msg-text.md .agent-code-token-function { color: #e5c681; }
+.agent-msg-text.md .agent-code-token-string { color: #8bcf9d; }
+.agent-msg-text.md .agent-code-token-number { color: #e5a47e; }
+.agent-msg-text.md .agent-code-token-type { color: #8bcbd4; }
+.agent-msg-text.md .agent-code-token-comment { color: #777f78; font-style: italic; }
+.agent-msg-text.md .agent-code-token-property { color: #9fc9e7; }
+.agent-msg-text.md .agent-code-token-operator { color: #c1c5c1; }
+.agent-msg-text.md .agent-code-token-punct { color: #aab0aa; }
+.agent-msg-text.md .agent-code-token-literal { color: #d3a6e8; }
+html[data-theme="light"] .agent-msg-text.md .agent-code-block { background: rgba(0, 0, 0, .035); }
+html[data-theme="light"] .agent-msg-text.md .agent-code-tools { border-bottom-color: rgba(0, 0, 0, .08); }
+html[data-theme="light"] .agent-msg-text.md .agent-code-token-comment { color: #737a73; }
+html[data-theme="light"] .agent-msg-text.md .agent-code-token-keyword { color: #76569a; }
+html[data-theme="light"] .agent-msg-text.md .agent-code-token-function { color: #80620f; }
+html[data-theme="light"] .agent-msg-text.md .agent-code-token-string { color: #397447; }
+html[data-theme="light"] .agent-msg-text.md .agent-code-token-number { color: #a75c37; }
+html[data-theme="light"] .agent-msg-text.md .agent-code-token-type { color: #347b83; }
+html[data-theme="light"] .agent-msg-text.md .agent-code-token-property { color: #396f8c; }
+html[data-theme="light"] .agent-msg-text.md .agent-code-token-operator,
+html[data-theme="light"] .agent-msg-text.md .agent-code-token-punct { color: #616960; }
+html[data-theme="light"] .agent-msg-text.md .agent-code-token-literal { color: #774f91; }
+.agent-msg-text.md .agent-sweep .agent-code-tools { visibility: hidden; }
 .agent-msg-text.md a { color: var(--accent); text-decoration: none; }
 .agent-msg-text.md a:hover { text-decoration: underline; }
 /* Markdown 图片(`![alt](https://…)`):宽度跟气泡,不撑破面板。
@@ -1762,9 +1940,6 @@ html[data-theme="light"] .agent-msg-text.md pre { background: rgba(0, 0, 0, .04)
     padding: 5px 10px; border: 1px solid var(--border); font-size: 13px;
 }
 .md-view th { background: rgba(255, 255, 255, .04); }
-
-/* ================= 粒子星空背景 ================= */
-#starfield { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
 /* ================= 无障碍 ================= */
 @media (prefers-reduced-motion: reduce) {

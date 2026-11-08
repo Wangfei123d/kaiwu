@@ -11,7 +11,7 @@ export const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 // 申请它的典型理由是"我的数据就存在笔记库旁边"——例如短剧项目落在 <笔记库>/短剧/。
 // drama:短剧工作台的引擎通道。引擎要用 fs / child_process / crypto,而渲染进程是
 // 沙箱 —— 那些只能在主进程跑,插件递叶子字段、主进程按当前笔记库解析路径。
-export const KNOWN_PERMISSIONS = ['log', 'settings', 'services', 'dialog', 'shell', 'cookies', 'browser', 'clipboard', 'vault', 'drama', 'sessions', 'canvas'];
+export const KNOWN_PERMISSIONS = ['log', 'settings', 'services', 'dialog', 'shell', 'cookies', 'browser', 'clipboard', 'vault', 'drama', 'sessions', 'canvas', 'agentSkills'];
 
 const KNOWN_TOP_LEVEL = new Set([
     'id', 'name', 'version', 'description', 'author', 'entry', 'order',

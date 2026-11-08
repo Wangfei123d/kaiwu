@@ -34,9 +34,6 @@
 .drama-menu > * { animation: menuItemIn .15s ease-out both; }
 @keyframes menuItemIn { from { opacity: 0; transform: translateX(-7px); } to { opacity: 1; transform: none; } }
 
-.drama-menu-cap { padding: 4px 8px 5px; font: 10.5px/1.4 var(--mono); color: var(--faint);
-    border-bottom: 1px solid var(--border); margin-bottom: 4px; }
-.drama-menu-group { padding: 6px 8px 3px; font-size: 10.5px; color: var(--faint); letter-spacing: .3px; }
 .drama-menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
 .drama-menu button { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
     font: inherit; font-size: 12.5px; color: var(--muted); background: none; border: 0;
@@ -56,13 +53,11 @@
 .drama-menu-dot.k-vid { background: #c9a0d8; }
 .drama-menu-dot.k-aud { background: #d8b36a; }
 .drama-menu button:hover .drama-menu-dot { transform: scale(1.5); filter: brightness(1.25); }
-.drama-menu-hint { font: 10px/1.4 var(--mono); color: var(--faint); transition: color .12s ease; }
-.drama-menu button:hover .drama-menu-hint { color: var(--accent); }
 .drama-menu-badge { font: 9.5px/1.4 var(--mono); color: var(--ask); flex: none;
     border: 1px solid rgba(216, 179, 106, .45); border-radius: 4px; padding: 0 4px; }
 
 @media (prefers-reduced-motion: reduce) {
-    .drama-menu, .drama-menu.closing, .drama-menu > *, .drama-menu-hint, .drama-menu-dot {
+    .drama-menu, .drama-menu.closing, .drama-menu > *, .drama-menu-dot {
         animation: none !important; transition: none !important;
     }
 }

@@ -325,6 +325,302 @@ function renderBlockHtml(block) {
     }
 }
 
+// ---------- Agent code fences ----------
+//
+// Keep this deliberately small and DOM-only: the Agent renderer never injects
+// token HTML, and unknown languages remain readable as plain code.
+const CODE_LANGUAGES = new Map([
+    ['js', 'javascript'], ['jsx', 'javascript'], ['mjs', 'javascript'], ['cjs', 'javascript'],
+    ['ts', 'typescript'], ['tsx', 'typescript'],
+    ['py', 'python'], ['py3', 'python'],
+    ['html', 'html'], ['xml', 'html'], ['svg', 'html'], ['xhtml', 'html'],
+    ['json', 'json'], ['jsonc', 'json'], ['json5', 'json'],
+    ['text', 'plain'], ['txt', 'plain'], ['plain', 'plain'], ['plaintext', 'plain'],
+    ['sh', 'bash'], ['shell', 'bash'], ['zsh', 'bash'], ['bash', 'bash'],
+    ['ps1', 'powershell'], ['powershell', 'powershell'], ['pwsh', 'powershell'],
+    ['yml', 'yaml'], ['yaml', 'yaml'], ['sql', 'sql'], ['css', 'css'],
+    ['java', 'java'], ['c', 'c'], ['h', 'c'], ['cpp', 'cpp'], ['cc', 'cpp'],
+    ['cxx', 'cpp'], ['rs', 'rust'], ['rust', 'rust'], ['go', 'go'],
+    ['php', 'php'], ['rb', 'ruby'], ['ruby', 'ruby'], ['swift', 'swift'],
+    ['kt', 'kotlin'], ['kotlin', 'kotlin'], ['cs', 'csharp'], ['csharp', 'csharp'],
+]);
+
+const CODE_KEYWORDS = {
+    javascript: 'async await break case catch class const continue debugger default delete do else export extends finally for from function get if import in instanceof let new of return set static super switch this throw try typeof var void while yield',
+    typescript: 'abstract any as asserts async await boolean break case catch class const continue declare default delete do else enum export extends finally for from function get if implements import in infer instanceof interface is keyof let module namespace never new number object of package private protected public readonly require return set static string super switch this throw try type typeof undefined unique unknown var void while yield',
+    python: 'and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield',
+    bash: 'case do done elif else esac fi for function if in select then time until while',
+    powershell: 'begin break catch class continue data do dynamicparam else elseif end enum exit filter finally for foreach from function hidden if in param process return switch throw trap try until using var while',
+    sql: 'add all alter analyze and as asc begin between by case cast check column commit constraint create cross current_date current_timestamp database default delete desc distinct drop else end except exists explain false fetch for foreign from full grant group having in index inner insert into is join left like limit not null offset on or order outer primary references returning right rollback select set table then true union unique update values view when where with',
+    css: 'important',
+    java: 'abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while',
+    c: 'auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while',
+    cpp: 'alignas alignof asm auto bool break case catch char class const constexpr continue decltype default delete do double else enum explicit export extern false float for friend goto if inline int long namespace new noexcept nullptr operator private protected public register return short signed sizeof static struct switch template this throw true try typedef typeid typename union unsigned using virtual void volatile while',
+    rust: 'as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type union unsafe use where while',
+    go: 'break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var',
+    php: 'abstract and array as break callable case catch class clone const continue declare default do else elseif empty enddeclare endfor endforeach endif endswitch endwhile extends final finally fn for foreach function global if implements include instanceof insteadof interface namespace new or private protected public require return static switch throw trait try use var while xor',
+    ruby: 'alias and begin break case class def defined do else elsif end ensure false for if in module next nil not or redo rescue retry return self super then true undef unless until when while yield',
+    swift: 'associatedtype break case class continue default defer deinit do else enum extension fallthrough false fileprivate for func guard if import in init inout internal is let nil open operator private protocol public repeat rethrows return self static struct subscript super switch throw throws true try typealias var where while',
+    kotlin: 'as break class continue do else false for fun if in interface is null object package return super this throw true try typealias typeof val var when while',
+    csharp: 'abstract as base bool break byte case catch char checked class const continue decimal default delegate do double else enum event explicit extern false finally fixed float for foreach goto if implicit in int interface internal is lock long namespace new null object operator out override params private protected public readonly ref return sbyte sealed short sizeof stackalloc static string struct switch this throw true try typeof uint ulong unchecked unsafe ushort using virtual void volatile while',
+};
+for (const language of Object.keys(CODE_KEYWORDS)) CODE_KEYWORDS[language] = new Set(CODE_KEYWORDS[language].split(' '));
+
+function canonicalCodeLanguage(raw) {
+    const value = String(raw ?? '').trim().toLowerCase().replace(/^language-/, '');
+    return CODE_LANGUAGES.get(value) ?? (Object.hasOwn(CODE_KEYWORDS, value) ? value : '');
+}
+
+function inferCodeLanguage(source) {
+    const text = String(source ?? '').trim();
+    if (text === '') return '';
+    if (/^(?:\{[\s\S]*\}|\[[\s\S]*\])$/.test(text)) {
+        try { JSON.parse(text); return 'json'; } catch { /* keep checking */ }
+    }
+    if (/^(?:<!doctype\s+html|<!--[\s\S]*?-->|<html\b|<\/?[a-z][^>]*>)/i.test(text)) return 'html';
+    if (/^(?:#!.*\b(?:ba|z|k)?sh\b|(?:[$#]\s*)?(?:npm|pnpm|yarn|node|git|cd|ls|mkdir|python|pip|cargo|go)\s)/i.test(text)) return 'bash';
+    if (/^(?:from\s+[\w.]+\s+import\b|import\s+[\w.]+|def\s+\w+\s*\(|class\s+\w+\s*(?:\(|:)|print\s*\()/m.test(text)) return 'python';
+    if (/^\s*(?:select|insert|update|delete|create|alter|with)\b/i.test(text)) return 'sql';
+    if (/^\s*(?:[.#][\w-]+|[a-z][\w-]*)\s*\{[^}]*:[^}]*\}/i.test(text)) return 'css';
+    if (/\b(?:const|let|var|function|console\.|=>|export\s+default|interface\s+\w+)\b/.test(text)) return 'javascript';
+    return '';
+}
+
+function languageLabel(language, raw) {
+    const labels = {
+        javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', html: 'HTML',
+        json: 'JSON', plain: 'Text', bash: 'Shell', powershell: 'PowerShell', yaml: 'YAML', sql: 'SQL', css: 'CSS', java: 'Java',
+        c: 'C', cpp: 'C++', rust: 'Rust', go: 'Go', php: 'PHP', ruby: 'Ruby',
+        swift: 'Swift', kotlin: 'Kotlin', csharp: 'C#',
+    };
+    return labels[language] ?? (String(raw ?? '').trim().slice(0, 18) || 'CODE');
+}
+
+function appendCodeToken(doc, parent, value, kind) {
+    if (!value) return;
+    if (!kind) { parent.appendChild(doc.createTextNode(value)); return; }
+    const token = doc.createElement('span');
+    token.className = `agent-code-token-${kind}`;
+    token.appendChild(doc.createTextNode(value));
+    parent.appendChild(token);
+}
+
+function highlightMarkup(doc, parent, source) {
+    let i = 0;
+    while (i < source.length) {
+        if (source.startsWith('<!--', i)) {
+            const end = source.indexOf('-->', i + 4);
+            const stop = end < 0 ? source.length : end + 3;
+            appendCodeToken(doc, parent, source.slice(i, stop), 'comment'); i = stop; continue;
+        }
+        if (source[i] !== '<' || !/^<\/?[A-Za-z!?]/.test(source.slice(i, i + 3))) {
+            const found = source.indexOf('<', i + (source[i] === '<' ? 1 : 0));
+            const next = found === -1 ? source.length : found;
+            appendCodeToken(doc, parent, source.slice(i, next)); i = next; continue;
+        }
+        appendCodeToken(doc, parent, '<', 'punct'); i++;
+        if (source[i] === '/') { appendCodeToken(doc, parent, '/', 'punct'); i++; }
+        if (source[i] === '!') {
+            let end = source.indexOf('>', i);
+            if (end < 0) end = source.length - 1;
+            appendCodeToken(doc, parent, source.slice(i, end + 1), 'comment'); i = end + 1; continue;
+        }
+        const name = /^[\w:-]+/.exec(source.slice(i));
+        if (name) { appendCodeToken(doc, parent, name[0], 'tag'); i += name[0].length; }
+        while (i < source.length && source[i] !== '>') {
+            if (/\s/.test(source[i])) { appendCodeToken(doc, parent, source[i++]); continue; }
+            if (source[i] === '/') { appendCodeToken(doc, parent, '/', 'punct'); i++; continue; }
+            if (source[i] === '=') { appendCodeToken(doc, parent, '=', 'operator'); i++; continue; }
+            if (source[i] === '"' || source[i] === "'") {
+                const quote = source[i]; let end = i + 1;
+                while (end < source.length && source[end] !== quote) end++;
+                if (end < source.length) end++;
+                appendCodeToken(doc, parent, source.slice(i, end), 'string'); i = end; continue;
+            }
+            const attr = /^[^\s=/>]+/.exec(source.slice(i));
+            if (attr) { appendCodeToken(doc, parent, attr[0], 'property'); i += attr[0].length; }
+            else { appendCodeToken(doc, parent, source[i++]); }
+        }
+        if (source[i] === '>') { appendCodeToken(doc, parent, '>', 'punct'); i++; }
+    }
+}
+
+function highlightCode(doc, code, source, language) {
+    code.setAttribute('data-language', language || 'plain');
+    if (!language || language === 'plain') { code.appendChild(doc.createTextNode(source)); return; }
+    if (language === 'html') { highlightMarkup(doc, code, source); return; }
+    const keywords = CODE_KEYWORDS[language] ?? CODE_KEYWORDS.javascript;
+    const supportsSlashComments = ['javascript', 'typescript', 'java', 'c', 'cpp', 'rust', 'go', 'php', 'swift', 'kotlin', 'csharp', 'css'].includes(language);
+    const supportsHashComments = ['python', 'bash', 'powershell', 'yaml', 'ruby'].includes(language);
+    const supportsSqlComments = language === 'sql';
+    const operators = ['>>>=', '===', '!==', '**=', '<<=', '>>=', '>>>', '&&', '||', '??=', '??', '?.', '=>', '->', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '<<', '>>', '**', '::', '...'];
+    const operatorChars = '=+-*/%<>!&|^~?:';
+    const isSpace = value => value !== '' && /\s/.test(value);
+    const isIdentifierStart = value => value !== '' && /^[\p{L}_$]$/u.test(value);
+    const isIdentifierPart = value => value !== '' && /^[\p{L}\p{N}_$]$/u.test(value);
+    let i = 0;
+    let previousWord = '';
+    let previousNonSpace = '';
+    while (i < source.length) {
+        const ch = source[i];
+        if (isSpace(ch)) {
+            const start = i++;
+            while (i < source.length && isSpace(source[i])) i++;
+            appendCodeToken(doc, code, source.slice(start, i)); continue;
+        }
+        if (supportsSlashComments && (source.startsWith('//', i) || source.startsWith('/*', i))) {
+            const line = source.startsWith('//', i);
+            const end = line ? source.indexOf('\n', i + 2) : source.indexOf('*/', i + 2);
+            const stop = end < 0 ? source.length : line ? end : end + 2;
+            appendCodeToken(doc, code, source.slice(i, stop), 'comment'); i = stop; previousNonSpace = '/'; continue;
+        }
+        if (supportsSqlComments && (source.startsWith('--', i) || source.startsWith('/*', i))) {
+            const line = source.startsWith('--', i);
+            const end = line ? source.indexOf('\n', i + 2) : source.indexOf('*/', i + 2);
+            const stop = end < 0 ? source.length : line ? end : end + 2;
+            appendCodeToken(doc, code, source.slice(i, stop), 'comment'); i = stop; previousNonSpace = '/'; continue;
+        }
+        if (supportsHashComments && ch === '#' && (language !== 'yaml' || i === 0 || isSpace(source[i - 1]))) {
+            const end = source.indexOf('\n', i);
+            const stop = end < 0 ? source.length : end;
+            appendCodeToken(doc, code, source.slice(i, stop), 'comment'); i = stop; previousNonSpace = '#'; continue;
+        }
+        const quote = ch;
+        if (quote === '"' || quote === "'" || (quote === '`' && ['javascript', 'typescript'].includes(language))) {
+            const triple = language === 'python' && source.startsWith(quote.repeat(3), i);
+            const delimiter = triple ? quote.repeat(3) : quote;
+            let end = i + delimiter.length;
+            while (end < source.length) {
+                if (source[end] === '\\') { end += 2; continue; }
+                if (source.startsWith(delimiter, end)) { end += delimiter.length; break; }
+                end++;
+            }
+            const value = source.slice(i, end);
+            const prop = language === 'json' && /^\s*:/.test(source.slice(end));
+            appendCodeToken(doc, code, value, prop ? 'property' : 'string'); i = end; previousWord = ''; previousNonSpace = quote; continue;
+        }
+        if (/\d/.test(ch) || (ch === '.' && /\d/.test(source[i + 1] ?? ''))) {
+            const number = /^(?:0[xX][\da-fA-F]+|0[bB][01]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?n?)/.exec(source.slice(i));
+            if (number) { appendCodeToken(doc, code, number[0], 'number'); i += number[0].length; previousWord = ''; previousNonSpace = '0'; continue; }
+        }
+        const point = source.codePointAt(i);
+        const char = point === undefined ? '' : String.fromCodePoint(point);
+        if (isIdentifierStart(char)) {
+            let end = i + char.length;
+            while (end < source.length) {
+                const nextPoint = source.codePointAt(end);
+                const next = nextPoint === undefined ? '' : String.fromCodePoint(nextPoint);
+                if (!isIdentifierPart(next)) break;
+                end += next.length;
+            }
+            const word = source.slice(i, end);
+            let afterIndex = end;
+            while (afterIndex < source.length && isSpace(source[afterIndex])) afterIndex++;
+            const after = source[afterIndex] ?? '';
+            let kind = '';
+            if (keywords.has(word)) kind = 'keyword';
+            else if (/^(?:true|false|null|undefined|None|True|False|nil|NaN|Infinity)$/i.test(word)) kind = 'literal';
+            else if (['new', 'extends', 'implements', 'instanceof', 'class', 'interface', 'type'].includes(previousWord)) kind = 'type';
+            else if (after === '(' || ['function', 'def', 'func', 'fn'].includes(previousWord)) kind = 'function';
+            else if (['json', 'yaml', 'css'].includes(language) && after === ':') kind = 'property';
+            else if (['javascript', 'typescript'].includes(language) && previousNonSpace === '.') kind = after === '(' ? 'function' : 'property';
+            appendCodeToken(doc, code, word, kind);
+            previousWord = word; previousNonSpace = source[end - 1]; i = end; continue;
+        }
+        if ('()[]{}.,;:'.includes(ch)) {
+            appendCodeToken(doc, code, ch, 'punct'); i++; previousWord = ''; previousNonSpace = ch; continue;
+        }
+        if (operatorChars.includes(ch)) {
+            const operator = operators.find(value => source.startsWith(value, i)) ?? ch;
+            appendCodeToken(doc, code, operator, 'operator'); i += operator.length; previousWord = ''; previousNonSpace = operator.at(-1); continue;
+        }
+        appendCodeToken(doc, code, ch);
+        previousWord = ''; previousNonSpace = ch;
+        i++;
+    }
+}
+
+function createCodeCopyButton(doc, code, label) {
+    const button = doc.createElement('button');
+    button.className = 'agent-code-copy';
+    button.type = 'button';
+    button.setAttribute('aria-label', `复制 ${label} 代码`);
+    button.setAttribute('title', `复制 ${label} 代码`);
+    button.setAttribute('data-tooltip', `复制 ${label} 代码`);
+    button.setAttribute('data-reply-static', 'true');
+    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+    const back = doc.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    back.setAttribute('class', 'copy-shape');
+    for (const [name, value] of Object.entries({ x: '8', y: '8', width: '12', height: '12', rx: '2' })) back.setAttribute(name, value);
+    const front = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+    front.setAttribute('class', 'copy-shape'); front.setAttribute('d', 'M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3');
+    const check = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+    check.setAttribute('class', 'check-shape'); check.setAttribute('d', 'm5 12 4 4 10-9');
+    svg.append(back, front, check); button.appendChild(svg);
+    button.addEventListener('click', async () => {
+        const text = code.textContent ?? '';
+        let copied = false;
+        const clipboard = doc.defaultView?.navigator?.clipboard;
+        try {
+            if (typeof clipboard?.writeText === 'function') {
+                try { await clipboard.writeText(text); copied = true; }
+                catch { /* use the local selection fallback below */ }
+            }
+            if (!copied) {
+                const input = doc.createElement('textarea');
+                input.value = text;
+                input.setAttribute('readonly', '');
+                input.style.position = 'fixed'; input.style.opacity = '0';
+                doc.body.appendChild(input); input.select();
+                copied = doc.execCommand?.('copy') === true;
+                input.remove();
+            }
+        } catch { copied = false; }
+        button.dataset.state = copied ? 'copied' : 'error';
+        button.setAttribute('aria-label', copied ? '代码已复制' : '复制失败');
+        button.setAttribute('title', copied ? '代码已复制' : '复制失败');
+        button.setAttribute('data-tooltip', copied ? '已复制' : '复制失败');
+        const view = doc.defaultView;
+        if (button.copyResetTimer) view?.clearTimeout?.(button.copyResetTimer);
+        button.copyResetTimer = view?.setTimeout?.(() => {
+            if (!button.isConnected) return;
+            delete button.dataset.state;
+            button.setAttribute('aria-label', `复制 ${label} 代码`);
+            button.setAttribute('title', `复制 ${label} 代码`);
+            button.setAttribute('data-tooltip', `复制 ${label} 代码`);
+        }, copied ? 1500 : 3000);
+    });
+    return button;
+}
+
+function renderCodeBlockNodes(doc, block, options) {
+    const source = block.text ?? '';
+    const language = canonicalCodeLanguage(block.lang) || inferCodeLanguage(source);
+    const label = languageLabel(language, block.lang);
+    const code = doc.createElement('code');
+    code.className = 'agent-code-source';
+    if (options.codeBlockTools) highlightCode(doc, code, source, language);
+    else code.appendChild(doc.createTextNode(source));
+    const pre = doc.createElement('pre');
+    pre.appendChild(code);
+    if (!options.codeBlockTools) return [pre];
+
+    const wrapper = doc.createElement('div');
+    wrapper.className = 'agent-code-block';
+    wrapper.setAttribute('data-language', language || 'plain');
+    const tools = doc.createElement('div');
+    tools.className = 'agent-code-tools';
+    tools.setAttribute('data-reply-static', 'true');
+    const languageName = doc.createElement('span');
+    languageName.className = 'agent-code-language';
+    languageName.textContent = label;
+    const copy = createCodeCopyButton(doc, code, label);
+    tools.append(languageName, copy);
+    wrapper.append(tools, pre);
+    return [wrapper];
+}
+
 /**
  * 渲染 markdown 为 HTML。
  *
@@ -424,13 +720,7 @@ function blockNodes(doc, block, options) {
             });
             return [el];
         }
-        case 'code': {
-            const pre = doc.createElement('pre');
-            const code = doc.createElement('code');
-            code.appendChild(doc.createTextNode(block.text));
-            pre.appendChild(code);
-            return [pre];
-        }
+        case 'code': return renderCodeBlockNodes(doc, block, options);
         case 'list': {
             const el = doc.createElement(block.ordered ? 'ol' : 'ul');
             for (const item of block.items) {
@@ -484,11 +774,11 @@ function blockNodes(doc, block, options) {
  *
  * @param {Document} doc 造节点用的 document(注入,便于单测)
  * @param {string} markdown
- * @param {{resolveLink?:Function, wikilinks?:boolean, tags?:boolean, tables?:boolean, omitImageUrls?:Set<string>}} [options]
+ * @param {{resolveLink?:Function, wikilinks?:boolean, tags?:boolean, tables?:boolean, omitImageUrls?:Set<string>, codeBlockTools?:boolean}} [options]
  * @returns {Node[]}
  */
 export function renderMarkdownNodes(doc, markdown, options = {}) {
-    const opts = { wikilinks: false, tags: false, tables: false, ...options };
+    const opts = { wikilinks: false, tags: false, tables: false, codeBlockTools: false, ...options };
     const blocks = parseMarkdown(markdown, opts);
     const out = [];
     for (const block of blocks) out.push(...blockNodes(doc, block, opts));

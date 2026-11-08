@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>开物 · Agent Skills</title>
+<style>
+:root{color-scheme:dark;--bg:#101211;--panel:#171a18;--panel-hi:#1c201d;--panel-soft:#202522;--line:#303733;--line-soft:#272d29;--text:#e8ece9;--muted:#a8b1ab;--dim:#78827b;--faint:#58615b;--blue:#83c7fa;--blue-soft:#83c7fa14;--green:#8bd9af;--green-soft:#8bd9af12;--purple:#bba1f7;--amber:#e5bf79;--radius:10px;--shadow:0 20px 60px #0005;font:13px/1.5 "Segoe UI","Microsoft YaHei UI",sans-serif;color:var(--text);background:var(--bg)}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse 65% 45% at 50% -10%,#29445622,transparent 74%),var(--bg)}button,input,textarea{font:inherit;color:inherit}button{cursor:pointer}svg{display:block}.page{width:min(1450px,calc(100% - 36px));margin:auto;padding:28px 0 34px}.eyebrow{color:var(--blue);font:10px/1.3 Consolas,"Cascadia Code",monospace;letter-spacing:.13em}.page-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}.mark{width:36px;height:36px;display:grid;place-items:center;border:1px solid #83c7fa33;border-radius:10px;background:#83c7fa0b;color:var(--blue)}.mark svg{width:20px;height:20px}.heading{min-width:0}.heading h1{margin:3px 0 0;font-size:20px;line-height:1.2;font-weight:640;letter-spacing:-.03em}.head-actions{margin-left:auto;display:flex;align-items:center;gap:8px}.auto-chip{height:34px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:#ffffff03;color:var(--muted);font-size:11px}.auto-chip svg{width:15px;height:15px;color:var(--blue)}.switch{position:relative;width:29px;height:16px;border:1px solid #424a45;border-radius:99px;background:#2a302c;transition:background .18s,border-color .18s;cursor:pointer}.switch:after{content:"";position:absolute;top:3px;left:3px;width:8px;height:8px;border-radius:50%;background:#8b958e;transition:transform .2s cubic-bezier(.2,.8,.2,1),background .2s}.switch.on{border-color:#56829b;background:#294452}.switch.on:after{transform:translateX(13px);background:#b7e5ff;box-shadow:0 0 8px #83c7fa66}.icon-btn{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line);border-radius:8px;background:#ffffff03;color:var(--muted);transition:background .16s,border-color .16s,color .16s,transform .16s}.icon-btn:hover{border-color:#527285;background:var(--blue-soft);color:var(--blue);transform:translateY(-1px)}.icon-btn:active{transform:translateY(0) scale(.96)}.icon-btn svg{width:16px;height:16px}.icon-btn.primary{border-color:#83c7fa66;background:#83c7fa;color:#10202a}.icon-btn.primary:hover{background:#a0d7ff;color:#10202a}.workspace{height:min(730px,calc(100vh - 115px));min-height:610px;display:grid;grid-template-columns:188px 294px minmax(0,1fr);overflow:hidden;border:1px solid #333a35;border-radius:13px;background:rgba(20,23,21,.97);box-shadow:var(--shadow);animation:workspace-in .36s cubic-bezier(.2,.75,.25,1) both}@keyframes workspace-in{from{opacity:.5;transform:translateY(7px) scale(.997)}to{opacity:1;transform:translateY(0) scale(1)}}.rail{display:flex;flex-direction:column;min-width:0;padding:13px 10px;border-right:1px solid var(--line-soft);background:#151815}.rail-title{display:flex;align-items:center;gap:8px;padding:4px 7px 13px;color:var(--text);font-size:11px;font-weight:620}.rail-title svg{width:16px;height:16px;color:var(--blue)}.rail-label{padding:9px 8px 5px;color:var(--faint);font-size:9px;letter-spacing:.08em;text-transform:uppercase}.rail-item{height:34px;display:flex;align-items:center;gap:9px;padding:0 8px;border:0;border-radius:7px;background:transparent;color:var(--muted);text-align:left;font-size:10px;transition:background .16s,color .16s}.rail-item:hover{background:#ffffff06;color:var(--text)}.rail-item.active{background:#83c7fa12;color:var(--blue)}.rail-item svg{width:15px;height:15px;flex:none;opacity:.9}.rail-count{margin-left:auto;color:var(--faint);font:9px Consolas,monospace}.rail-spacer{flex:1}.agent-profile{display:flex;align-items:center;gap:8px;margin:7px 3px 0;padding:9px 7px;border-top:1px solid var(--line-soft);color:var(--dim);font-size:9px}.avatar{width:23px;height:23px;display:grid;place-items:center;border-radius:7px;background:linear-gradient(140deg,#283e4a,#252b32);color:#bde4fa;font-size:10px}.list-pane{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line-soft);background:#171a18}.list-head{padding:14px 12px 9px}.list-head-row{display:flex;align-items:center;gap:7px;margin-bottom:10px}.list-head-row h2{margin:0;font-size:13px;font-weight:620}.count{color:var(--faint);font:9px Consolas,monospace}.spacer{flex:1}.search{height:31px;display:flex;align-items:center;gap:7px;padding:0 8px;border:1px solid var(--line);border-radius:7px;background:#111412;color:var(--dim);transition:border-color .16s,box-shadow .16s}.search:focus-within{border-color:#54738a;box-shadow:0 0 0 2px #83c7fa10}.search svg{width:14px;height:14px;flex:none}.search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--text);font-size:10px}.search input::placeholder{color:#5e6861}.filter-row{display:flex;gap:4px;margin-top:8px}.filter{padding:4px 7px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--dim);font-size:9px}.filter:hover{color:var(--text)}.filter.active{border-color:#40586a;background:#83c7fa10;color:var(--blue)}.skill-items{flex:1;min-height:0;overflow:auto;padding:2px 7px 10px}.skill{position:relative;width:100%;display:flex;align-items:center;gap:9px;padding:9px 8px;border:1px solid transparent;border-radius:8px;background:transparent;text-align:left;transition:background .17s,border-color .17s,transform .17s;animation:item-in .3s both}.skill:nth-child(2){animation-delay:25ms}.skill:nth-child(3){animation-delay:50ms}.skill:nth-child(4){animation-delay:75ms}.skill:nth-child(5){animation-delay:100ms}.skill:nth-child(6){animation-delay:125ms}@keyframes item-in{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:none}}.skill:hover{background:#ffffff05}.skill.active{border-color:#344953;background:#1d2828}.skill.active:before{content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--blue);box-shadow:0 0 9px #83c7fa65}.skill-icon{width:29px;height:29px;flex:none;display:grid;place-items:center;border:1px solid #39423d;border-radius:8px;background:#222723;color:var(--muted);transition:background .17s,color .17s,border-color .17s}.skill-icon svg{width:15px;height:15px}.skill.active .skill-icon{border-color:#476170;background:#263a42;color:var(--blue)}.skill-info{min-width:0;flex:1}.skill-name{display:block;overflow:hidden;color:#dce2dd;font-size:10px;font-weight:570;text-overflow:ellipsis;white-space:nowrap}.skill-meta{display:flex;align-items:center;gap:5px;margin-top:3px;color:var(--faint);font-size:8px}.skill-meta .tiny-dot{width:5px;height:5px;border-radius:50%;background:var(--green)}.skill-meta .tiny-dot.off{background:#555f59}.skill-state{margin-left:auto;color:var(--faint);font-size:8px}.list-foot{display:flex;align-items:center;gap:7px;padding:9px 12px;border-top:1px solid var(--line-soft);color:var(--faint);font-size:8px}.list-foot svg{width:13px;height:13px;color:#8bd9af9c}.detail{display:flex;flex-direction:column;min-width:0;min-height:0;background:linear-gradient(120deg,#1b1f1c,#181b19 58%)}.detail-top{display:flex;align-items:center;gap:11px;padding:16px 18px 14px;border-bottom:1px solid var(--line-soft)}.hero-icon{width:40px;height:40px;display:grid;place-items:center;flex:none;border:1px solid #526078;border-radius:11px;background:linear-gradient(145deg,#2a3844,#21282b);color:#a8d7f3;box-shadow:inset 0 1px #ffffff12,0 5px 20px #0002}.hero-icon svg{width:22px;height:22px}.detail-title{min-width:0;flex:1}.title-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.title-line h2{margin:0;font-size:15px;letter-spacing:-.02em;font-weight:620}.source{padding:2px 6px;border:1px solid #38413b;border-radius:5px;color:var(--dim);font-size:8px}.detail-sub{margin-top:3px;color:var(--dim);font-size:9px}.detail-actions{display:flex;align-items:center;gap:6px}.detail-scroll{flex:1;min-height:0;overflow:auto;padding:14px 18px 16px}.properties{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(180px,.8fr);gap:18px}.column{min-width:0}.section{margin-bottom:16px}.section-head{display:flex;align-items:center;gap:7px;margin-bottom:7px;color:var(--muted);font-size:9px;font-weight:600}.section-head svg{width:13px;height:13px;color:var(--dim)}.description{width:100%;min-height:54px;resize:vertical;padding:8px 9px;border:1px solid transparent;border-radius:7px;background:#202522;color:#cbd2cd;font-size:10px;line-height:1.55;outline:none;transition:border-color .16s,background .16s}.description:focus{border-color:#4e7289;background:#202725}.chips{display:flex;flex-wrap:wrap;gap:5px}.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid #363e39;border-radius:6px;background:#1e221f;color:#9fa9a2;font-size:8px}.chip svg{width:11px;height:11px;color:#83c7fa}.source-path{display:flex;align-items:center;gap:7px;padding:7px 8px;border:1px solid var(--line-soft);border-radius:6px;background:#181b19;color:var(--dim);font:8px Consolas,monospace;overflow:hidden}.source-path svg{width:13px;height:13px;flex:none;color:#8eaaa0}.source-path span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.match-box{padding:10px;border:1px solid #344039;border-radius:8px;background:linear-gradient(140deg,#1c2420,#191d1a)}.match-top{display:flex;align-items:center;gap:6px}.match-top svg{width:14px;height:14px;color:var(--green)}.match-top strong{font-size:9px;font-weight:590}.match-top .pill{margin-left:auto;color:var(--green);font-size:8px}.match-box p{margin:6px 0 0;color:#7e8981;font-size:8px;line-height:1.5}.match-example{margin-top:8px;padding:7px;border-left:2px solid #7ac89e;border-radius:0 5px 5px 0;background:#8bd9af08;color:#bac4bd;font-size:8px}.match-example small{display:block;margin-top:3px;color:var(--faint);font-size:7px}.editor{border:1px solid #343c37;border-radius:8px;background:#131614;overflow:hidden}.editor-bar{height:32px;display:flex;align-items:center;gap:7px;padding:0 9px;border-bottom:1px solid var(--line-soft);background:#191d1a}.file-icon{width:14px;height:14px;color:#92a9a0}.editor-bar strong{font:9px Consolas,monospace;color:#c3ccc5}.editor-bar .spacer{flex:1}.editor-bar span{color:var(--faint);font-size:8px}.editor-body{min-height:236px;padding:12px 13px;outline:0;color:#bac4bd;font:9px/1.8 Consolas,"Microsoft YaHei UI",monospace;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--blue)}.editor-body:focus{box-shadow:inset 0 0 0 1px #83c7fa18}.md-h{color:#94c9f2}.md-key{color:#b7a1ef}.md-com{color:#6f7b73}.md-code{color:#8bd9af}.side-stack{display:flex;flex-direction:column;gap:11px}.run-label{color:var(--dim);font-size:8px}.run-input{width:100%;min-height:67px;resize:vertical;padding:8px;border:1px solid var(--line);border-radius:7px;background:#151916;color:#cbd3cc;font-size:9px;line-height:1.5;outline:0}.run-input:focus{border-color:#52738a}.run-input::placeholder{color:#5f6962}.run-output{display:none;padding:8px;border:1px solid #36413a;border-radius:7px;background:#191e1a;animation:result-in .22s ease both}@keyframes result-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}.run-output.show{display:block}.run-output-title{display:flex;align-items:center;gap:5px;color:var(--green);font-size:8px}.run-output-title svg{width:12px;height:12px}.run-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}.run-tags .chip{font-size:7px}.detail-foot{display:flex;align-items:center;gap:8px;padding:10px 18px;border-top:1px solid var(--line-soft);background:#181b19}.saved{display:flex;align-items:center;gap:5px;color:var(--faint);font-size:8px}.saved svg{width:12px;height:12px;color:#7dbe96}.detail-foot .spacer{flex:1}.status-btn{height:30px;display:flex;align-items:center;gap:6px;padding:0 9px;border:1px solid var(--line);border-radius:6px;background:#ffffff03;color:var(--muted);font-size:9px}.status-btn svg{width:14px;height:14px}.status-btn.primary{border-color:#83c7fa;background:var(--blue);color:#112029;font-weight:620}.status-btn.primary:hover{background:#a0d8ff}.dialog{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;padding:18px;background:#080b09aa;backdrop-filter:blur(5px)}.dialog.open{display:flex;animation:veil-in .16s ease both}@keyframes veil-in{from{opacity:0}to{opacity:1}}.dialog-card{width:min(420px,100%);padding:17px;border:1px solid #424a44;border-radius:12px;background:#1a1e1b;box-shadow:0 24px 70px #0009;animation:dialog-in .2s cubic-bezier(.2,.8,.2,1) both}@keyframes dialog-in{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}.dialog-head{display:flex;align-items:center;gap:8px;margin-bottom:13px}.dialog-head svg{width:17px;height:17px;color:var(--blue)}.dialog-head strong{font-size:12px}.dialog-head .spacer{flex:1}.dialog-card label{display:block;margin:11px 0 5px;color:var(--dim);font-size:9px}.dialog-card input,.dialog-card textarea{width:100%;border:1px solid var(--line);border-radius:6px;background:#121513;padding:8px;color:var(--text);font-size:10px;outline:0}.dialog-card input:focus,.dialog-card textarea:focus{border-color:#52738a}.dialog-card textarea{height:86px;resize:vertical}.dialog-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:13px}.toast{position:fixed;left:50%;bottom:22px;z-index:40;transform:translate(-50%,8px);opacity:0;padding:8px 12px;border:1px solid #405b4b;border-radius:7px;background:#1b231d;color:#b6ddc4;font-size:10px;pointer-events:none;transition:opacity .18s,transform .18s}.toast.show{opacity:1;transform:translate(-50%,0)}button:focus-visible,input:focus-visible,textarea:focus-visible,[contenteditable]:focus-visible{outline:2px solid #83c7fa99;outline-offset:2px}.hidden{display:none!important}
+@media(max-width:1050px){.workspace{grid-template-columns:158px 250px minmax(0,1fr)}.properties{grid-template-columns:1fr}.side-stack{display:grid;grid-template-columns:1fr 1fr}.run-output{grid-column:1/-1}.detail-scroll{padding:12px}}
+@media(max-width:760px){.page{width:calc(100% - 20px);padding-top:14px}.head-actions .auto-chip{font-size:0;gap:5px;padding:0 7px}.head-actions .auto-chip .switch{width:27px}.workspace{height:calc(100vh - 86px);min-height:560px;grid-template-columns:54px 1fr}.rail{align-items:center;padding:10px 5px}.rail-title{padding:4px}.rail-title span,.rail-label,.rail-item span:not(.rail-count),.rail-count,.agent-profile span{display:none}.rail-item{width:37px;justify-content:center;padding:0}.agent-profile{border:0;margin-top:auto;padding:5px}.list-pane{border-right:0}.detail{position:absolute;inset:62px 0 0 54px;z-index:3;display:none;border-left:1px solid var(--line)}.workspace.detail-open .detail{display:flex;animation:detail-in .2s ease both}@keyframes detail-in{from{opacity:0;transform:translateX(5px)}to{opacity:1;transform:none}}.workspace.detail-open .list-pane{visibility:hidden}.detail-top{padding:11px}.detail-scroll{padding:10px}.detail-foot{padding:8px 11px}.side-stack{display:flex}.detail-actions .icon-btn{width:29px;height:29px}.icon-btn.mobile-back{display:grid!important}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+svg{fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+</style>
+</head>
+<body>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute;overflow:hidden">
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.1 5.7L20 11l-5.9 2.3L12 19l-2.1-5.7L4 11l5.9-2.3L12 3Z"/><path d="m19 15 .9 2.2L22 18l-2.1.8L19 21l-.9-2.2L16 18l2.1-.8L19 15Z"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.2 4.2L19 6.8"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4.5 7.7 7.5 4.2 7.5-4.2M12 12v8.5"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="m4 20 4.3-.9L19 8.4 15.6 5 4.9 15.7 4 20Z"/><path d="m13.8 6.8 3.4 3.4M4 20h16"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4.5h11a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3V4.5Z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6M9 11h5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m16 16 4.2 4.2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M5 14v5h14v-5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3.5h8l4 4V20H6V3.5Z"/><path d="M14 3.5V8h4M9 12h6M9 15h6"/></symbol>
+  <symbol id="i-tune" viewBox="0 0 24 24"><path d="M4 7h9m4 0h3M4 17h3m4 0h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="i-run" viewBox="0 0 24 24"><path d="m9 6 10 6-10 6V6Z"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h12l3 3v13H4V5a1 1 0 0 1 1-1Z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+</svg>
+<main class="page">
+  <header class="page-head">
+    <div class="mark"><svg><use href="#i-spark"/></svg></div>
+    <div class="heading"><div class="eyebrow">KAIWU · AGENT</div><h1>Skills</h1></div>
+    <div class="head-actions">
+      <button class="auto-chip" id="autoMatch" aria-label="切换自动匹配" aria-pressed="true"><svg><use href="#i-spark"/></svg><span>自动匹配</span><i class="switch on" aria-hidden="true"></i></button>
+      <span class="source" title="由 Agent 在任务中创建并沉淀">Agent 创建 · 06</span>
+    </div>
+  </header>
+  <section class="workspace" id="workspace">
+    <nav class="rail" aria-label="Skill 分类">
+      <div class="rail-title"><svg><use href="#i-grid"/></svg><span>技能空间</span></div>
+      <div class="rail-label">范围</div>
+      <button class="rail-item active" data-category="全部"><svg><use href="#i-grid"/></svg><span>全部</span><span class="rail-count">08</span></button>
+      <button class="rail-item" data-category="写作"><svg><use href="#i-pen"/></svg><span>写作</span><span class="rail-count">03</span></button>
+      <button class="rail-item" data-category="资料"><svg><use href="#i-book"/></svg><span>资料</span><span class="rail-count">02</span></button>
+      <button class="rail-item" data-category="开发"><svg><use href="#i-code"/></svg><span>开发</span><span class="rail-count">02</span></button>
+      <button class="rail-item" data-category="其他"><svg><use href="#i-box"/></svg><span>其他</span><span class="rail-count">01</span></button>
+      <button class="rail-item" data-category="Agent 创建"><svg><use href="#i-spark"/></svg><span>Agent 创建</span><span class="rail-count">06</span></button>
+      <div class="rail-spacer"></div>
+      <button class="rail-item" id="preferences"><svg><use href="#i-tune"/></svg><span>匹配偏好</span></button>
+      <div class="agent-profile"><i class="avatar">K</i><span>开物 Agent</span></div>
+    </nav>
+    <aside class="list-pane">
+      <div class="list-head">
+        <div class="list-head-row"><h2>技能库</h2><span class="count" id="visibleCount">08</span></div>
+        <label class="search"><svg><use href="#i-search"/></svg><input type="search" id="skillSearch" placeholder="搜索" aria-label="搜索 Skill"></label>
+        <div class="filter-row"><button class="filter active" data-filter="全部">全部</button><button class="filter" data-filter="已启用">已启用</button><button class="filter" data-filter="已停用">已停用</button></div>
+      </div>
+      <div class="skill-items" id="skillList">
+        <button class="skill active" data-skill="文档撰写" data-category="写作" data-origin="Agent" data-enabled="true" data-description="按用户要求组织、撰写或改写内容，并根据指定格式交付。" data-uses="Word 文档,Markdown,项目方案" data-body="# 文档撰写\n\n## 工作方式\n- 先识别目标读者与交付格式。\n- 按请求组织结构，避免冗长铺垫。\n- 用户指定文件格式时，生成对应文件。\n- 交付前检查内容、文件名和格式。\n\n## 输出\n清晰、可直接使用的最终文稿。"><i class="skill-icon"><svg><use href="#i-file"/></svg></i><span class="skill-info"><b class="skill-name">文档撰写</b><small class="skill-meta"><i class="tiny-dot"></i><span>内置</span></small></span><span class="skill-state">✓</span></button>
+        <button class="skill" data-skill="会议纪要" data-category="写作" data-origin="Agent" data-enabled="true" data-description="从会议记录中提炼主题、结论、待办事项和负责人。" data-uses="会议记录,行动项,周报" data-body="# 会议纪要\n\n## 提炼规则\n- 区分讨论内容与最终决议。\n- 将待办写成“事项 / 负责人 / 时间”。\n- 未明确的信息标记待确认，不要推测。\n\n## 输出结构\n主题、结论、行动项。"><i class="skill-icon"><svg><use href="#i-book"/></svg></i><span class="skill-info"><b class="skill-name">会议纪要</b><small class="skill-meta"><i class="tiny-dot"></i><span>内置</span></small></span><span class="skill-state">✓</span></button>
+        <button class="skill" data-skill="资料研究" data-category="资料" data-origin="Agent" data-enabled="true" data-description="拆解研究问题，比较可靠来源，并分开呈现事实与推断。" data-uses="资料调研,来源核验,竞品比较" data-body="# 资料研究\n\n## 研究流程\n- 明确问题和时间范围。\n- 优先使用权威、近期来源。\n- 区分来源事实、分析和不确定内容。\n- 标注来源链接。\n\n## 输出\n先给结论，再给依据。"><i class="skill-icon"><svg><use href="#i-globe"/></svg></i><span class="skill-info"><b class="skill-name">资料研究</b><small class="skill-meta"><i class="tiny-dot"></i><span>内置</span></small></span><span class="skill-state">✓</span></button>
+        <button class="skill" data-skill="代码修复" data-category="开发" data-origin="内置" data-enabled="true" data-description="复现并定位代码问题，完成范围最小的修复。" data-uses="调试,错误修复,代码审查" data-body="# 代码修复\n\n## 工作方式\n- 先定位问题和受影响范围。\n- 尽量采用小而完整的修复。\n- 不运行用户未要求的测试。\n- 说明修改内容和验证范围。"><i class="skill-icon"><svg><use href="#i-code"/></svg></i><span class="skill-info"><b class="skill-name">代码修复</b><small class="skill-meta"><i class="tiny-dot"></i><span>内置</span></small></span><span class="skill-state">✓</span></button>
+        <button class="skill" data-skill="短剧创作" data-category="写作" data-origin="Agent" data-enabled="true" data-description="按人物设定、场景和时长要求编写短剧内容。" data-uses="剧本,分镜,对白" data-body="# 短剧创作\n\n## 创作约束\n- 保持人物设定和动机一致。\n- 按场景组织动作与对白。\n- 尊重用户指定的时长、题材和格式。\n- 不擅自扩写未要求的部分。"><i class="skill-icon"><svg><use href="#i-pen"/></svg></i><span class="skill-info"><b class="skill-name">短剧创作</b><small class="skill-meta"><i class="tiny-dot"></i><span>内置</span></small></span><span class="skill-state">✓</span></button>
+        <button class="skill" data-skill="图片提示词" data-category="其他" data-origin="Agent" data-enabled="false" data-description="将画面想法转换成清楚、可执行的图像生成提示词。" data-uses="图像生成,风格描述,画面构图" data-body="# 图片提示词\n\n用主体、场景、构图、光线和风格表达画面。保持用户指定的视觉重点，避免堆叠相互冲突的形容词。"><i class="skill-icon"><svg><use href="#i-spark"/></svg></i><span class="skill-info"><b class="skill-name">图片提示词</b><small class="skill-meta"><i class="tiny-dot off"></i><span>内置</span></small></span><span class="skill-state">○</span></button>
+        <button class="skill" data-skill="表格分析" data-category="资料" data-origin="内置" data-enabled="true" data-description="检查表格数据结构，汇总变化并制作可读的分析结果。" data-uses="数据整理,趋势分析,图表" data-body="# 表格分析\n\n检查字段和数据质量；说明计算口径；用简洁表格或图表呈现关键结果。"><i class="skill-icon"><svg><use href="#i-grid"/></svg></i><span class="skill-info"><b class="skill-name">表格分析</b><small class="skill-meta"><i class="tiny-dot"></i><span>内置</span></small></span><span class="skill-state">✓</span></button>
+        <button class="skill" data-skill="界面设计" data-category="开发" data-origin="Agent" data-enabled="true" data-description="按开物 UI 设计准则制作简洁、清楚、有细腻动效的界面。" data-uses="界面,HTML 预览,交互设计" data-body="# 界面设计\n\n- 减少解释性文字，让内容直接表达。\n- 常见操作优先使用矢量图标。\n- 保持布局简洁并复用产品设计语言。\n- 使用克制的状态动效和自然缓动。\n- 支持键盘操作与减少动态效果偏好。"><i class="skill-icon"><svg><use href="#i-spark"/></svg></i><span class="skill-info"><b class="skill-name">界面设计</b><small class="skill-meta"><i class="tiny-dot"></i><span>项目</span></small></span><span class="skill-state">✓</span></button>
+      </div>
+      <div class="list-foot"><svg><use href="#i-spark"/></svg><span>Agent 创建 · 按需匹配</span></div>
+    </aside>
+    <section class="detail" id="detail">
+      <div class="detail-top">
+        <button class="icon-btn mobile-back" id="backToList" aria-label="返回技能列表" title="返回" style="display:none"><svg style="transform:rotate(180deg)"><use href="#i-chev"/></svg></button>
+        <div class="hero-icon"><svg id="heroGlyph"><use href="#i-file"/></svg></div>
+        <div class="detail-title"><div class="title-line"><h2 id="skillTitle">文档撰写</h2><span class="source" id="sourceBadge">内置</span></div><p class="detail-sub" id="skillSummary">按用户要求组织、撰写或改写内容，并根据指定格式交付。</p></div>
+        <div class="detail-actions">
+          <button class="icon-btn" id="previewSkill" aria-label="试运行 Skill" title="试运行"><svg><use href="#i-run"/></svg></button>
+          <button class="icon-btn" id="toggleCurrent" aria-label="启用或停用 Skill" title="启用 Skill"><svg><use href="#i-check"/></svg></button>
+          <button class="icon-btn" id="moreSkill" aria-label="更多操作" title="更多"><svg><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+        </div>
+      </div>
+      <div class="detail-scroll">
+        <div class="properties">
+          <div class="column">
+            <div class="section"><div class="section-head"><svg><use href="#i-pen"/></svg><span>用途</span></div><textarea class="description" id="description"></textarea></div>
+            <div class="section"><div class="section-head"><svg><use href="#i-spark"/></svg><span>适用任务</span></div><div class="chips" id="useChips"></div></div>
+            <div class="section">
+              <div class="section-head"><svg><use href="#i-file"/></svg><span>指令</span><span class="spacer"></span><span class="source">SKILL.md</span></div>
+              <div class="editor"><div class="editor-bar"><svg class="file-icon"><use href="#i-file"/></svg><strong>SKILL.md</strong><span class="spacer"></span><span>Markdown</span></div><div class="editor-body" id="skillBody" contenteditable="true" spellcheck="false"></div></div>
+            </div>
+          </div>
+          <aside class="side-stack">
+            <div class="section"><div class="section-head"><svg><use href="#i-box"/></svg><span>来源</span></div><div class="source-path"><svg><use href="#i-file"/></svg><span id="skillPath">内置 / writing / document</span></div></div>
+            <div class="section"><div class="section-head"><svg><use href="#i-tune"/></svg><span>自动匹配</span><span class="spacer"></span><i class="switch on" id="skillAuto" role="switch" aria-checked="true" tabindex="0"></i></div><div class="match-box"><div class="match-top"><svg><use href="#i-spark"/></svg><strong>最近匹配</strong><span class="pill">已调用</span></div><div class="match-example">“把这份调研整理成 Word 简报”<small>文档撰写 · 资料研究</small></div></div></div>
+            <div class="section"><div class="section-head"><svg><use href="#i-run"/></svg><span>试运行</span></div><textarea id="runInput" class="run-input" placeholder="输入一个任务"></textarea><button class="status-btn" id="runInline" style="margin-top:6px"><svg><use href="#i-run"/></svg>试运行</button><div class="run-output" id="runOutput"><div class="run-output-title"><svg><use href="#i-check"/></svg>匹配结果</div><div class="run-tags" id="runTags"></div></div></div>
+          </aside>
+        </div>
+      </div>
+      <footer class="detail-foot"><span class="saved"><svg><use href="#i-check"/></svg><span id="saveState">已保存</span></span><span class="spacer"></span><button class="icon-btn" id="openFolder" aria-label="打开位置" title="打开位置"><svg><use href="#i-import"/></svg></button><button class="status-btn primary" id="saveSkill"><svg><use href="#i-save"/></svg>保存</button></footer>
+    </section>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+(() => {
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const list = $('#skillList'), cards = $$('.skill', list), workspace = $('#workspace'), toast = $('#toast');
+  let selected = cards[0], currentFilter = '全部', activeCategory = '全部', toastTimer;
+  function notify(text) { toast.textContent = text; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 1700); }
+  function iconFor(card) { const icon = $('use', $('.skill-icon', card)); return icon?.getAttribute('href') || '#i-spark'; }
+  function renderDetail(card) {
+    selected = card;
+    cards.forEach(item => item.classList.toggle('active', item === card));
+    cards.forEach(item => { const label = $('.skill-meta span', item); if (label) label.textContent = item.dataset.origin === 'Agent' ? 'Agent 创建' : '内置'; });
+    const name = card.dataset.skill, enabled = card.dataset.enabled === 'true';
+    $('#skillTitle').textContent = name;
+    $('#skillSummary').textContent = card.dataset.description;
+    $('#sourceBadge').textContent = card.dataset.origin === 'Agent' ? 'Agent 创建' : '内置';
+    $('#heroGlyph').setAttribute('href', iconFor(card));
+    $('#description').value = card.dataset.description;
+    $('#skillBody').textContent = card.dataset.body;
+    $('#useChips').replaceChildren(...card.dataset.uses.split(',').map(label => { const chip=document.createElement('span');chip.className='chip';chip.innerHTML='<svg><use href="#i-check"/></svg>';chip.append(document.createTextNode(label));return chip; }));
+    $('#skillPath').textContent = card.dataset.origin === 'Agent' ? `Agent / skills / ${name}` : `内置 / ${card.dataset.category} / ${name}`;
+    $('#toggleCurrent').title = enabled ? '停用 Skill' : '启用 Skill';
+    $('#toggleCurrent').setAttribute('aria-label', $('#toggleCurrent').title);
+    $('#toggleCurrent').classList.toggle('primary', enabled);
+    $('#skillAuto').classList.toggle('on', enabled);
+    $('#skillAuto').setAttribute('aria-checked', String(enabled));
+    if (innerWidth <= 760) workspace.classList.add('detail-open');
+  }
+  function visibleCards() {
+    const query = $('#skillSearch').value.trim().toLowerCase();
+    cards.forEach(card => {
+      const matches = `${card.dataset.skill} ${card.dataset.description} ${card.dataset.uses}`.toLowerCase().includes(query);
+      const category = activeCategory === '全部' || (activeCategory === 'Agent 创建' ? card.dataset.origin === 'Agent' : card.dataset.category === activeCategory);
+      const enabled = currentFilter === '全部' || (card.dataset.enabled === 'true') === (currentFilter === '已启用');
+      card.classList.toggle('hidden', !(matches && category && enabled));
+    });
+    $('#visibleCount').textContent = String(cards.filter(card => !card.classList.contains('hidden')).length).padStart(2,'0');
+    if (selected.classList.contains('hidden')) { const next=cards.find(card => !card.classList.contains('hidden')); if(next) renderDetail(next); }
+  }
+  cards.forEach(card => card.addEventListener('click', () => renderDetail(card)));
+  $$('.rail-item[data-category]').forEach(button => button.addEventListener('click', () => {
+    $$('.rail-item[data-category]').forEach(item => item.classList.toggle('active', item === button)); activeCategory=button.dataset.category; visibleCards();
+  }));
+  $$('.filter').forEach(button => button.addEventListener('click', () => {
+    $$('.filter').forEach(item => item.classList.toggle('active', item === button)); currentFilter=button.dataset.filter; visibleCards();
+  }));
+  $('#skillSearch').addEventListener('input', visibleCards);
+  $('#toggleCurrent').addEventListener('click', () => {
+    selected.dataset.enabled = String(selected.dataset.enabled !== 'true');
+    const on=selected.dataset.enabled === 'true';
+    $('.tiny-dot', selected).classList.toggle('off', !on); $('.skill-state', selected).textContent=on?'✓':'○';
+    $('#toggleCurrent').title=on?'停用 Skill':'启用 Skill'; $('#toggleCurrent').setAttribute('aria-label',$('#toggleCurrent').title);
+    $('#skillAuto').classList.toggle('on',on); $('#skillAuto').setAttribute('aria-checked',String(on)); visibleCards(); notify(on?'Skill 已启用':'Skill 已停用');
+  });
+  $('#skillAuto').addEventListener('click', () => $('#toggleCurrent').click());
+  $('#skillAuto').addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); $('#toggleCurrent').click(); } });
+  function switchAuto() { $('#autoMatch .switch').classList.toggle('on'); $('#autoMatch').setAttribute('aria-pressed',String($('#autoMatch .switch').classList.contains('on'))); notify($('#autoMatch .switch').classList.contains('on')?'已开启自动匹配':'已关闭自动匹配'); }
+  $('#autoMatch').addEventListener('click',switchAuto);
+  $('#saveSkill').addEventListener('click',()=>{selected.dataset.description=$('#description').value;selected.dataset.body=$('#skillBody').innerText;$('#skillSummary').textContent=$('#description').value;notify('已保存');$('#saveState').textContent='刚刚保存';});
+  $('#description').addEventListener('input',()=>$('#saveState').textContent='未保存'); $('#skillBody').addEventListener('input',()=>$('#saveState').textContent='未保存');
+  $('#previewSkill').addEventListener('click',()=>$('#runInput').focus());
+  $('#runInline').addEventListener('click',()=>{
+    const task=$('#runInput').value.trim().toLowerCase(); if(!task){$('#runInput').focus();return;}
+    const matched=cards.filter(card=>card.dataset.enabled==='true' && `${card.dataset.skill} ${card.dataset.description} ${card.dataset.uses}`.toLowerCase().split(/[ ,，。/]+/).some(word=>word.length>1&&task.includes(word)));
+    const results=matched.length?matched:[selected]; $('#runTags').replaceChildren(...results.map(card=>{const chip=document.createElement('span');chip.className='chip';chip.textContent=card.dataset.skill;return chip;}));
+    $('#runOutput').classList.add('show'); notify(`匹配到 ${results.length} 个 Skill`);
+  });
+  $('#openFolder').addEventListener('click',()=>notify('打开 Skill 文件位置'));
+  $('#preferences').addEventListener('click',()=>notify('匹配偏好'));
+  $('#moreSkill').addEventListener('click',()=>notify('更多 Skill 操作'));
+  $('#backToList').addEventListener('click',()=>workspace.classList.remove('detail-open'));
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')workspace.classList.remove('detail-open');});
+  renderDetail(cards[0]);
+})();
+</script>
+</body>
+</html>

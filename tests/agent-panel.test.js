@@ -620,6 +620,7 @@ test('流式增量只改文字、不重建 DOM(重建会把扫光/光标动画�
     bridge.emit(chunks('一二三四五六七八九十')[0]);
     await flush();
     const sweepBefore = els.messagesEl.queryAll('.agent-sweep')[0];
+    const baseBefore = els.messagesEl.query('.agent-stream-base');
     const thinkBefore = els.messagesEl.queryAll('.agent-think')[0];
     assert.ok(sweepBefore, '应当有扫光层');
 
@@ -632,10 +633,11 @@ test('流式增量只改文字、不重建 DOM(重建会把扫光/光标动画�
     assert.equal(els.messagesEl.queryAll('.agent-think')[0], thinkBefore);
     assert.equal(textOf(sweepAfter), '一二三四五六七八九十十一十二', '复用节点也要把新正文写进去');
 
-    // 但结构真变了(比如来了一条工具卡)就必须重建,不能拿旧节点凑合
+    // 新工具结束上一段流式输出。收起扫光的同时保留已经画好的正文节点。
     bridge.emit({ kind: 'update', sessionId: 's1', update: { sessionUpdate: 'tool_call', toolCallId: 'c1', title: 'read', kind: 'read', status: 'pending' } });
     await flush();
-    assert.equal(els.messagesEl.queryAll('.agent-sweep')[0], sweepBefore, '工具改变列表结构也不能重置回复播放器');
+    assert.equal(els.messagesEl.query('.agent-sweep'), null);
+    assert.equal(els.messagesEl.query('.agent-stream-base'), baseBefore, '工具改变列表结构也不能重置回复播放器');
     assert.match(textOf(els.messagesEl), /一二三四五六七八九十十一十二/, '重建之后正文一个字都不能少');
 });
 
@@ -1527,6 +1529,36 @@ test('方案B(界面):思考不再置顶,工具卡不再跑到用户消息上面
     assert.match(textOf(turn.children[0]), /你好呀/, '第一条是用户那句,工具卡不许跑到它上面');
 });
 
+test('先发进度、再用工具和思考时，最终正文在过程下方逐段输出', async (t) => {
+    const { bridge, els, panel } = await mountPanel();
+    t.after(() => panel.dispose());
+    els.inputEl.value = '生成测试代码';
+    await panel.send();
+    for (const event of [
+        evThink('先确认语言'), evText('我先看看项目。'), evTool('read'),
+        evThink('根据测试结果整理答案'), evText('测试'),
+    ]) {
+        bridge.emit(event);
+        await flush();
+    }
+
+    const turn = els.messagesEl.query('.agent-turn');
+    assert.deepEqual(turn.children.map(c => String(c.className).split(' ')[0]),
+        ['agent-msg', 'agent-think', 'agent-group', 'agent-think', 'agent-msg']);
+    const group = turn.query('.agent-group');
+    assert.match(textOf(group.children[1]), /我先看看项目/);
+    assert.equal(group.children[2].getAttribute('data-tool-call-id'), 'read');
+    assert.equal(turn.children.at(-1).getAttribute('data-streaming'), 'true');
+
+    bridge.emit(evToolDone('read'));
+    bridge.emit(evText('全部通过。'));
+    bridge.emit({ kind: 'prompt-end', sessionId: 's1' });
+    await flush();
+    const finalTurn = els.messagesEl.query('.agent-turn');
+    assert.equal(textOf(finalTurn.children.at(-1)), '测试全部通过。');
+    assert.equal(finalTurn.queryAll('.agent-msg-assistant').length, 2, '进度和最终回复各一条');
+});
+
 test('方案B(界面):摘要行写着"N 次工具调用",卡片收在里面(点开才可见,但一直在 DOM 里)', async () => {
     const { bridge, els } = await mountPanel();
     bridge.emit(evTool('call-1')); await flush();
@@ -1646,7 +1678,7 @@ test('AI 生图完成后结果替换原框，正文重复图片不再显示，�
     assert.equal(els.messagesEl.query('.agent-image-generation'), before, '下一轮不丢历史结果框');
 });
 
-test('AI 生图结果追加到工具之前的回复时，加载失败仍保留查看原图入口', async (t) => {
+test('AI 先发进度再生图时，加载失败仍保留查看原图入口', async (t) => {
     const { bridge, els, panel } = await mountPanel();
     t.after(() => panel.dispose());
     els.inputEl.value = '生成图片';
@@ -3183,6 +3215,7 @@ test('接着聊:resumed 的会话事件 → 从台账把历史铺回对话(用�
         title: '上次那条',
         entries: [
             { kind: 'user', at: 1000, text: '上次我问的那句' },
+            { kind: 'reply', at: 1500, text: '我先看看文件。' },
             { kind: 'think', at: 2000, text: '上次的思考过程' },
             { kind: 'tool', at: 3000, id: 'tc-1', title: '读 文件', status: 'ok', toolKind: 'read' },
             { kind: 'reply', at: 4000, text: '上次的回复正文' },
@@ -3204,8 +3237,8 @@ test('接着聊:resumed 的会话事件 → 从台账把历史铺回对话(用�
     assert.equal(els.messagesEl.queryAll('.agent-think').length, 1, '思考条也要铺回来');
     assert.ok(els.messagesEl.queryAll('.agent-tool').length >= 1, '工具卡片也要铺回来');
     const answers = els.messagesEl.queryAll('.agent-msg-assistant');
-    assert.equal(answers.length, 1, '回复也要铺回来');
-    assert.equal(textOf(answers[0]), '上次的回复正文');
+    assert.deepEqual(answers.map(textOf), ['我先看看文件。', '上次的回复正文']);
+    assert.equal(els.messagesEl.query('.agent-turn').children.at(-1), answers[1], '重开历史时正文仍在过程下方');
 });
 
 test('接着聊:历史里的图片只留张数,并**如实说出来**(不许留一个裂图)', async () => {

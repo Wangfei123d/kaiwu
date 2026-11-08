@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent Skill 系统 · 三种方案</title>
+<style>
+:root{color-scheme:dark;--bg:#111211;--panel:#181a19;--raised:#1e211f;--raised2:#242826;--line:#343936;--line2:#292e2b;--text:#e9ece9;--muted:#abb2ad;--dim:#7c8580;--faint:#5d6661;--blue:#83c7fa;--blue-weak:#83c7fa18;--green:#87d8ad;--amber:#e8bd78;--purple:#bba2fa;--shadow:0 18px 48px #0004;font:13px/1.45 "Segoe UI","Microsoft YaHei UI",sans-serif;color:var(--text);background:var(--bg)}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -20%,#29445a2b,transparent 45%),var(--bg)}button,input,textarea{font:inherit;color:inherit}button{cursor:pointer}.page{max-width:1560px;margin:auto;padding:28px clamp(14px,2.5vw,36px) 40px}.eyebrow{font:10px/1.3 "Cascadia Code",Consolas,monospace;letter-spacing:.13em;color:var(--blue);text-transform:uppercase}.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:17px}.page-head h1{margin:5px 0 4px;font-size:clamp(23px,3vw,31px);letter-spacing:-.035em;font-weight:650}.page-head p{margin:0;color:var(--dim);font-size:12px}.top-right{color:var(--faint);font-size:10px;text-align:right}.top-right b{display:block;color:var(--muted);font-size:11px;font-weight:500}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}.option{min-width:0;border:1px solid #303633;border-radius:12px;background:linear-gradient(150deg,#ffffff05,#ffffff01);overflow:hidden;box-shadow:var(--shadow);transition:border-color .2s,transform .2s,box-shadow .2s}.option:hover{transform:translateY(-2px);border-color:#4a5550}.option.selected{border-color:#83c7fa88;box-shadow:0 0 0 1px #83c7fa22,0 20px 50px #0005}.option-head{min-height:74px;padding:12px 13px 10px;display:flex;gap:10px;align-items:flex-start}.letter{flex:none;width:25px;height:25px;display:grid;place-items:center;border:1px solid #83c7fa48;border-radius:7px;color:var(--blue);background:#83c7fa0d;font:11px Consolas,monospace}.copy{min-width:0;flex:1}.copy h2{margin:1px 0 3px;font-size:13px;font-weight:650}.copy p{margin:0;color:var(--faint);font-size:10px}.choose{flex:none;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#ffffff04;color:var(--dim);font-size:9px;white-space:nowrap}.selected .choose{border-color:#83c7fa70;color:var(--blue);background:var(--blue-weak)}.mock{height:595px;margin:0 8px 8px;border:1px solid #303633;border-radius:9px;background:#141615;overflow:hidden;display:flex;flex-direction:column}.appbar{height:39px;flex:none;padding:0 11px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line2);background:#191c1a}.app-icon{width:17px;height:17px;color:var(--blue);display:grid;place-items:center}.app-icon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.appbar strong{font-size:11px}.appbar .spacer{flex:1}.state{font-size:9px;color:var(--green);display:flex;align-items:center;gap:5px}.dot{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}.icon-btn{width:24px;height:24px;padding:0;display:grid;place-items:center;border:1px solid var(--line);border-radius:6px;background:#ffffff03;color:var(--muted)}.icon-btn:hover,.btn:hover{border-color:#547286;color:var(--blue)}.icon-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.btn{border:1px solid var(--line);border-radius:6px;background:#ffffff04;color:var(--muted);padding:5px 9px;font-size:9px;white-space:nowrap}.btn.primary{color:#13212a;border-color:var(--blue);background:var(--blue);font-weight:650}.btn.ghost{border-color:transparent;color:var(--blue)}.pill{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border:1px solid #3d4942;border-radius:99px;background:#87d8ad0d;color:var(--green);font-size:9px;white-space:nowrap}.pill.blue{border-color:#405767;background:var(--blue-weak);color:var(--blue)}.pill.muted{border-color:#373d39;background:#ffffff04;color:var(--dim)}.muted{color:var(--dim)}.faint{color:var(--faint)}.section-label{font-size:9px;color:var(--dim);letter-spacing:.04em}.divider{height:1px;background:var(--line2);flex:none}
+/* A · 技能库管理 */
+.a-body{flex:1;min-height:0;display:grid;grid-template-columns:118px minmax(0,1fr)}.a-nav{padding:11px 8px;border-right:1px solid var(--line2);background:#171917}.nav-title{padding:2px 6px 8px;color:var(--faint);font-size:8px;letter-spacing:.08em}.nav-item{display:flex;align-items:center;gap:7px;margin:2px 0;padding:7px 7px;border-radius:5px;color:var(--muted);font-size:9px;cursor:pointer}.nav-item:hover,.nav-item.active{background:#83c7fa12;color:var(--blue)}.nav-item .count{margin-left:auto;color:var(--faint);font:8px Consolas,monospace}.nav-icon{width:14px;height:14px;display:grid;place-items:center;color:inherit}.nav-icon svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.a-main{min-width:0;padding:12px 11px;overflow:auto}.subhead{display:flex;align-items:center;gap:5px;margin-bottom:9px}.subhead strong{font-size:11px}.subhead .spacer{flex:1}.search{width:100%;height:27px;border:1px solid var(--line);border-radius:6px;background:#111311;color:var(--text);padding:0 8px;font-size:9px;outline:none}.search:focus{border-color:#527087}.skill-list{display:grid;gap:5px;margin-top:8px}.skill-row{width:100%;text-align:left;padding:8px;border:1px solid var(--line2);border-radius:7px;background:#ffffff02;display:flex;align-items:flex-start;gap:8px;transition:.16s}.skill-row:hover,.skill-row.active{border-color:#4c6471;background:#83c7fa0b}.skill-glyph{flex:none;width:25px;height:25px;border-radius:6px;display:grid;place-items:center;color:var(--blue);background:#83c7fa13}.skill-glyph svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.skill-info{min-width:0;flex:1}.skill-info b{display:block;color:#dfe5e0;font-size:9px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.skill-info small{display:block;margin-top:3px;color:var(--faint);font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.switch{position:relative;flex:none;width:25px;height:14px;margin-top:3px;border:1px solid #454d48;border-radius:99px;background:#282d2a;cursor:pointer}.switch:after{content:"";position:absolute;top:2px;left:2px;width:8px;height:8px;border-radius:50%;background:#758079;transition:.17s}.switch.on{border-color:#6191a9;background:#294251}.switch.on:after{left:13px;background:var(--blue);box-shadow:0 0 7px #83c7fa66}.a-detail{margin-top:10px;border:1px solid var(--line);border-radius:8px;background:#191c1a;overflow:hidden}.detail-head{padding:9px 10px;display:flex;align-items:center;gap:7px}.detail-head strong{font-size:10px}.detail-head .spacer{flex:1}.detail-body{padding:0 10px 10px}.field-label{display:block;margin:8px 0 4px;color:var(--dim);font-size:8px}.detail-text{padding:7px 8px;border:1px solid var(--line2);border-radius:5px;background:#131513;color:#bdc5bf;font-size:8px;line-height:1.55}.code{white-space:pre-wrap;color:#aeb8b1;font:8px/1.55 Consolas,monospace}.a-footer{display:flex;gap:6px;margin-top:9px}.a-footer .btn{flex:1}
+/* B · 对话时动态匹配 */
+.b-main{min-height:0;flex:1;display:flex;flex-direction:column;padding:11px 10px}.chat-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.chat-meta strong{font-size:10px}.message{max-width:95%;padding:8px 9px;border:1px solid #343a36;border-radius:8px;background:#1d211e;color:#dce2dd;font-size:9px;line-height:1.6}.message.user{align-self:flex-end;border-color:#3c5361;background:#1b2830}.match-head{display:flex;align-items:center;gap:6px;margin:12px 0 6px}.match-head strong{font-size:9px;font-weight:600}.match-head .spacer{flex:1}.match-stack{display:grid;gap:5px}.match-card{display:flex;align-items:center;gap:7px;padding:7px;border:1px solid #36413a;border-radius:7px;background:#191d1a;cursor:pointer;transition:.18s}.match-card:hover{border-color:#52675b;transform:translateX(2px)}.match-card.off{opacity:.45;border-style:dashed}.match-card .skill-glyph{width:23px;height:23px}.match-desc{min-width:0;flex:1}.match-desc b{display:block;font-size:9px;font-weight:600}.match-desc small{display:block;margin-top:2px;color:var(--faint);font-size:8px}.reason{max-width:75px;color:#9ec7dd;font-size:7px;text-align:right}.applied{margin-top:7px;padding:6px 8px;border-left:2px solid var(--green);background:#87d8ad09;color:#9eaaa2;font-size:8px;line-height:1.5}.assistant{margin-top:9px;padding:9px;border:1px solid var(--line2);border-radius:8px;background:#171a18;color:#cbd2cc;font-size:9px;line-height:1.7}.assistant strong{color:#eef1ee}.assistant .mini-tags{display:flex;gap:4px;margin-top:7px}.b-compose{margin-top:auto;padding:8px;border:1px solid var(--line);border-radius:8px;background:#191c1a}.compose-tools{display:flex;align-items:center;gap:5px;margin-bottom:6px}.compose-tools .spacer{flex:1}.compose-text{width:100%;height:54px;resize:none;border:0;outline:0;background:transparent;color:var(--text);font-size:9px;line-height:1.5}.compose-text::placeholder{color:#68726c}.auto-skill{display:flex;align-items:center;gap:5px;color:var(--dim);font-size:8px}.b-bottom{display:flex;align-items:center;gap:5px}.b-bottom .spacer{flex:1}.tiny-action{padding:3px 5px;border:1px solid var(--line2);border-radius:5px;background:#ffffff03;color:var(--dim);font-size:7px;cursor:pointer}.tiny-action:hover{color:var(--blue);border-color:#4d6878}
+/* C · 技能路由工作台 */
+.c-main{flex:1;min-height:0;padding:11px;display:flex;flex-direction:column;gap:9px}.c-prompt{padding:8px;border:1px solid var(--line);border-radius:7px;background:#191c1a}.c-prompt-top{display:flex;align-items:center;gap:6px;margin-bottom:5px}.c-prompt-top strong{font-size:9px}.c-prompt textarea{width:100%;height:40px;resize:none;border:0;outline:0;background:transparent;color:#dce2dd;font-size:9px;line-height:1.5}.flow{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:8px 0}.flow:before{content:"";position:absolute;top:32px;bottom:33px;left:50%;width:1px;background:linear-gradient(#3a555f,#83c7fa78,#4b6252);opacity:.65}.flow-node{position:relative;z-index:1;width:min(100%,290px);padding:8px;border:1px solid #38423c;border-radius:8px;background:#1a1e1b;transition:.22s}.flow-node.active{border-color:#83c7fa9c;box-shadow:0 0 18px #83c7fa19;transform:scale(1.015)}.flow-node.result.active{border-color:#87d8ad8c;box-shadow:0 0 18px #87d8ad14}.flow-node-head{display:flex;align-items:center;gap:7px}.node-icon{width:21px;height:21px;display:grid;place-items:center;border-radius:6px;background:#83c7fa12;color:var(--blue);font-size:10px}.flow-node-head b{font-size:9px;font-weight:600}.flow-node-head small{margin-left:auto;color:var(--faint);font-size:7px}.flow-node p{margin:5px 0 0;color:var(--dim);font-size:8px;line-height:1.4}.flow-arrow{position:relative;z-index:2;height:19px;color:#71827b;font-size:11px}.skill-chip{display:inline-flex;align-items:center;gap:4px;margin-top:6px;margin-right:3px;padding:3px 6px;border:1px solid #425447;border-radius:5px;background:#87d8ad0b;color:#a5dabc;font-size:7px}.skill-chip.hot{border-color:#477089;background:#83c7fa10;color:#a9dcfa}.c-policy{padding:8px;border:1px solid var(--line2);border-radius:7px;background:#171a18}.policy-head{display:flex;align-items:center;gap:6px;margin-bottom:6px}.policy-head strong{font-size:9px}.policy-head .spacer{flex:1}.policy-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid #252a27;color:#afb7b1;font-size:8px}.policy-row span:nth-child(2){flex:1}.priority{font:8px Consolas,monospace;color:var(--faint)}.c-footer{display:flex;align-items:center;gap:6px}.c-footer small{flex:1;color:var(--faint);font-size:7px}
+.bottom{display:flex;align-items:center;gap:10px;margin:14px 2px 0;color:var(--faint);font-size:10px}.bottom .line{height:1px;flex:1;background:var(--line2)}.toast{position:fixed;z-index:50;left:50%;bottom:20px;transform:translate(-50%,15px);opacity:0;pointer-events:none;padding:8px 12px;border:1px solid #4b6069;border-radius:7px;background:#1a2222;color:#c7e6f5;font-size:11px;transition:.22s}.toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:1120px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.option:last-child{grid-column:1/-1}.option:last-child .mock{height:550px}}
+@media(max-width:700px){.page{padding-top:18px}.page-head{align-items:flex-start;flex-direction:column}.top-right{text-align:left}.grid{grid-template-columns:1fr}.option:last-child{grid-column:auto}.mock{height:620px}.option:last-child .mock{height:620px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="page-head">
+    <div><div class="eyebrow">KAIWU · AGENT EXTENSIONS</div><h1>Agent Skill 系统</h1><p>三种技能组织方式：从集中管理、对话中自动调用，到可视化路由。</p></div>
+    <div class="top-right"><b>预览交互</b>选择方案 · 开关技能 · 试用任务匹配</div>
+  </header>
+  <section class="grid" aria-label="Agent Skill 系统方案">
+    <article class="option" data-option="a">
+      <header class="option-head"><span class="letter">A</span><div class="copy"><h2>技能库 · 集中管理</h2><p>像插件一样管理 Skill；逐项编辑和启用</p></div><button class="choose" data-choose>选择方案</button></header>
+      <div class="mock">
+        <div class="appbar"><span class="app-icon"><svg viewBox="0 0 24 24"><path d="M12 3.5 14.1 9l5.5 2.1-5.5 2.1L12 18.7l-2.1-5.5-5.5-2.1L9.9 9 12 3.5Z"/><path d="m18.5 16 .9 2.2 2.1.8-2.1.8-.9 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z"/></svg></span><strong>Agent 技能</strong><span class="pill">自动匹配开启</span><span class="spacer"></span><button class="btn primary" data-add-skill>＋ 新建技能</button></div>
+        <div class="a-body">
+          <aside class="a-nav"><div class="nav-title">技能空间</div><div class="nav-item active" data-filter="全部"><span class="nav-icon">✧</span>全部<span class="count">08</span></div><div class="nav-item" data-filter="写作"><span class="nav-icon">✎</span>写作<span class="count">03</span></div><div class="nav-item" data-filter="资料"><span class="nav-icon">⌕</span>资料<span class="count">02</span></div><div class="nav-item" data-filter="开发"><span class="nav-icon">⌘</span>开发<span class="count">02</span></div><div class="nav-item" data-filter="自定义"><span class="nav-icon">＋</span>自定义<span class="count">01</span></div><div style="height:1px;background:var(--line2);margin:9px 5px"></div><div class="nav-item"><span class="nav-icon">⚙</span>匹配偏好</div></aside>
+          <div class="a-main">
+            <div class="subhead"><strong>技能库</strong><span class="pill muted">8 个</span><span class="spacer"></span><span class="section-label">自动调用</span></div>
+            <input class="search" data-skill-search placeholder="搜索技能" aria-label="搜索技能">
+            <div class="skill-list" data-skill-list>
+              <button class="skill-row active" data-skill="文档撰写" data-cat="写作"><span class="skill-glyph">W</span><span class="skill-info"><b>文档撰写</b><small>按需求生成 Word / Markdown 文档</small></span><span class="switch on" data-switch></span></button>
+              <button class="skill-row" data-skill="会议纪要" data-cat="写作"><span class="skill-glyph">≋</span><span class="skill-info"><b>会议纪要</b><small>整理录音、讨论和行动项</small></span><span class="switch on" data-switch></span></button>
+              <button class="skill-row" data-skill="资料研究" data-cat="资料"><span class="skill-glyph">⌕</span><span class="skill-info"><b>资料研究</b><small>比较来源并整理事实依据</small></span><span class="switch on" data-switch></span></button>
+              <button class="skill-row" data-skill="代码修复" data-cat="开发"><span class="skill-glyph">⌘</span><span class="skill-info"><b>代码修复</b><small>定位问题、修改并说明变更</small></span><span class="switch on" data-switch></span></button>
+            </div>
+            <div class="a-detail"><div class="detail-head"><span class="skill-glyph" style="width:21px;height:21px">W</span><strong data-detail-name>文档撰写</strong><span class="spacer"></span><span class="pill">已启用</span><button class="icon-btn" aria-label="更多设置">···</button></div><div class="detail-body"><label class="field-label">用途</label><div class="detail-text" data-detail-purpose>根据用户要求撰写、整理或改写文档；仅在明确提出导出格式时创建对应文件。</div><label class="field-label">适用情境</label><div class="detail-text">“整理成 Word”“写一份方案”“把内容转为 Markdown”</div><label class="field-label">技能指令预览 <span class="faint">SKILL.md</span></label><div class="detail-text code"># 文档撰写\n先确认受众和交付格式。\n按结构组织内容，校对后再导出。\n输出格式由本次请求决定。</div><div class="a-footer"><button class="btn" data-edit>编辑技能</button><button class="btn" data-import>从文件夹导入</button></div></div></div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="option" data-option="b">
+      <header class="option-head"><span class="letter">B</span><div class="copy"><h2>对话即调用 · 自动匹配</h2><p>用户直接说需求；本轮用到的 Skill 清晰可见</p></div><button class="choose" data-choose>选择方案</button></header>
+      <div class="mock">
+        <div class="appbar"><span class="app-icon"><svg viewBox="0 0 24 24"><path d="M4 5.5h16v11H9l-5 4v-15Z"/><path d="M8 10h8M8 13h5"/></svg></span><strong>AI 对话</strong><span class="spacer"></span><button class="icon-btn" aria-label="技能库" title="技能库">✧</button></div>
+        <div class="b-main">
+          <div class="chat-meta"><strong>新会话</strong><span class="state"><i class="dot"></i>自动匹配</span></div>
+          <div class="message user">请把本周讨论整理成会议纪要，并导出 Word 文件。</div>
+          <div class="match-head"><strong>本轮匹配技能</strong><span class="pill blue" data-match-count>2 项</span><span class="spacer"></span><button class="tiny-action" data-auto>自动</button><button class="tiny-action" data-reset-skills>重置</button></div>
+          <div class="match-stack" data-match-list>
+            <div class="match-card" data-match="会议纪要"><span class="skill-glyph">≋</span><span class="match-desc"><b>会议纪要</b><small>整理结论、行动项和负责人</small></span><span class="reason">需求：讨论整理</span><span class="switch on" data-match-switch></span></div>
+            <div class="match-card" data-match="文档撰写"><span class="skill-glyph">W</span><span class="match-desc"><b>文档撰写</b><small>根据要求生成 Word 文件</small></span><span class="reason">需求：导出 Word</span><span class="switch on" data-match-switch></span></div>
+          </div>
+          <div class="applied">已将技能指令加入本轮任务上下文。用户原始问题仍是主要依据，未匹配的技能不会参与。</div>
+          <div class="assistant"><strong>会议纪要已整理完成。</strong><br>我会按“讨论主题 / 决议 / 待办事项”整理，并生成 Word 文档供你下载。<div class="mini-tags"><span class="pill muted">会议纪要</span><span class="pill muted">文档撰写</span></div></div>
+          <div class="b-compose"><div class="compose-tools"><button class="tiny-action" data-auto>✧ 自动匹配</button><span class="auto-skill"><i class="dot" style="color:var(--green)"></i>已启用 8 个技能</span><span class="spacer"></span><button class="icon-btn" aria-label="技能列表">⌄</button></div><textarea class="compose-text" data-prompt aria-label="对话输入" placeholder="试试：整理这段讨论并生成 Word">请把本周讨论整理成会议纪要，并导出 Word 文件。</textarea><div class="b-bottom"><button class="tiny-action" data-example>试用：代码问题</button><button class="tiny-action" data-example-writing>试用：写作任务</button><span class="spacer"></span><button class="btn primary" data-match-run>发送 ↗</button></div></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="option" data-option="c">
+      <header class="option-head"><span class="letter">C</span><div class="copy"><h2>技能路由 · 可视化规则</h2><p>为复杂流程配置匹配条件、优先级和调用范围</p></div><button class="choose" data-choose>选择方案</button></header>
+      <div class="mock">
+        <div class="appbar"><span class="app-icon"><svg viewBox="0 0 24 24"><circle cx="5" cy="5" r="2.2"/><circle cx="19" cy="7" r="2.2"/><circle cx="12" cy="19" r="2.2"/><path d="m7 6 9.8.8M6.3 7l4.6 9.9m6.8-7.7-4.3 7.8"/></svg></span><strong>技能路由</strong><span class="pill muted">当前工作区</span><span class="spacer"></span><button class="btn" data-save>保存</button></div>
+        <div class="c-main">
+          <div class="c-prompt"><div class="c-prompt-top"><strong>任务输入</strong><span class="spacer"></span><span class="section-label">自然语言</span></div><textarea data-route-prompt>把这份调研整理为简报，并输出 Word 文档</textarea></div>
+          <div class="flow" data-flow>
+            <div class="flow-node" data-flow-node="input"><div class="flow-node-head"><span class="node-icon">✎</span><b>任务理解</b><small>读取用户请求</small></div><p>抽取目标、期望格式和约束</p></div><div class="flow-arrow">↓</div>
+            <div class="flow-node" data-flow-node="router"><div class="flow-node-head"><span class="node-icon">✧</span><b>技能路由器</b><small>语义匹配 · 排除冲突</small></div><p>仅从已启用技能中选择相关项</p><div><span class="skill-chip hot">资料研究 · 相关</span><span class="skill-chip">文档撰写 · 格式</span></div></div><div class="flow-arrow">↓</div>
+            <div class="flow-node" data-flow-node="execute"><div class="flow-node-head"><span class="node-icon">⟳</span><b>按序执行</b><small>注入 Skill 指令</small></div><p>研究要点 → 生成简报 → 导出文件</p></div><div class="flow-arrow">↓</div>
+            <div class="flow-node result" data-flow-node="result"><div class="flow-node-head"><span class="node-icon" style="background:#87d8ad14;color:var(--green)">✓</span><b>交付结果</b><small>Markdown + Word</small></div><p>回答附带使用的技能和生成文件</p></div>
+          </div>
+          <div class="c-policy"><div class="policy-head"><strong>路由规则</strong><span class="pill muted">3 条启用</span><span class="spacer"></span><button class="tiny-action" data-rule>＋ 添加规则</button></div><div class="policy-row"><span class="priority">01</span><span>明确指定输出格式 → 文档撰写</span><span class="pill muted">写作</span></div><div class="policy-row"><span class="priority">02</span><span>查询、比较、调研 → 资料研究</span><span class="pill muted">资料</span></div><div class="policy-row"><span class="priority">03</span><span>代码、报错、修复 → 代码修复</span><span class="pill muted">开发</span></div></div>
+          <div class="c-footer"><small>匹配解释可审阅 · 未命中时直接交给 Agent</small><button class="btn primary" data-route-run>试运行路由</button></div>
+        </div>
+      </div>
+    </article>
+  </section>
+  <footer class="bottom"><span>三种侧重点</span><span class="line"></span><span>A 管理 · B 使用 · C 编排</span></footer>
+</main>
+<div class="toast" role="status" aria-live="polite"></div>
+<script>
+(() => {
+  const toast = document.querySelector('.toast');
+  let toastTimer;
+  function notify(message) { toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 1800); }
+  document.querySelectorAll('[data-option]').forEach(option => option.querySelector('[data-choose]').addEventListener('click', () => {
+    document.querySelectorAll('.option').forEach(item => item.classList.remove('selected'));
+    option.classList.add('selected'); notify(`已选择方案 ${option.dataset.option.toUpperCase()}`);
+  }));
+  document.querySelectorAll('[data-switch]').forEach(toggle => toggle.addEventListener('click', event => {
+    event.stopPropagation(); toggle.classList.toggle('on');
+    const row = toggle.closest('.skill-row'); if (row) row.style.opacity = toggle.classList.contains('on') ? '1' : '.55';
+    notify(toggle.classList.contains('on') ? '技能已启用' : '技能已停用');
+  }));
+  const detailNames = { '文档撰写':'根据用户要求撰写、整理或改写文档；仅在明确提出导出格式时创建对应文件。', '会议纪要':'从会议记录中提取主题、决策、行动项、负责人和截止时间。', '资料研究':'分解研究问题，核对来源，并将结论与证据分开整理。', '代码修复':'先定位复现路径，再做最小修复并说明影响。' };
+  document.querySelectorAll('.skill-row').forEach(row => row.addEventListener('click', event => {
+    if (event.target.closest('[data-switch]')) return;
+    document.querySelectorAll('.skill-row').forEach(item => item.classList.remove('active'));
+    row.classList.add('active'); document.querySelector('[data-detail-name]').textContent = row.dataset.skill;
+    document.querySelector('[data-detail-purpose]').textContent = detailNames[row.dataset.skill] || '根据技能说明，在适用任务中为 Agent 提供专门指引。';
+  }));
+  document.querySelectorAll('.nav-item[data-filter]').forEach(item => item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item[data-filter]').forEach(nav => nav.classList.remove('active')); item.classList.add('active');
+    const filter = item.dataset.filter; document.querySelectorAll('.skill-row').forEach(row => row.hidden = filter !== '全部' && row.dataset.cat !== filter);
+  }));
+  document.querySelector('[data-skill-search]').addEventListener('input', event => {
+    const query = event.target.value.trim().toLowerCase(); document.querySelectorAll('.skill-row').forEach(row => row.hidden = !row.dataset.skill.toLowerCase().includes(query));
+  });
+  document.querySelector('[data-add-skill]').addEventListener('click', () => notify('新建技能：填写名称、用途和 SKILL.md 指令'));
+  document.querySelector('[data-edit]').addEventListener('click', () => notify('打开技能编辑器'));
+  document.querySelector('[data-import]').addEventListener('click', () => notify('选择包含 SKILL.md 的技能文件夹'));
+  const matchCards = [...document.querySelectorAll('[data-match]')];
+  function updateMatches() { const active = matchCards.filter(card => card.querySelector('[data-match-switch]').classList.contains('on')).length; document.querySelector('[data-match-count]').textContent = `${active} 项`; }
+  matchCards.forEach(card => card.addEventListener('click', event => { if (event.target.closest('[data-match-switch]')) { event.target.closest('[data-match-switch]').classList.toggle('on'); card.classList.toggle('off'); updateMatches(); } }));
+  document.querySelector('[data-reset-skills]').addEventListener('click', () => { matchCards.forEach(card => { card.classList.remove('off'); card.querySelector('[data-match-switch]').classList.add('on'); }); updateMatches(); notify('已恢复本轮自动匹配结果'); });
+  document.querySelectorAll('[data-auto]').forEach(button => button.addEventListener('click', () => notify('将根据本轮任务自动匹配技能')));
+  document.querySelector('[data-example]').addEventListener('click', () => { document.querySelector('[data-prompt]').value = '帮我检查这个 JavaScript 报错，并修复对应代码。'; notify('已载入代码修复示例'); });
+  document.querySelector('[data-example-writing]').addEventListener('click', () => { document.querySelector('[data-prompt]').value = '把这段介绍改成简洁的产品发布文案。'; notify('已载入写作示例'); });
+  document.querySelector('[data-match-run]').addEventListener('click', () => {
+    const prompt = document.querySelector('[data-prompt]').value.toLowerCase(); let selected = [];
+    if (/会议|讨论|纪要/.test(prompt)) selected.push('会议纪要');
+    if (/word|文档|导出|简报/.test(prompt)) selected.push('文档撰写');
+    if (/代码|报错|修复|javascript/.test(prompt)) selected.push('代码修复');
+    if (/资料|调研|来源|比较/.test(prompt)) selected.push('资料研究');
+    if (!selected.length) selected = ['通用助手'];
+    matchCards.forEach(card => { const on = selected.includes(card.dataset.match); card.classList.toggle('off', !on); card.querySelector('[data-match-switch]').classList.toggle('on', on); });
+    document.querySelector('[data-match-count]').textContent = `${selected.length} 项`;
+    notify(`已匹配：${selected.join('、')}`);
+  });
+  function route() {
+    const prompt = document.querySelector('[data-route-prompt]').value.toLowerCase();
+    const chosen = []; if (/调研|资料|比较|来源|查询/.test(prompt)) chosen.push('router');
+    if (/word|文档|简报|markdown|导出/.test(prompt)) chosen.push('router');
+    if (/代码|报错|修复/.test(prompt)) chosen.push('router');
+    const active = ['input', ...(chosen.length ? ['router','execute','result'] : ['execute','result'])];
+    document.querySelectorAll('[data-flow-node]').forEach(node => node.classList.remove('active'));
+    document.querySelectorAll('.flow-arrow').forEach(node => node.classList.remove('lit'));
+    active.forEach((name,index) => setTimeout(() => document.querySelector(`[data-flow-node="${name}"]`)?.classList.add('active'), index * 150));
+    notify(chosen.length ? '路由完成：将按匹配结果执行技能' : '未匹配专用技能，交给 Agent 直接处理');
+  }
+  document.querySelector('[data-route-run]').addEventListener('click', route);
+  document.querySelector('[data-save]').addEventListener('click', () => notify('路由方案已保存'));
+  document.querySelector('[data-rule]').addEventListener('click', () => notify('新增路由条件'));
+})();
+</script>
+</body>
+</html>

@@ -27,6 +27,8 @@ import { APINEBULA_IMAGE_SIGNATURE, createApinebulaImageGenerator } from './dram
 import { createDramaTextGenerator } from './drama/lib/text-generator.js';
 import { createAgentRuntime } from './agent/agent-runtime.js';
 import { registerAgentIpc } from './agent/agent-ipc.js';
+import { createAgentSkillCatalog } from './agent/skill-catalog.js';
+import { resolveKaiwuDshHome } from '../app/lib/agent-env.js';
 import { createSessionLedger } from './sessions/session-ledger.js';
 import { registerSessionsIpc, SESSIONS_CHANGED_CHANNEL } from './sessions/sessions-ipc.js';
 import { createFetchTransport, createVideoProvider } from './video/dashscope.js';
@@ -949,10 +951,44 @@ app.whenReady().then(async () => {
         log: console,
     });
     agentRuntimeRef = agentRuntime;
+    const skillCatalog = createAgentSkillCatalog({
+        getRoots: () => {
+            const vault = notesIpc.currentVault();
+            if (typeof vault !== 'string' || vault === '') return [];
+            let projectRoot = path.resolve(vault);
+            let probe = projectRoot;
+            while (true) {
+                try {
+                    fs.statSync(path.join(probe, '.git'));
+                    projectRoot = probe;
+                    break;
+                } catch { /* 继续向上找当前项目根目录 */ }
+                const parent = path.dirname(probe);
+                if (parent === probe) break;
+                probe = parent;
+            }
+            const appData = app.getPath('appData');
+            const dshHome = resolveKaiwuDshHome({
+                env: { ...process.env, APPDATA: appData },
+                appData,
+                configured: configuredDshHome(),
+            });
+            const agentsHome = process.env.DSH_AGENTS_HOME || path.join(os.homedir(), '.agents');
+            const roots = [
+                { key: 'project-dsh', path: path.join(projectRoot, '.dsh', 'skills'), relative: '.dsh/skills' },
+                { key: 'project-agents', path: path.join(projectRoot, '.agents', 'skills'), relative: '.agents/skills' },
+                ...(dshHome ? [{ key: 'user-dsh', path: path.join(dshHome, 'skills'), relative: 'DSH/skills' }] : []),
+                { key: 'user-agents', path: path.join(agentsHome, 'skills'), relative: 'Agent/skills' },
+                ...(process.env.DSH_BUNDLED_SKILL_DIR ? [{ key: 'bundled', path: process.env.DSH_BUNDLED_SKILL_DIR, relative: '内置' }] : []),
+            ];
+            return roots;
+        },
+    });
     registerAgentIpc({
         ipcMain,
         getWindow: () => (win.isDestroyed() ? null : win),
         runtime: agentRuntime,
+        skills: skillCatalog,
         log: console,
     });
     registerSessionsIpc({
